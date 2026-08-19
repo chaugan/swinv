@@ -176,14 +176,16 @@ jobs:
 
       - name: Verify unit files
         run: |
-          # systemd-analyze complains that /usr/local/bin/swinv and the man page
-          # are not installed on the runner; those two messages are expected
-          # and are filtered out. Anything else is a real syntax error.
+          # systemd-analyze complains that the binary and the man page are not
+          # installed on the runner; those messages are expected and filtered
+          # out. Anything else is a real syntax error. The path is matched
+          # loosely so a future move of the binary does not silently turn an
+          # expected message into a CI failure.
           set -o pipefail
           out="$(systemd-analyze verify ./packaging/swinv.service ./packaging/swinv.timer 2>&1 || true)"
           echo "$out"
           filtered="$(printf '%s\n' "$out" \
-            | grep -v 'Command /usr/local/bin/swinv is not executable' \
+            | grep -v 'is not executable: No such file or directory' \
             | grep -v "Command 'man swinv(8)' failed" \
             | grep -v 'has been removed and it is ignored' \
             | grep -v '^[[:space:]]*$' || true)"

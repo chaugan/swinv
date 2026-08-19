@@ -156,7 +156,7 @@ licenses: $(LICENSE_CSV) license-check
 	    echo; \
 	    echo "| Module | Licence | Source |"; \
 	    echo "|---|---|---|"; \
-	    sort -t, -k1,1 $(LICENSE_CSV) | awk -F, 'NF { url=$$2; \
+	    LC_ALL=C sort -t, -k1,1 $(LICENSE_CSV) | awk -F, 'NF { url=$$2; \
 	        if (url == "" || url == "Unknown" || url !~ /^https?:\/\//) url="—"; \
 	        else url="[link](" url ")"; \
 	        printf "| `%s` | %s | %s |\n", $$1, $$3, url }'; \
