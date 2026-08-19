@@ -75,6 +75,9 @@ type config struct {
 	hash             bool
 	offline          bool
 	skipNestedRootfs bool
+	perm             string
+	filePerm         os.FileMode
+	dirPerm          os.FileMode
 	maxMemory        string
 	maxMemoryBytes   int64
 	since            string
@@ -343,10 +346,11 @@ func loadBaseline(path string) (*model.Report, error) {
 
 // writeFiles renders the report to every requested format under cfg.out.
 func writeFiles(cfg *config, report *model.Report, logf func(string, ...any), stderr io.Writer) int {
-	// 0755 is mandated by the spec: the output directory is meant to be
-	// readable by a collector process running as another user.
-	// #nosec G301 -- deliberate, see above
-	if err := os.MkdirAll(cfg.out, 0o755); err != nil {
+	// Derived from --perm. The default (0755) keeps a collector running as
+	// another user able to read the reports, which is the documented
+	// deployment model; --perm 0600 tightens it to owner-only.
+	// #nosec G301 -- the mode is operator-chosen and validated, see parsePerm
+	if err := os.MkdirAll(cfg.out, cfg.dirPerm); err != nil {
 		fmt.Fprintf(stderr, "swinv: creating %s: %v\n", cfg.out, err)
 		return exitFatal
 	}
@@ -365,7 +369,7 @@ func writeFiles(cfg *config, report *model.Report, logf func(string, ...any), st
 			return exitUsage
 		}
 		target := filepath.Join(cfg.out, base+ext)
-		if err := output.AtomicWriteFile(target, 0o644, func(w io.Writer) error {
+		if err := output.AtomicWriteFile(target, cfg.filePerm, func(w io.Writer) error {
 			return writer(w, report)
 		}); err != nil {
 			fmt.Fprintf(stderr, "swinv: writing %s: %v\n", target, err)

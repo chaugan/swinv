@@ -35,6 +35,7 @@ that would otherwise be rejected.
 | `--root PATH` | `/` | Filesystem root to scan |
 | `--include-home` | `false` | Also scan `/home` and `/root` |
 | `--offline` | `false` | Skip the reverse-DNS lookup used for `host.fqdn`. The only network activity swinv performs; with this set the run is completely network-silent. |
+| `--perm OCTAL` | `0644` | Permission bits for the report files. The output directory gets the same bits plus execute wherever read is granted, so `0644`→`0755`, `0640`→`0750`, `0600`→`0700`. Setuid, setgid and sticky are refused rather than silently dropped. |
 | `--skip-nested-rootfs` | `false` | Drop components whose package-database evidence comes from a nested root filesystem (an extracted image, container rootfs, chroot or test fixture) rather than the scanned host. Off by default: scanning such a tree is sometimes the point. |
 | `--no-snap` | `false` | Exclude `/snap` |
 | `--no-flatpak` | `false` | Exclude `/var/lib/flatpak` |

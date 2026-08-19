@@ -21,6 +21,7 @@
 .Op Fl -no-flatpak
 .Op Fl -include-home
 .Op Fl -offline
+.Op Fl -perm Ar octal
 .Op Fl -skip-nested-rootfs
 .Op Fl -max-memory Ar size
 .Op Fl -hash
@@ -223,6 +224,25 @@ distribution label.
 Off by default, because scanning such a tree is sometimes exactly the intent;
 .Nm
 warns about them either way.
+.It Fl -perm Ar octal
+Permission bits for the report files, default
+.Cm 0644 .
+The output directory receives the same bits plus execute wherever read is
+granted, so
+.Cm 0644
+yields a
+.Cm 0755
+directory,
+.Cm 0640
+yields
+.Cm 0750 ,
+and
+.Cm 0600
+yields
+.Cm 0700 .
+The permissive default lets a collector running as another user read the
+reports; tighten it if any local user reading the inventory is a concern.
+Setuid, setgid and the sticky bit are refused rather than silently dropped.
 .It Fl -hash
 Record a SHA-256 digest of each component's primary on-disk file in the
 .Va sha256

@@ -36,9 +36,12 @@ machine it runs on.
 - **Reports list installed software and its paths.** With `--include-home` those
   paths include the contents of users' home directories, which is the main
   reason home directories are excluded by default.
-- **Output permissions are deliberate but permissive.** `--out` is created
-  `0755` and files `0644`, so an inventory is world-readable on the host.
-  Tighten this if your threat model requires it.
+- **Output permissions default to permissive, and are configurable.** Reports
+  are written `0644` in a `0755` directory so a collector running as another
+  user can read them, which is the documented deployment model. The cost is
+  that any local user can read a file identifying the host and listing its
+  software. Use `--perm 0640` to restrict to the owning group or `--perm 0600`
+  to the owner alone; the directory mode is derived from it.
 
 ## Running it safely
 

@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -47,6 +49,7 @@ func parseFlags(args []string, stderr io.Writer) (*config, int, error) {
 	fs.StringVar(&cfg.maxMemory, "max-memory", "", "soft memory limit, e.g. 512MiB or 2GiB; makes the GC work harder near the limit (empty = unlimited)")
 	fs.BoolVar(&cfg.offline, "offline", false, "perform no network activity at all; skips the reverse-DNS lookup that fills host.fqdn, which is the only thing swinv uses the network for")
 	fs.BoolVar(&cfg.skipNestedRootfs, "skip-nested-rootfs", false, "drop components that exist only because the scan walked into a second root filesystem (an extracted image, a container rootfs, a chroot); off by default because scanning those is sometimes the point")
+	fs.StringVar(&cfg.perm, "perm", "0644", "octal permission bits for the report files; the output directory gets the same bits plus execute wherever read is granted (0644 -> 0755, 0640 -> 0750, 0600 -> 0700)")
 	fs.BoolVar(&cfg.hash, "hash", false, "record a SHA-256 of each component's primary file; useful for change detection and integrity, at the cost of reading every such file")
 	fs.StringVar(&cfg.since, "since", "", "path to a previous swinv JSON report; adds a delta of added/removed/changed components")
 	fs.BoolVar(&cfg.deltaOnly, "delta-only", false, "with --since, emit only the changed components instead of the full inventory")
@@ -107,6 +110,13 @@ func parseFlags(args []string, stderr io.Writer) (*config, int, error) {
 	if cfg.quiet && cfg.verbose {
 		return nil, exitUsage, fmt.Errorf("--quiet and --verbose are mutually exclusive")
 	}
+	filePerm, err := parsePerm(cfg.perm)
+	if err != nil {
+		return nil, exitUsage, fmt.Errorf("--perm: %w", err)
+	}
+	cfg.filePerm = filePerm
+	cfg.dirPerm = dirPermFor(filePerm)
+
 	if cfg.maxMemory != "" {
 		n, err := parseSize(cfg.maxMemory)
 		if err != nil {
@@ -122,4 +132,45 @@ func parseFlags(args []string, stderr io.Writer) (*config, int, error) {
 	}
 
 	return cfg, exitOK, nil
+}
+
+// parsePerm converts an octal permission string such as "0640" or "600" into
+// file mode bits.
+//
+// Only the nine permission bits are accepted. Setuid, setgid and the sticky bit
+// are refused rather than silently dropped: an inventory file has no business
+// carrying them, and quietly ignoring what the operator asked for would be
+// worse than saying no.
+func parsePerm(s string) (os.FileMode, error) {
+	raw := strings.TrimSpace(s)
+	if raw == "" {
+		return 0, fmt.Errorf("empty permission")
+	}
+	v, err := strconv.ParseUint(raw, 8, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid octal permission %q (want something like 0644 or 0600)", s)
+	}
+	if v > 0o777 {
+		return 0, fmt.Errorf("permission %q is out of range; only the nine rwx bits are accepted, "+
+			"so setuid, setgid and the sticky bit cannot be set", s)
+	}
+	if v&0o400 == 0 {
+		return 0, fmt.Errorf("permission %q would make the report unreadable by its own owner", s)
+	}
+	return os.FileMode(v), nil
+}
+
+// dirPermFor derives the output directory's mode from the report file mode: a
+// directory needs the execute bit wherever the file grants read, or the files
+// inside it cannot be reached. 0644 gives 0755, 0640 gives 0750, 0600 gives
+// 0700. The owner always keeps write and execute so swinv can create the files
+// at all.
+func dirPermFor(file os.FileMode) os.FileMode {
+	dir := file
+	for _, shift := range []uint{6, 3, 0} {
+		if dir&(0o4<<shift) != 0 {
+			dir |= 0o1 << shift
+		}
+	}
+	return dir | 0o300
 }

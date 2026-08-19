@@ -276,6 +276,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--stdout` | false | Write to stdout; requires exactly one `--format` |
 | `--include-home` | false | Also scan `/home` and `/root` |
 | `--offline` | false | Perform no network activity at all (skips the FQDN lookup) |
+| `--perm OCTAL` | `0644` | Permission bits for the reports; the directory derives from it |
 | `--skip-nested-rootfs` | false | Drop packages that came from a nested root filesystem (see Known limitations) |
 | `--since PATH` | — | Diff against a previous report |
 | `--hash` | false | Record a SHA-256 per component |
