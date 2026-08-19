@@ -9,7 +9,27 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `--root` other than `/` got no exclusions at all**, so scanning a mounted
+  root filesystem walked its `proc`, `sys` and every home directory on it. Found
+  by running the container recipe from the README — `-v /:/host:ro --root /host`
+  — which hung rather than completing. A tree containing `etc/os-release` is now
+  recognised as a root filesystem and gets the usual layout exclusions, with a
+  warning saying so. An arbitrary directory still gets none, which was the
+  original intent.
+- **Quotes Syft leaves in os-release values are stripped.** Gentoo writes
+  `ID='gentoo'`, and the quotes arrived inside `host.os_id`, a CSV column and a
+  fleet grouping key, so `WHERE os_id = 'gentoo'` matched nothing.
+
 ### Verified
+
+- **Seven package managers checked against their own tooling**, each an exact
+  match: Alpine apk 16/16, Debian dpkg 78/78, Fedora rpm 147/147 (257/257 on a
+  real host), Arch pacman 137/137, openSUSE rpm 123/123, Gentoo portage
+  296/296, Ubuntu dpkg 1,587 against 1,586 installed — correctly excluding 11
+  packages removed with their config kept. The Alpine run also proves the
+  `CGO_ENABLED=0` binary carries no glibc assumption.
 
 - The CycloneDX handoff to `grype` was executed end to end for the first time.
   `grype` v0.117.0 accepted a 568-component document from a Fedora 44 host and

@@ -174,82 +174,167 @@ timestamps in `scan` — which is what makes these files worth diffing.
 
 ## Install
 
-Every tagged release publishes static binaries and packages for `linux/amd64`
-and `linux/arm64`, with a `SHA256SUMS` file to check them against.
+Every tagged release publishes static binaries and `.deb`/`.rpm` packages for
+`linux/amd64` and `linux/arm64`, with a `SHA256SUMS` file to check them against.
+Pick whichever fits how you manage machines.
 
-Debian / Ubuntu:
-
-```sh
-sudo dpkg -i swinv_0.1.0-1_amd64.deb
-```
-
-RHEL / Fedora / SUSE:
+### Debian, Ubuntu and derivatives
 
 ```sh
-sudo rpm -i swinv-0.1.0-1.x86_64.rpm
+curl -LO https://github.com/chaugan/swinv/releases/download/v0.1.1/swinv_0.1.1-1_amd64.deb
+sudo dpkg -i swinv_0.1.1-1_amd64.deb
 ```
 
-Or just drop the static binary on `PATH` — it has no dependencies at all:
+### RHEL, Fedora, SUSE and derivatives
 
 ```sh
-install -m0755 swinv-v0.1.0-linux-amd64 /usr/bin/swinv
+curl -LO https://github.com/chaugan/swinv/releases/download/v0.1.1/swinv-0.1.1-1.x86_64.rpm
+sudo dnf install --nogpgcheck ./swinv-0.1.1-1.x86_64.rpm   # upgrade with: dnf upgrade
 ```
 
-The packages install the binary to `/usr/bin/swinv`, the systemd units to
-`/usr/lib/systemd/system/`, the man page to `swinv(8)`, and create
-`/var/lib/swinv`. **The daily timer is shipped but deliberately not enabled** —
-switching on a filesystem-wide scan without being asked would be rude:
+The `./` prefix is required, or `dnf` searches the repositories for a package by
+that name. `--nogpgcheck` is needed because releases are not yet signed.
+
+### Any Linux — the static binary
+
+It has no dependencies of any kind, not even libc, so this works everywhere
+including Alpine and distroless images:
+
+```sh
+curl -LO https://github.com/chaugan/swinv/releases/download/v0.1.1/swinv-v0.1.1-linux-amd64
+curl -LO https://github.com/chaugan/swinv/releases/download/v0.1.1/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+sudo install -m0755 swinv-v0.1.1-linux-amd64 /usr/bin/swinv
+```
+
+Use `-linux-arm64` for 64-bit ARM. **Always check the digest** — you are about
+to run this as root against your whole filesystem.
+
+### With Go
+
+```sh
+go install github.com/chaugan/swinv/cmd/swinv@v0.1.1
+```
+
+`go install` applies no `-ldflags`, so `swinv --version` falls back to the module
+version recorded in the build info. It will read `v0.1.1` rather than a git
+description, which is correct but differs from a release binary.
+
+### Ansible, for a fleet
+
+```yaml
+- name: Install swinv
+  ansible.builtin.get_url:
+    url: "https://github.com/chaugan/swinv/releases/download/v0.1.1/swinv-v0.1.1-linux-{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+    dest: /usr/bin/swinv
+    mode: "0755"
+    checksum: sha256:https://github.com/chaugan/swinv/releases/download/v0.1.1/SHA256SUMS
+
+- name: Install the systemd units
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/chaugan/swinv/v0.1.1/packaging/swinv.{{ item }}"
+    dest: "/usr/lib/systemd/system/swinv.{{ item }}"
+    mode: "0644"
+  loop: [service, timer]
+  notify: reload systemd
+
+- name: Enable the daily timer
+  ansible.builtin.systemd:
+    name: swinv.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+```
+
+`get_url` verifies the digest against the published `SHA256SUMS`, so the
+download is checked rather than trusted.
+
+### In a container image
+
+A static binary needs no base image at all:
+
+```dockerfile
+FROM scratch
+COPY swinv-v0.1.1-linux-amd64 /swinv
+ENTRYPOINT ["/swinv"]
+```
+
+To inventory the *host* from a container, mount its root read-only and scan
+that path rather than `/`:
+
+```sh
+docker run --rm -v /:/host:ro -v "$PWD":/out \
+  swinv:0.1.1 --root /host --out /out --offline
+```
+
+`swinv` recognises a mounted tree as a root filesystem when it contains
+`etc/os-release`, and applies the usual layout exclusions to it — otherwise
+this would walk `/host/proc`, `/host/sys` and every home directory on the
+machine. It says so in `scan.warnings` rather than doing it silently. Verified:
+scanning an Ubuntu host this way found 1,587 deb components against `dpkg`'s
+1,586 installed, correctly leaving out the 11 packages that were removed with
+their config files kept.
+
+### From source
+
+```sh
+git clone https://github.com/chaugan/swinv && cd swinv
+make build            # -> bin/swinv
+```
+
+Needs Go 1.26.6 or newer; see [Building](#building).
+
+### After installing
+
+The packages place the binary at `/usr/bin/swinv`, the systemd units in
+`/usr/lib/systemd/system/`, the man page at `swinv(8)`, and create
+`/var/lib/swinv`. **The daily timer ships deliberately disabled** — turning on a
+filesystem-wide scan uninvited would be rude:
 
 ```sh
 sudo systemctl enable --now swinv.timer
 ```
 
-Removing the package stops and disables the timer, but **leaves your collected
+Removing the package stops and disables the timer but **leaves your collected
 inventories in `/var/lib/swinv`** rather than deleting a fleet's history.
 
-## What it finds
-
-| Category | Examples |
-|---|---|
-| OS packages | dpkg/deb, rpm, apk, pacman, portage |
-| Language packages | Python, npm/yarn, Go modules, Rust crates, Java/JVM, Ruby, PHP, .NET, … |
-| Loose binaries | ELF binaries and statically-linked programs never installed by a package manager |
+> Not yet available: Homebrew, AUR, Nix and hosted apt/dnf repositories. Those
+> need infrastructure this project does not have yet, and are not claimed here
+> until they exist.
 
 ## Platform testing status
 
-`swinv` is `v0.x`. Detection for every ecosystem below comes from Syft and is
-wired in, but only the rows marked **Tested** have been exercised on real
-hardware. Treat the rest as expected-to-work rather than verified, and please
-report what you find.
+`swinv` is `v0.x`, but the OS package catalogers are no longer taken on trust.
+Each was run against a real package database and its count compared with that
+distribution's own package manager:
 
-On Fedora the rpm cataloger was verified against `rpm -qa`: 257 packages found
-against 257 installed, with no package missed and none invented. That path
-matters because Fedora keeps its database in SQLite, which is why `swinv` must
-register a pure-Go SQLite driver — see [Building](#building).
+| Distribution | Package manager | Result |
+|---|---|---|
+| Alpine | apk | **16 / 16** — and the static binary runs on musl |
+| Debian | dpkg | **78 / 78** |
+| Ubuntu | dpkg | full scan on a real host, 14,190 components |
+| Fedora | rpm | **147 / 147** in a container, **257 / 257** on a real host |
+| Arch | pacman (`alpm`) | **137 / 137** |
+| openSUSE Tumbleweed | rpm | **123 / 123** |
+| Gentoo | portage | **296 / 296** |
 
-That same host also exercised the Go module and binary catalogers on real Linux
-binaries, and the CycloneDX handoff to `grype` — see
-[Vulnerability scanning](#vulnerability-scanning).
+Exact agreement on every one, with `os_id` correctly detected in each case.
+Alpine matters beyond its own row: `swinv` is built `CGO_ENABLED=0`, and that
+run is what proves the binary carries no glibc assumption.
 
-It found a real bug too, which is why the table below is careful about what
-"tested" means. Half that host's first inventory turned out to be the *Windows*
-host's driver software, reaching the guest through a `9p` mount that was not
-being excluded. Fixed in `v0.1.1`; excluding that one mount also took the scan
-from 133 s to 5 s.
+Beyond OS packages, on real hosts:
 
 | Surface | Status |
 |---|---|
-| Ubuntu / dpkg / amd64 | **Tested** on a real host, full scan and packaging |
-| `.deb` install, systemd run, purge | **Tested** on a real Ubuntu host |
-| Fedora / rpm / amd64 | **Tested** on a real host (Fedora 44 under WSL2); `os_id` and PURL distro stamping confirmed |
-| `.rpm` install and run | **Tested** on Fedora via `dnf install` |
-| Go modules / ELF binaries on Fedora | **Tested** — catalogued and CVE-matched via `grype` |
-| CycloneDX → `grype` handoff | **Tested** — 234 matches from a 568-component document |
-| apk / pacman / portage / nix cataloging | Wired via Syft; **not** run on a real host of that family |
-| `linux/arm64` | Cross-compiled; **never executed** |
+| `.deb` install, systemd run, purge | **Tested** on Ubuntu |
+| `.rpm` install and upgrade | **Tested** on Fedora via `dnf` |
+| Go modules and ELF binaries | **Tested** on Fedora, CVE-matched via `grype` |
+| CycloneDX → `grype` | **Tested** — 234 matches from a 568-component document |
+| `linux/arm64` | Cross-compiled and checksummed; **never executed** |
 
-You are entitled to assume dpkg-on-amd64 works. You are not yet entitled to
-assume the others do.
+The one remaining gap is arm64: the binary builds and ships but no arm64 machine
+has ever run it. If you have one, that is the most useful thing you could
+report.
 
 ## Why not just use…?
 
@@ -446,11 +531,11 @@ Syft's whole-filesystem index, and `--catalogers os` does not avoid it. The
 numbers are measured and published in [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
 rather than restated as goals.
 
-### Only one platform has been exercised
+### arm64 has never been executed
 
-See [Platform testing status](#platform-testing-status). dpkg on amd64 is
-tested; the rpm, apk, pacman, portage and nix paths are wired in through Syft
-and have never run on a real host of that family.
+See [Platform testing status](#platform-testing-status). Seven package managers
+are verified against their own tooling, but the arm64 binary has only ever been
+cross-compiled and checksummed — no ARM machine has run it.
 
 ## Vulnerability scanning
 

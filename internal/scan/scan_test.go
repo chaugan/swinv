@@ -978,3 +978,87 @@ func TestUnquoteDistroValues(t *testing.T) {
 		}
 	}
 }
+
+// TestLooksLikeRootFilesystem covers the signal used to decide whether the
+// filesystem-layout exclusions apply to a --root other than "/".
+func TestLooksLikeRootFilesystem(t *testing.T) {
+	if !LooksLikeRootFilesystem("/") {
+		t.Error(`"/" must always count as a root filesystem`)
+	}
+
+	// A mounted image or chroot: has etc/os-release.
+	rootfs := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rootfs, "etc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rootfs, "etc/os-release"), []byte("ID=debian\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !LooksLikeRootFilesystem(rootfs) {
+		t.Error("a tree with etc/os-release should be treated as a root filesystem")
+	}
+
+	// usr/lib/os-release alone is enough; some images ship only that.
+	alt := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(alt, "usr/lib"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(alt, "usr/lib/os-release"), []byte("ID=fedora\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !LooksLikeRootFilesystem(alt) {
+		t.Error("usr/lib/os-release should also count")
+	}
+
+	// An ordinary directory must not be mistaken for one.
+	plain := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(plain, "etc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if LooksLikeRootFilesystem(plain) {
+		t.Error("a directory with an empty etc/ is not a root filesystem")
+	}
+}
+
+// TestMountedRootfsGetsLayoutExclusions is the regression test for a gap found
+// by running the documented container command. Scanning the host from inside a
+// container with "-v /:/host:ro --root /host" applied NO exclusions at all,
+// because they were gated on the root being exactly "/". The scan then walked
+// /host/proc, /host/sys and every home directory on the machine.
+func TestMountedRootfsGetsLayoutExclusions(t *testing.T) {
+	rootfs := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rootfs, "etc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rootfs, "etc/os-release"), []byte("ID=ubuntu\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, warnings, err := BuildExcludes(ExcludeOptions{Root: rootfs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"./proc/**", "./sys/**", "./home/**", "./root/**"} {
+		if !contains(got, want) {
+			t.Errorf("a mounted root filesystem should exclude %q; got %v", want, got)
+		}
+	}
+	var announced bool
+	for _, w := range warnings {
+		if strings.Contains(w, "root filesystem") {
+			announced = true
+		}
+	}
+	if !announced {
+		t.Error("applying layout exclusions to a non-/ root must be announced, not silent")
+	}
+
+	// An ordinary directory still gets nothing, which is the original contract.
+	plain, _, err := BuildExcludes(ExcludeOptions{Root: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plain) != 0 {
+		t.Errorf("an arbitrary directory should get no layout exclusions, got %v", plain)
+	}
+}

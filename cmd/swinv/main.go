@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -24,11 +25,30 @@ import (
 	"github.com/chaugan/swinv/internal/scan"
 )
 
-// Build-time values, injected with -ldflags.
+// Build-time values, injected with -ldflags by the Makefile.
 var (
 	version = "dev"
 	commit  = "none"
 )
+
+// resolveVersion reports the version to display.
+//
+// `go install github.com/chaugan/swinv/cmd/swinv@v0.1.1` runs no -ldflags, so
+// the stamped value stays "dev" and the binary cannot say what it is. Go does
+// record the module version in the build info for that install path, so fall
+// back to it. A local `go build` reports "(devel)" there, which is no better
+// than "dev", so it is ignored.
+func resolveVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		if v := bi.Main.Version; v != "" && v != "(devel)" {
+			return v
+		}
+	}
+	return version
+}
 
 // Exit codes, per the spec.
 const (
@@ -123,7 +143,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	if cfg.showVersion {
 		fmt.Fprintf(stdout, "swinv %s (commit %s, syft %s, %s/%s)\n",
-			version, commit, scan.SyftVersion(), runtime.GOOS, runtime.GOARCH)
+			resolveVersion(), commit, scan.SyftVersion(), runtime.GOOS, runtime.GOARCH)
 		return exitOK
 	}
 
@@ -251,7 +271,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		SchemaVersion: model.SchemaVersion,
 		Tool: model.Tool{
 			Name:        "swinv",
-			Version:     version,
+			Version:     resolveVersion(),
 			Commit:      commit,
 			SyftVersion: scan.SyftVersion(),
 		},

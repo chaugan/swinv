@@ -205,6 +205,16 @@ func BuildExcludes(o ExcludeOptions) (patterns []string, warnings []string, err 
 
 	patterns = append(patterns, DefaultExcludes(root)...)
 
+	// Say so when the layout defaults were applied to something other than "/",
+	// because it is a real behaviour change for that scan and the operator
+	// should not have to infer it from the excluded list.
+	if root != "/" && LooksLikeRootFilesystem(root) {
+		warnings = append(warnings, fmt.Sprintf(
+			"%s looks like a root filesystem (it has etc/os-release), so the usual layout "+
+				"exclusions were applied; pass --no-auto-exclude-mounts and your own --exclude "+
+				"patterns if you want the whole tree walked", root))
+	}
+
 	if !o.IncludeHome {
 		if home := HomeExcludes(root); len(home) > 0 {
 			patterns = append(patterns, home...)
@@ -246,13 +256,39 @@ func BuildExcludes(o ExcludeOptions) (patterns []string, warnings []string, err 
 	return model.SortedSet(patterns), warnings, nil
 }
 
+// LooksLikeRootFilesystem reports whether a directory is the root of a Linux
+// installation rather than an arbitrary folder.
+//
+// The presence of etc/os-release is the signal. It is what every distribution
+// writes at the top of its filesystem, it is what Syft itself keys distro
+// detection on, and no ordinary directory has one.
+//
+// This matters because --root is documented for exactly this case: scanning a
+// mounted image, a chroot, or the host from inside a container with
+// "-v /:/host:ro --root /host". Without it, none of the layout exclusions
+// applied to such a scan, so swinv would walk /host/proc, /host/sys and every
+// home directory on the machine. That is not a hypothetical — it is what
+// happened the first time the documented container command was run.
+func LooksLikeRootFilesystem(root string) bool {
+	root = normalizeRoot(root)
+	if root == "/" {
+		return true
+	}
+	for _, marker := range []string{"etc/os-release", "usr/lib/os-release"} {
+		if fi, err := os.Stat(filepath.Join(filepath.FromSlash(root), filepath.FromSlash(marker))); err == nil && fi.Mode().IsRegular() {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultExcludes returns the filesystem-layout exclusions for the given scan
-// root. They describe the layout of a running Linux system, so they are only
-// meaningful when the root is "/": any other root is an arbitrary tree (a
-// fixture, a mounted image) whose layout swinv cannot assume, and DefaultExcludes
-// returns nil for it.
+// root. They describe the layout of a running Linux system, so they apply to
+// "/" and to any other tree that is itself a root filesystem — a mounted
+// image, a chroot, the host bind-mounted into a container. An arbitrary
+// directory has no such layout to assume, and gets nothing.
 func DefaultExcludes(root string) []string {
-	if normalizeRoot(root) != "/" {
+	if !LooksLikeRootFilesystem(root) {
 		return nil
 	}
 	out := make([]string, 0, len(defaultExcludeDirs)+len(defaultExcludeFiles)+len(noiseExcludePatterns))
@@ -270,7 +306,7 @@ func DefaultExcludes(root string) []string {
 // when the root is not "/". Callers skip it when the operator asked for
 // --include-home.
 func HomeExcludes(root string) []string {
-	if normalizeRoot(root) != "/" {
+	if !LooksLikeRootFilesystem(root) {
 		return nil
 	}
 	out := make([]string, 0, len(homeExcludeDirs))
