@@ -484,7 +484,7 @@ Syft is Apache-2.0, so importing it imposes no copyleft obligation; attribution
 is in [`NOTICE`](NOTICE). **No GPL, AGPL or LGPL module may enter this binary** —
 linking one in would force the whole combined work under the GPL. CI enforces
 that with a hard gate (`make license-check`) that fails on any dependency whose
-licence is copyleft or unidentified. Of 279 dependencies, none is copyleft.
+licence is copyleft or unidentified. Of 278 dependencies, none is copyleft.
 [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) is generated, not
 hand-written.
 

@@ -132,8 +132,13 @@ bench: build
 # inventory would satisfy license-check after a dependency was added.
 $(LICENSE_CSV): go.mod go.sum
 	@mkdir -p $(BIN_DIR)
-	@echo ">> collecting dependency licences with go-licenses"
-	@$(GO_LICENSES) csv $(PKG) > $@ || { rm -f $@; \
+	@echo ">> collecting dependency licences with go-licenses (CGO_ENABLED=0)"
+	@# CGO_ENABLED=0 matters: go-licenses walks the build graph, so a cgo-only
+	@# dependency such as github.com/DataDog/zstd appears with cgo enabled and
+	@# vanishes without it. The shipped binary is always built CGO_ENABLED=0,
+	@# so the inventory must describe that build or it drifts between a
+	@# developer machine and CI.
+	@CGO_ENABLED=0 $(GO_LICENSES) csv $(PKG) > $@ || { rm -f $@; \
 	    echo "go-licenses failed; see the output above" >&2; exit 1; }
 
 licenses: $(LICENSE_CSV) license-check

@@ -26,7 +26,6 @@ suppress a detected copyleft one.
 | `dario.cat/mergo` | BSD-3-Clause | [link](https://github.com/imdario/mergo/blob/v1.0.2/LICENSE) |
 | `github.com/BurntSushi/toml` | MIT | [link](https://github.com/BurntSushi/toml/blob/v1.6.0/COPYING) |
 | `github.com/CycloneDX/cyclonedx-go` | Apache-2.0 | [link](https://github.com/CycloneDX/cyclonedx-go/blob/v0.11.0/LICENSE) |
-| `github.com/DataDog/zstd` | BSD-3-Clause | [link](https://github.com/DataDog/zstd/blob/v1.5.5/LICENSE) |
 | `github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp` | Apache-2.0 | [link](https://github.com/GoogleCloudPlatform/opentelemetry-operations-go/blob/detectors/gcp/v1.32.0/detectors/gcp/LICENSE) |
 | `github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric` | Apache-2.0 | [link](https://github.com/GoogleCloudPlatform/opentelemetry-operations-go/blob/exporter/metric/v0.55.0/exporter/metric/LICENSE) |
 | `github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping` | Apache-2.0 | [link](https://github.com/GoogleCloudPlatform/opentelemetry-operations-go/blob/internal/resourcemapping/v0.55.0/internal/resourcemapping/LICENSE) |
