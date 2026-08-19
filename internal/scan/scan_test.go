@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 // --- exclusion pattern validation ------------------------------------------

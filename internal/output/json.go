@@ -25,7 +25,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 // ErrNilReport is returned by every writer when it is handed a nil report.

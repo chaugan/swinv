@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chrzz/swinv/internal/model"
-	"github.com/chrzz/swinv/internal/output"
-	"github.com/chrzz/swinv/internal/scan"
+	"github.com/chaugan/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/output"
+	"github.com/chaugan/swinv/internal/scan"
 )
 
 // updateGolden regenerates the checked-in golden files. Driven by `make golden`.

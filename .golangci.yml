@@ -78,7 +78,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/chrzz/swinv
+        - github.com/chaugan/swinv
 
 issues:
   max-issues-per-linter: 0

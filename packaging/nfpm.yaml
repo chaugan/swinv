@@ -23,7 +23,7 @@ description: |
   There is no server, no daemon and no network transmission: collecting the
   files afterwards is left to rsync, Ansible, a log shipper or scp.
 vendor: "The swinv Authors"
-homepage: "https://github.com/chrzz/swinv"
+homepage: "https://github.com/chaugan/swinv"
 license: "Apache-2.0"
 
 contents:
@@ -83,7 +83,7 @@ scripts:
 
 deb:
   fields:
-    Bugs: "https://github.com/chrzz/swinv/issues"
+    Bugs: "https://github.com/chaugan/swinv/issues"
 
 rpm:
   group: Applications/System

@@ -18,10 +18,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chrzz/swinv/internal/hostfacts"
-	"github.com/chrzz/swinv/internal/model"
-	"github.com/chrzz/swinv/internal/output"
-	"github.com/chrzz/swinv/internal/scan"
+	"github.com/chaugan/swinv/internal/hostfacts"
+	"github.com/chaugan/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/output"
+	"github.com/chaugan/swinv/internal/scan"
 )
 
 // Build-time values, injected with -ldflags.

@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 const (

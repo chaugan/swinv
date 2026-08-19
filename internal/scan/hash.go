@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 // maxHashFileSize caps how large a file swinv will digest. Package databases

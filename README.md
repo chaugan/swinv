@@ -1,7 +1,7 @@
 # `swinv`
 
-[![CI](https://github.com/chrzz/swinv/actions/workflows/ci.yml/badge.svg)](https://github.com/chrzz/swinv/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/github/go-mod/go-version/chrzz/swinv)](go.mod)
+[![CI](https://github.com/chaugan/swinv/actions/workflows/ci.yml/badge.svg)](https://github.com/chaugan/swinv/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/github/go-mod/go-version/chaugan/swinv)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 **Local software inventory for Linux: one static binary, files on disk, nothing

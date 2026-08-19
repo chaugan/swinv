@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 // ndjsonLine is one newline-delimited JSON record: a single component, flattened

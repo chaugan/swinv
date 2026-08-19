@@ -24,7 +24,7 @@ import (
 	"github.com/anchore/syft/syft/sbom"
 	"github.com/anchore/syft/syft/source"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 
 	// Syft v1.51.0's RPM cataloger opens the RPM package database through
 	// database/sql and needs a registered "sqlite" driver. Without this blank

@@ -1,4 +1,4 @@
-module github.com/chrzz/swinv
+module github.com/chaugan/swinv
 
 go 1.26.6
 

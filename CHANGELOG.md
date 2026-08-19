@@ -60,5 +60,5 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chrzz/swinv/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/chrzz/swinv/releases/tag/v0.1.0
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/chaugan/swinv/releases/tag/v0.1.0

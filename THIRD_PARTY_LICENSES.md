@@ -82,7 +82,7 @@ suppress a detected copyleft one.
 | `github.com/charmbracelet/x/ansi` | MIT | [link](https://github.com/charmbracelet/x/blob/ansi/v0.11.6/ansi/LICENSE) |
 | `github.com/charmbracelet/x/cellbuf` | MIT | [link](https://github.com/charmbracelet/x/blob/cellbuf/v0.0.15/cellbuf/LICENSE) |
 | `github.com/charmbracelet/x/term` | MIT | [link](https://github.com/charmbracelet/x/blob/term/v0.2.2/term/LICENSE) |
-| `github.com/chrzz/swinv` | Apache-2.0 | [link](https://github.com/chrzz/swinv/blob/HEAD/LICENSE) |
+| `github.com/chaugan/swinv` | Apache-2.0 | [link](https://github.com/chaugan/swinv/blob/HEAD/LICENSE) |
 | `github.com/clipperhouse/displaywidth` | MIT | [link](https://github.com/clipperhouse/displaywidth/blob/v0.11.0/LICENSE) |
 | `github.com/clipperhouse/uax29/v2/graphemes` | MIT | [link](https://github.com/clipperhouse/uax29/blob/v2.7.0/LICENSE) |
 | `github.com/cloudflare/circl` | BSD-3-Clause | [link](https://github.com/cloudflare/circl/blob/v1.6.3/LICENSE) |

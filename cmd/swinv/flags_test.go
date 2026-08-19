@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 func TestParseFlagsDefaults(t *testing.T) {

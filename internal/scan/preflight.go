@@ -12,7 +12,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 // maxQuarantineWarnings caps how many individual symlinks a warning names.

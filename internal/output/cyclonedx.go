@@ -8,7 +8,7 @@ import (
 
 	cyclonedx "github.com/CycloneDX/cyclonedx-go"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 // Property namespaces. CycloneDX asks that custom property names be

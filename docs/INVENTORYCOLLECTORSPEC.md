@@ -62,7 +62,7 @@ These were decided by the project owner. Do not revisit them.
 | Package parsers | **Import Syft as a library** (`github.com/anchore/syft`), do not shell out to the `syft` CLI, do not hand-roll parsers |
 | Output | Local files only: JSON + CSV (plus optional CycloneDX and NDJSON) |
 | Distribution | Single static binary, `CGO_ENABLED=0` |
-| Module path | `github.com/chrzz/swinv` |
+| Module path | `github.com/chaugan/swinv` |
 
 The rationale for importing Syft rather than wrapping the CLI: it gives ~40
 package ecosystems and the binary-classifier cataloger on day one, it is

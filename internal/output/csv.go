@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 // multiValueSep separates the elements of the multi-valued CSV columns

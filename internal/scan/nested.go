@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 // packageDBDirs are the directories a Linux package manager keeps its

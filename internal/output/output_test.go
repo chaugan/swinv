@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chrzz/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/model"
 )
 
 // fixedStart is the only timestamp any test uses; every writer must derive all

@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report security issues **privately** through GitHub's
-[private vulnerability reporting](https://github.com/chrzz/swinv/security/advisories/new)
+[private vulnerability reporting](https://github.com/chaugan/swinv/security/advisories/new)
 rather than opening a public issue.
 
 Include the `swinv --version` output, the distribution and architecture, whether
