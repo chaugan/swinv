@@ -33,11 +33,11 @@ jobs:
     name: verify before shipping
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -58,12 +58,12 @@ jobs:
     permissions:
       contents: write        # required to create the release and upload assets
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # `make release` stamps the version from `git describe`.
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -148,7 +148,7 @@ jobs:
         run: cat dist/SHA256SUMS
 
       - name: Upload artefacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: swinv-${{ steps.version.outputs.version }}
           path: |
@@ -163,7 +163,7 @@ jobs:
         # Pinned to a SHA, not the mutable v2 tag: this step runs with
         # contents:write, so a compromised or retagged action could publish
         # arbitrary assets under our release.
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           draft: true          # review the notes before it goes public
           generate_release_notes: true
