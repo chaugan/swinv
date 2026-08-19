@@ -330,7 +330,7 @@ The formats do not all pick up a new field automatically. Work through this list
 1. Change the version in `go.mod` to an exact tag. Never `@latest`.
 2. Check the new `go.mod` for a raised Go requirement. If it moved, update the
    pinned Go version in `README.md`, the spec, and `GO_VERSION` in
-   `.github/workflows/ci.yml`.
+   `.github/workflows/ci.yml` and `.github/workflows/release.yml`.
 3. Re-verify the integration against upstream sources: `syft/create_sbom.go`,
    `syft/get_source.go`, `syft/create_sbom_config.go`, and `syft/cataloging/`.
    The config builder in `internal/scan/scan.go` calls into all of them.

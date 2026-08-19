@@ -134,7 +134,15 @@ jobs:
           test -f /usr/share/man/man8/swinv.8.gz
           # A real scan of a fixture tree, end to end.
           swinv --root testdata/rootfs --out /tmp/smoke --format json,csv
-          test -s /tmp/smoke/*.json
+          # The glob matches the dated file AND the -latest symlink, so a bare
+          # "test -s /tmp/smoke/*.json" gets three arguments and exits 2.
+          # Check each match, and require that there was at least one.
+          found=0
+          for f in /tmp/smoke/*.json; do
+            test -s "$f"
+            found=$((found + 1))
+          done
+          test "$found" -gt 0
           sudo dpkg --purge swinv
 
       - name: Verify the rpm payload

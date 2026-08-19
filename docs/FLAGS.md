@@ -18,7 +18,7 @@ Flags are parsed by the Go standard `flag` package, so `-flag`, `--flag`,
 double-dash form throughout; the built-in help prints the single-dash form.
 
 ```console
-$ swinv -h        # usage to stderr, exit 2
+$ swinv -h        # usage to stderr, exit 0
 $ swinv --version # version to stdout, exit 0
 swinv dev (commit none, syft v1.51.0, linux/amd64)
 ```

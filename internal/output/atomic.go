@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 )
 
 // tempSuffix builds the staging name for path: "<path>.tmp-<pid>" in the same
@@ -153,7 +154,9 @@ func syncDir(dir string) error {
 	if err := d.Sync(); err != nil {
 		// Some filesystems simply do not implement directory fsync. The data
 		// and the rename are already in place, so this is not a failure.
-		if errors.Is(err, fs.ErrInvalid) || errors.Is(err, fs.ErrPermission) ||
+		// EINVAL is what Linux returns for a directory on such a filesystem;
+		// errors.ErrUnsupported covers the ENOTSUP/EOPNOTSUPP spellings.
+		if errors.Is(err, syscall.EINVAL) || errors.Is(err, fs.ErrPermission) ||
 			errors.Is(err, errors.ErrUnsupported) {
 			return nil
 		}

@@ -236,7 +236,7 @@ reported in `scan.warnings`:
 a digest of a file backing many components identifies none of them
 ```
 
-Files above 512 MB and anything that is not a regular file are also skipped. So
+Files above 512 MiB and anything that is not a regular file are also skipped. So
 in practice OS packages have no `sha256` and language packages do.
 
 ---
