@@ -32,6 +32,7 @@ jobs:
   verify:
     name: verify before shipping
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -55,6 +56,7 @@ jobs:
     name: build and publish
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write        # required to create the release and upload assets
     steps:
@@ -148,7 +150,12 @@ jobs:
       - name: Verify the rpm payload
         run: |
           set -e
-          sudo apt-get update -qq && sudo apt-get install -y -qq rpm
+          # Bound the dpkg lock wait: unattended-upgrades on the runner can
+          # otherwise hold it long enough to stall the whole release.
+          if ! command -v rpm >/dev/null 2>&1; then
+            sudo apt-get update -qq -o DPkg::Lock::Timeout=120
+            sudo apt-get install -y -qq -o DPkg::Lock::Timeout=120 rpm
+          fi
           rpm -qip dist/swinv-*.x86_64.rpm
           rpm -qlp dist/swinv-*.x86_64.rpm
 
