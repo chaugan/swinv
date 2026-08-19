@@ -9,6 +9,10 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.1] — 2026-08-19
+
 ### Fixed
 
 - **Host-shared filesystems were scanned, so another operating system's
@@ -40,7 +44,7 @@ schema and cataloger coverage may still change between releases. See
   Debian-family host can reach.
 - The `.rpm` package installs and runs on Fedora via `dnf install`.
 
-## [0.1.0] — unreleased
+## [0.1.0] — 2026-08-19
 
 First public release.
 
@@ -90,5 +94,6 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/chaugan/swinv/releases/tag/v0.1.1
 [0.1.0]: https://github.com/chaugan/swinv/releases/tag/v0.1.0
