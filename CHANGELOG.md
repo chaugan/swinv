@@ -9,7 +9,16 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
-Nothing yet.
+### Verified
+
+- The CycloneDX handoff to `grype` was executed end to end for the first time.
+  `grype` v0.117.0 accepted a 568-component document from a Fedora 44 host and
+  returned 234 vulnerability matches across `rpm` and `go-module` components.
+  Because CVE matching is a join on package identity, this also confirms the
+  emitted PURLs are well-formed — the CycloneDX writer is built from
+  `cyclonedx-go` rather than reusing Syft's encoder, so that was not a given.
+- The Go module and binary catalogers ran against real Linux binaries on a
+  non-Debian host.
 
 ## [0.1.1] — 2026-08-19
 

@@ -227,11 +227,15 @@ against 257 installed, with no package missed and none invented. That path
 matters because Fedora keeps its database in SQLite, which is why `swinv` must
 register a pure-Go SQLite driver — see [Building](#building).
 
-The same run found a real bug, which is why the table below is careful about
-what "tested" means: half that host's inventory turned out to be the Windows
+That same host also exercised the Go module and binary catalogers on real Linux
+binaries, and the CycloneDX handoff to `grype` — see
+[Vulnerability scanning](#vulnerability-scanning).
+
+It found a real bug too, which is why the table below is careful about what
+"tested" means. Half that host's first inventory turned out to be the *Windows*
 host's driver software, reaching the guest through a `9p` mount that was not
-being excluded. The ELF and binary classifiers therefore remain unverified on
-a non-Debian host — the binaries they were cataloguing were Windows ones.
+being excluded. Fixed in `v0.1.1`; excluding that one mount also took the scan
+from 133 s to 5 s.
 
 | Surface | Status |
 |---|---|
@@ -239,6 +243,8 @@ a non-Debian host — the binaries they were cataloguing were Windows ones.
 | `.deb` install, systemd run, purge | **Tested** on a real Ubuntu host |
 | Fedora / rpm / amd64 | **Tested** on a real host (Fedora 44 under WSL2); `os_id` and PURL distro stamping confirmed |
 | `.rpm` install and run | **Tested** on Fedora via `dnf install` |
+| Go modules / ELF binaries on Fedora | **Tested** — catalogued and CVE-matched via `grype` |
+| CycloneDX → `grype` handoff | **Tested** — 234 matches from a 568-component document |
 | apk / pacman / portage / nix cataloging | Wired via Syft; **not** run on a real host of that family |
 | `linux/arm64` | Cross-compiled; **never executed** |
 
@@ -473,8 +479,11 @@ grype sbom:sbom.json
   air-gapped or egress-restricted fleets. Collect the SBOMs and match them
   somewhere with connectivity.
 
-> Not yet verified: this handoff is documented but the CycloneDX output has not
-> been fed to `grype` end to end. If you try it, please report the result.
+Verified end to end on Fedora 44: a 568-component CycloneDX document was
+accepted by `grype` v0.117.0, which resolved both `rpm` and `go-module`
+components and returned **234 vulnerability matches**. That is a stronger
+result than "it parsed" — CVE matching is a join on package identity, so it
+also confirms the PURLs are well-formed and correct.
 
 ## Building
 
