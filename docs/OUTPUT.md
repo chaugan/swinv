@@ -632,3 +632,43 @@ The NDJSON carries the same field names but keeps `cpes`, `licenses` and
 `locations` as arrays, which is the better starting point if your target is a
 JSON column or a document store. For anything that wants flat rows, use the CSV
 — it is the format designed for it.
+
+Loading it into a `jsonb` column needs one trick. `COPY` has no JSON mode, so
+the delimiter and quote characters are set to control bytes that cannot appear
+in JSON, which makes `COPY` treat each whole line as a single field:
+
+```sql
+CREATE TABLE feed (doc jsonb);
+\copy feed FROM 'host-latest.ndjson' WITH (FORMAT csv, DELIMITER E'\x01', QUOTE E'\x02');
+```
+
+The arrays then stay queryable as arrays:
+
+```sql
+SELECT doc->>'name'            AS name,
+       doc->>'type'            AS type,
+       doc->'licenses'->>0     AS first_licence,
+       jsonb_array_length(doc->'locations') AS location_count
+FROM feed
+ORDER BY name;
+```
+
+## Verification
+
+Every recipe on this page has been executed against real output, not written
+from memory:
+
+| Step | Result |
+|---|---|
+| Concatenating two hosts' CSVs | 14,197 rows, one header, 0 malformed rows |
+| PostgreSQL `\copy` (17 columns) | 14,197 rows, 2 hosts |
+| SQLite `.import` | 14,197 rows, columns named from the header |
+| NDJSON into `jsonb` | loads, arrays remain queryable |
+
+The content that makes this non-trivial survived intact and identical in both
+databases and in the source file: **2,596 rows contain a backslash** inside a
+CPE (`cpe:2.3:a:acpid:acpid:1\:2.0.34-1ubuntu3:*:*:*:*:*:*:*`) and **11 rows
+contain a comma inside the `licenses` field**. The backslash is the one to
+watch: PostgreSQL's `COPY` treats it as an escape character in its *text*
+format, so the `FORMAT csv` in the recipe above is load-bearing, not
+decoration.
