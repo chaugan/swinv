@@ -142,6 +142,37 @@ Push harder and the trade does arrive. `--max-memory 768MiB --parallelism 1`
 reaches **1085 MB**, the lowest figure measured, at **615 s** — nearly double the
 default runtime.
 
+## A worked example of why exclusions dominate
+
+The clearest evidence for everything above came from a Fedora 44 guest under
+WSL2, and it was an accident.
+
+`/usr/lib/wsl` is a `9p` mount through which WSL projects the Windows host's
+driver packages into the guest. Until `v0.1.1`, `9p` was not in the non-local
+filesystem list, so the scan walked it:
+
+| | Components | Wall time |
+|---|---|---|
+| Before (`9p` walked) | 1,003 | 133.6 s |
+| After (`9p` excluded) | 526 | **5.1 s** |
+
+**A 26× speedup from one exclusion.** The 477 components that disappeared were
+never that machine's software — they were Windows binaries and .NET assemblies
+belonging to the host. So the tree being walked was simultaneously the largest
+cost and pure noise.
+
+Two things generalise from this:
+
+- **The walk is the cost, and remote-backed filesystems are the worst kind of
+  walk.** `9p`, like NFS or CIFS, crosses a boundary on every `stat` and every
+  read. A tree that would take a second on local disk can take minutes through
+  one.
+- **The most expensive thing to scan is often the thing you least wanted.**
+  Mounted shares, extracted images and host projections tend to be both large
+  and irrelevant. Getting the exclusions right is not a micro-optimisation; on
+  this host it was the difference between five seconds and two minutes, and
+  between a correct inventory and one that was half wrong.
+
 ## Tuning guide
 
 Ordered by effect. Do the first thing before considering the second.
