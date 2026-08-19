@@ -1,0 +1,20 @@
+# Daily trigger for swinv.service.
+#
+# The randomised delay spreads the scan across a one-hour window so a fleet of
+# machines does not all start walking their filesystems at midnight.
+
+[Unit]
+Description=Daily local software inventory collection
+Documentation=man:swinv(8)
+
+[Timer]
+Unit=swinv.service
+OnCalendar=daily
+RandomizedDelaySec=3600
+# Catch up after downtime: if the machine was off at the scheduled time, run
+# shortly after it comes back rather than skipping the day entirely.
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

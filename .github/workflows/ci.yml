@@ -1,0 +1,202 @@
+# CI for swinv.
+#
+# Four gates, all of which must pass:
+#   build     CGO_ENABLED=0 build + vet + race tests, and proof the shipped
+#             binary is statically linked (a primary product requirement)
+#   lint      golangci-lint
+#   licences  no GPL / AGPL / LGPL / unknown dependency (spec section 3)
+#   units     the systemd unit files parse
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Syft v1.51.0 declares go >= 1.26.3; an older toolchain fails with
+  # 'unrecognized import path "golang.org/toolchain"'. Pin exactly.
+  GO_VERSION: "1.26.6"
+  CGO_ENABLED: "0"
+
+jobs:
+  build:
+    name: build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # `make build` stamps the version from `git describe`.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: false
+          cache: true
+
+      - name: Report toolchain
+        run: |
+          go version
+          go env GOVERSION GOOS GOARCH CGO_ENABLED
+
+      - name: Verify module checksums
+        run: go mod verify
+
+      - name: Build (CGO_ENABLED=0)
+        run: CGO_ENABLED=0 go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (race detector)
+        # The race detector needs cgo, so it is enabled for this step only.
+        # It never applies to the shipped binary, which is built above and
+        # again in the static-linkage check below with CGO_ENABLED=0.
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race ./...
+
+      - name: Build release binary
+        run: make build
+
+      - name: Assert the binary is statically linked
+        run: |
+          set -u
+          echo "--- file ---"
+          file bin/swinv
+          echo "--- ldd ---"
+          # ldd exits non-zero for a non-dynamic executable, so capture the
+          # output rather than relying on the exit status.
+          out="$(ldd bin/swinv 2>&1 || true)"
+          echo "$out"
+          case "$out" in
+            *"not a dynamic executable"*|*"statically linked"*)
+              echo "OK: bin/swinv is statically linked"
+              ;;
+            *)
+              echo "FAIL: bin/swinv is dynamically linked; the single-binary" >&2
+              echo "      requirement (spec section 2) is broken." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Smoke-test the binary
+        run: |
+          ./bin/swinv --version
+          ./bin/swinv --help 2>&1 | head -40 || true
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: swinv-linux-amd64
+          path: bin/swinv
+          if-no-files-found: error
+          retention-days: 7
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          args: --timeout=5m
+
+  licenses:
+    name: licence gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # Hard requirement from spec section 3: linking GPL/AGPL/LGPL code into
+      # swinv would relicense the whole binary. This step is what stops the
+      # licence position from drifting, so it must fail the build.
+      - name: Fail on GPL / AGPL / LGPL / unknown dependencies
+        run: make license-check
+
+      - name: Regenerate THIRD_PARTY_LICENSES.md
+        run: make licenses
+
+      - name: Fail if THIRD_PARTY_LICENSES.md is out of date
+        run: |
+          if ! git diff --quiet -- THIRD_PARTY_LICENSES.md; then
+            echo "THIRD_PARTY_LICENSES.md is stale." >&2
+            echo "Run 'make licenses' and commit the result." >&2
+            git --no-pager diff -- THIRD_PARTY_LICENSES.md >&2
+            exit 1
+          fi
+          echo "OK: THIRD_PARTY_LICENSES.md is current"
+
+      - name: Upload licence inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: licence-inventory
+          path: |
+            bin/licenses.csv
+            THIRD_PARTY_LICENSES.md
+          if-no-files-found: ignore
+          retention-days: 7
+
+  packaging:
+    name: systemd units
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Verify unit files
+        run: |
+          # systemd-analyze complains that /usr/local/bin/swinv and the man page
+          # are not installed on the runner; those two messages are expected
+          # and are filtered out. Anything else is a real syntax error.
+          set -o pipefail
+          out="$(systemd-analyze verify ./packaging/swinv.service ./packaging/swinv.timer 2>&1 || true)"
+          echo "$out"
+          filtered="$(printf '%s\n' "$out" \
+            | grep -v 'Command /usr/local/bin/swinv is not executable' \
+            | grep -v "Command 'man swinv(8)' failed" \
+            | grep -v 'has been removed and it is ignored' \
+            | grep -v '^[[:space:]]*$' || true)"
+          if [ -n "$filtered" ]; then
+            echo "FAIL: systemd-analyze reported problems:" >&2
+            printf '%s\n' "$filtered" >&2
+            exit 1
+          fi
+          echo "OK: unit files verify cleanly"
+
+      - name: Check the man page renders
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq groff-base
+          groff -mandoc -Tutf8 packaging/swinv.8 > /dev/null
+          echo "OK: packaging/swinv.8 renders"

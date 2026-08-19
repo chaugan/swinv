@@ -1,0 +1,40 @@
+# Build output. Anchored to the repo root so that cmd/swinv/ — the source
+# directory, which is also called swinv — is never ignored.
+/bin/
+/dist/
+/swinv
+/swinv-*-linux-*
+
+# Test and coverage artefacts
+coverage.out
+coverage.html
+coverage.txt
+*.test
+*.prof
+*.pprof
+
+# Local inventory output — never commit a real host's inventory.
+/inventory/
+/out/
+*.tmp-*
+*-latest.json
+*-latest.csv
+*-latest.ndjson
+*-latest.cdx.json
+
+# Golden fixtures and their expected output are deliberately checked in, so
+# nothing under testdata/ is ignored.
+!testdata/**
+
+# Pre-existing data that is NOT part of swinv. This directory was in the
+# working tree before the project was created and contains a Lance vector
+# index of unknown provenance. It is ignored so it can never be pushed to a
+# public repository; delete it if it is no longer wanted.
+/vectors/
+
+# Editor / OS noise
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store

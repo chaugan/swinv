@@ -1,0 +1,39 @@
+Package: zlib1g
+Status: install ok installed
+Priority: required
+Section: libs
+Installed-Size: 163
+Maintainer: Mark Brown <broonie@debian.org>
+Architecture: amd64
+Multi-Arch: same
+Source: zlib
+Version: 1:1.2.13.dfsg-1
+Description: compression library - runtime
+ zlib is a library implementing the deflate compression method.
+Homepage: http://zlib.net/
+
+Package: openssl
+Status: install ok installed
+Priority: optional
+Section: utils
+Installed-Size: 1352
+Maintainer: Debian OpenSSL Team <pkg-openssl-devel@lists.alioth.debian.org>
+Architecture: amd64
+Version: 3.0.11-1~deb12u2
+Depends: libc6 (>= 2.34), libssl3 (>= 3.0.0)
+Description: Secure Sockets Layer toolkit - cryptographic utility
+ This package is part of the OpenSSL project's implementation of the SSL
+ and TLS cryptographic protocols for secure communication over the Internet.
+Homepage: https://www.openssl.org/
+
+Package: bash
+Status: install ok installed
+Essential: yes
+Priority: required
+Section: shells
+Installed-Size: 6469
+Maintainer: Matthias Klose <doko@debian.org>
+Architecture: amd64
+Version: 5.2.15-2+b7
+Description: GNU Bourne Again SHell
+ Bash is an sh-compatible command language interpreter.

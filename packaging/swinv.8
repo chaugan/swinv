@@ -1,0 +1,363 @@
+.\" Manual page for swinv(8) — local software inventory collector.
+.\" Rendered with: man ./packaging/swinv.8
+.Dd August 19, 2026
+.Dt SWINV 8
+.Os
+.Sh NAME
+.Nm swinv
+.Nd collect a local software inventory
+.Sh SYNOPSIS
+.Nm
+.Op Fl -root Ar path
+.Op Fl -out Ar dir
+.Op Fl -name Ar template
+.Op Fl -output-mode Ar mode
+.Op Fl -format Ar list
+.Op Fl -stdout
+.Op Fl -latest-symlink Ns = Ns Ar bool
+.Op Fl -exclude Ar glob
+.Op Fl -no-auto-exclude-mounts
+.Op Fl -no-snap
+.Op Fl -no-flatpak
+.Op Fl -include-home
+.Op Fl -max-memory Ar size
+.Op Fl -hash
+.Op Fl -since Ar path
+.Op Fl -delta-only
+.Op Fl -catalogers Ar expr
+.Op Fl -no-file-ownership
+.Op Fl -parallelism Ar n
+.Op Fl -timeout Ar duration
+.Op Fl -require-host-id
+.Op Fl -quiet
+.Op Fl -verbose
+.Nm
+.Fl -version
+.Sh DESCRIPTION
+.Nm
+scans the machine it runs on, enumerates every piece of installed software it
+can find — operating-system packages, language-ecosystem packages, and loose
+binaries that no package manager ever installed — and writes the result to
+local files.
+.Pp
+There is no server, no agent, no database, and no network transmission.
+Files land on disk and something else
+.Pq Xr rsync 1 , Ansible, a log shipper, a human
+is responsible for collecting them later.
+.Pp
+.Nm
+is a single static binary. It needs no runtime, no interpreter, and no
+configuration file. Running as a non-root user is fully supported: the scan
+simply misses root-only paths and DMI serial numbers, and records a warning in
+the report.
+.Pp
+All human-readable output goes to standard error. Standard output carries data
+only, and only when
+.Fl -stdout
+is given.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl -root Ar path
+Filesystem root to scan.
+Default:
+.Pa / .
+Point it at a mounted image or a fixture tree to scan something other than the
+running system. Component locations are reported as absolute system paths with
+this prefix stripped.
+.It Fl -out Ar dir
+Output directory. Created with mode 0755 if missing; files are written 0644.
+Default:
+.Pa /var/lib/swinv .
+.It Fl -name Ar template
+Basename for the output files, without an extension. The following
+placeholders are substituted:
+.Bl -tag -width "{machine_id}" -compact -offset indent
+.It Sy {hostname}
+the short hostname
+.It Sy {machine_id}
+contents of
+.Pa /etc/machine-id
+.It Sy {date}
+UTC date,
+.Ql 20060102
+.It Sy {datetime}
+UTC timestamp,
+.Ql 20060102T150405Z
+.El
+.Pp
+When this flag is not given, the default template comes from
+.Fl -output-mode .
+An explicit
+.Fl -name
+always wins.
+.It Fl -output-mode Ar mode
+Selects the default
+.Fl -name
+template, and with it the file-rotation behaviour.
+Default:
+.Cm dated .
+.Bl -tag -width "timestamped" -offset indent
+.It Cm dated
+Template
+.Ql {hostname}-{date} .
+One file per day; re-running on the same day replaces that day's file.
+.It Cm overwrite
+Template
+.Ql {hostname} .
+One fixed file, replaced on every run.
+.It Cm timestamped
+Template
+.Ql {hostname}-{datetime} .
+A brand-new file for every run, kept forever. Prune it yourself.
+.El
+.Pp
+All three modes write atomically, so
+.Cm overwrite
+never leaves a partially written file behind.
+.It Fl -format Ar list
+Comma-separated list of output formats.
+Default:
+.Ql json,csv .
+Recognised values:
+.Bl -tag -width "cyclonedx-json" -compact -offset indent
+.It Cm json
+the full report, indented, extension
+.Pa .json
+.It Cm csv
+one row per component, extension
+.Pa .csv
+.It Cm ndjson
+one JSON object per component per line, extension
+.Pa .ndjson
+.It Cm cyclonedx-json
+CycloneDX 1.6, extension
+.Pa .cdx.json
+.El
+.It Fl -stdout
+Write to standard output instead of to files. Requires exactly one
+.Fl -format .
+.It Fl -latest-symlink
+Also maintain
+.Pa {hostname}-latest.<ext>
+symlinks in the output directory, pointing at the file just written. The
+symlink is replaced atomically.
+Default: enabled; disable with
+.Fl -latest-symlink Ns = Ns Cm false .
+Most useful together with
+.Fl -output-mode Cm timestamped .
+.It Fl -exclude Ar glob
+Exclude a path from the scan. Repeatable, and appended to the built-in
+defaults. Patterns must begin with
+.Ql ./ ,
+.Ql */ ,
+or
+.Ql **/ ;
+anything else is a usage error.
+.It Fl -no-auto-exclude-mounts
+Do not automatically exclude mount points whose filesystem is not local
+.Pq nfs, cifs, sshfs, autofs, overlay, squashfs, and friends .
+Reading
+.Pa /proc/self/mountinfo
+and skipping those mounts is the single largest factor in whether a scan takes
+seconds or hours; turn this off only deliberately.
+.It Fl -no-snap
+Exclude
+.Pa /snap .
+.It Fl -no-flatpak
+Exclude
+.Pa /var/lib/flatpak .
+.Pp
+Both trees hold entire vendored runtimes. They are genuinely installed
+software and are included by default, at the cost of scan time and component
+count.
+.Pp
+Note that snaps are squashfs loop mounts and squashfs is in the non-local
+filesystem skip list;
+.Nm
+carves snap mount points out of that rule so the two behaviours do not
+contradict each other.
+.It Fl -include-home
+Also scan the user home trees
+.Pa /home
+and
+.Pa /root .
+They are skipped by default: they are typically larger than the rest of the
+filesystem combined, dominated by
+.Pa node_modules
+and virtualenv trees, and they are per-user, high-churn and privacy-sensitive.
+The skipped paths are always recorded in
+.Va scan.excluded
+and announced in
+.Va scan.warnings ,
+so a consumer can tell what was left out.
+.It Fl -max-memory Ar size
+Set a soft memory limit, for example
+.Cm 512MiB
+or
+.Cm 2GiB .
+Go's garbage collector then works proportionally harder as the limit is
+approached, trading CPU time for resident memory.
+This is a soft limit: if the genuinely live data exceeds it the process still
+allocates rather than failing, because a truncated inventory would be worse
+than a larger one. It reduces peak memory; it does not guarantee a ceiling.
+.It Fl -hash
+Record a SHA-256 digest of each component's primary on-disk file in the
+.Va sha256
+field and CSV column.
+Off by default: it reads every such file in full.
+Files backing more than one component (package databases such as
+.Pa /var/lib/dpkg/status )
+are deliberately not hashed, because a digest shared by every package on the
+machine identifies none of them and would make all of them appear to change
+whenever any one package changed.
+.It Fl -since Ar path
+Compare this scan against a previous
+.Nm
+JSON report and add a
+.Va delta
+block listing added, removed and version-changed components.
+Components are matched on name and type, not version, so an upgrade is
+reported as one change rather than a removal plus an addition.
+The full inventory is still written alongside the delta.
+.It Fl -delta-only
+With
+.Fl -since ,
+emit only the changed components instead of the full inventory. Each is tagged
+.Cm added , Cm removed No or Cm changed
+in the
+.Va change
+field.
+Requires
+.Fl -since .
+.It Fl -catalogers Ar expr
+Cataloger selection expression, in
+.Ql +name,-tag
+syntax. Empty means the default selection, which is the
+.Ql installed
+and
+.Ql directory
+tags — already correct for a live filesystem, and already covering loose
+binaries. Example:
+.Ql --catalogers os
+for operating-system packages only.
+.It Fl -no-file-ownership
+Skip package-to-file ownership resolution. Faster, but it reintroduces
+duplicate components: the binary classifier will report files that an OS
+package already claims.
+Default: ownership resolution is on.
+.It Fl -parallelism Ar n
+Number of concurrent catalogers.
+.Ql 0
+means one per CPU.
+Default:
+.Ql 0 .
+.It Fl -timeout Ar duration
+Whole-run deadline, as a Go duration string
+.Pq Ql 90s , Ql 30m , Ql 2h .
+Default:
+.Ql 30m .
+Exceeding it exits 4.
+.It Fl -require-host-id
+Fail if
+.Pa /etc/machine-id
+is unreadable. Off by default, since every host fact is optional.
+.It Fl -quiet
+Suppress status output on standard error.
+.It Fl -verbose
+Print per-stage timings — source construction, cataloging, writing — to
+standard error, so a performance regression is attributable.
+.It Fl -version
+Print the
+.Nm
+version, the git commit it was built from, and the version of Syft compiled
+into it; then exit 0.
+.El
+.Sh EXIT STATUS
+.Bl -tag -width "0" -compact
+.It 0
+Success; a complete inventory was written.
+.It 1
+Partial success; output was written but at least one cataloger failed, and
+.Ql scan.incomplete
+is true in the report. An inventory missing one ecosystem is far more useful
+than no inventory.
+.It 2
+Usage error: an unknown flag, an invalid exclusion pattern, or conflicting
+options.
+.It 3
+Fatal: the scan source could not be constructed, or the output could not be
+written.
+.It 4
+The
+.Fl -timeout
+deadline was exceeded.
+.El
+.Sh FILES
+.Bl -tag -width "/proc/self/mountinfo" -compact
+.It Pa /var/lib/swinv
+Default output directory.
+.It Pa /etc/machine-id
+Primary source of the stable host identifier, with
+.Pa /var/lib/dbus/machine-id
+as a fallback.
+.It Pa /etc/os-release
+Operating-system identity, with
+.Pa /usr/lib/os-release
+as a fallback.
+.It Pa /proc/self/mountinfo
+Read to discover non-local filesystems to exclude.
+.It Pa /sys/class/dmi/id
+Hardware vendor, product name, and — for root only — serial and UUID.
+.El
+.Sh EXAMPLES
+Scan the running system and write JSON and CSV to the default directory:
+.Bd -literal -offset indent
+swinv
+.Ed
+.Pp
+Keep one file per run forever, plus a stable
+.Ql -latest
+symlink:
+.Bd -literal -offset indent
+swinv --output-mode timestamped --latest-symlink
+.Ed
+.Pp
+Operating-system packages only, straight to standard output, for a pipeline:
+.Bd -literal -offset indent
+swinv --catalogers os --format json --stdout | jq '.components | length'
+.Ed
+.Pp
+Produce a CycloneDX document for a downstream vulnerability scanner:
+.Bd -literal -offset indent
+swinv --format cyclonedx-json --out /var/lib/swinv
+grype sbom:/var/lib/swinv/$(hostname)-latest.cdx.json
+.Ed
+.Pp
+Scan a mounted disk image rather than the live system:
+.Bd -literal -offset indent
+swinv --root /mnt/image --out ./inventory --no-auto-exclude-mounts
+.Ed
+.Sh SEE ALSO
+.Xr systemd.timer 5 ,
+.Xr systemd.exec 5
+.Pp
+.Nm
+is normally driven by
+.Pa swinv.timer ,
+a daily systemd timer with a one-hour randomised delay.
+.Sh STANDARDS
+Output conforms to the swinv JSON schema recorded in
+.Ql schema_version ,
+and, for the CycloneDX format, to CycloneDX 1.6. The CSV is RFC 4180 quoted,
+UTF-8, without a byte-order mark.
+.Sh AUTHORS
+.Nm
+is Apache-2.0 licensed and builds on
+.Lk https://github.com/anchore/syft Syft ,
+also Apache-2.0.
+.Sh CAVEATS
+Two runs on an unchanged machine produce byte-identical output apart from the
+timestamps in the
+.Ql scan
+object, which is what makes these files diffable. Anything that breaks that
+property is a bug.

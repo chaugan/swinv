@@ -1,0 +1,19 @@
+# swinv authors
+#
+# swinv is a community-owned project. Copyright is held collectively by the
+# people and organisations listed below; each contributor retains copyright in
+# their own contribution and licenses it to everyone under the Apache License
+# 2.0 (see LICENSE).
+#
+# There is no CLA and no copyright assignment. The trade-off is deliberate:
+# because no single party owns the whole work, swinv cannot be relicensed or
+# dual-licensed without the agreement of everyone listed here.
+#
+# If you contribute, add yourself to this file in the same commit. Order is
+# alphabetical by name. Either form is fine:
+#
+#     Ada Lovelace <ada@example.org>
+#     Example Corp Ltd
+#
+# Names below this line.
+chaugan <christian@chrzz.no>

@@ -1,0 +1,85 @@
+# golangci-lint configuration for swinv.
+#
+# Deliberately moderate: the standard linter set plus a handful of checks that
+# catch real bugs, minus the stylistic ones that would generate churn without
+# improving the code. Run it with `make lint`.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - gosec
+    # misspell is deliberately NOT enabled. This codebase writes British prose
+    # in comments ("behaviour", "licence") but must use the US spellings baked
+    # into the Go and Syft APIs it calls ("cataloging", "Artifacts",
+    # "Normalize"). No single misspell locale can accept both, so the linter
+    # only ever produces false positives here.
+    - nolintlint
+    - revive
+    - unconvert
+
+  settings:
+    errcheck:
+      # Deferred Close on a file opened read-only, and writes to a
+      # bytes.Buffer, cannot fail in any way the caller can act on.
+      check-type-assertions: true
+      check-blank: false
+
+    gosec:
+      excludes:
+        # G304: reading a file whose path comes from a variable IS the job of
+        # this tool; every host-facts and scan path is dynamic by design.
+        - G304
+        # G302/G306: 0755 directories and 0644 files are the documented
+        # output permissions (spec section 9).
+        - G302
+        - G306
+
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: indent-error-flow
+        - name: error-strings
+        - name: error-return
+        - name: context-as-argument
+        - name: unreachable-code
+        - name: var-declaration
+
+    staticcheck:
+      checks:
+        - all
+        # ST1000/ST1003/ST1020-1022 duplicate what revive already reports.
+        - -ST1003
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      # Tests may ignore errors and hard-code paths freely.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/chrzz/swinv
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

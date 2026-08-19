@@ -1,0 +1,108 @@
+# swinv — local software inventory collector (oneshot)
+#
+# Install:
+#   install -m 0755 bin/swinv /usr/bin/swinv
+#   install -m 0644 packaging/swinv.service packaging/swinv.timer /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now swinv.timer
+#
+# Run it once by hand with:  systemctl start swinv.service
+
+[Unit]
+Description=Local software inventory collection
+Documentation=man:swinv(8)
+# The scan reads package databases all over the filesystem; wait until local
+# mounts are in place so nothing is missed.
+After=local-fs.target
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+# On a memory-constrained host, bound the heap. --max-memory is a soft limit:
+# the GC works harder near it rather than the process failing. Measured on a
+# ~1M-file host, 1536MiB cut peak RSS ~30% and was also faster than unlimited;
+# "--max-memory 768MiB --parallelism 1" roughly halves peak RSS at ~2x the time.
+# ExecStart=/usr/bin/swinv --out /var/lib/swinv --max-memory 1536MiB
+ExecStart=/usr/bin/swinv --out /var/lib/swinv
+
+# Exit code 1 means "output written, but at least one cataloger failed".
+# That is a partial success worth keeping, so do not mark the unit failed.
+SuccessExitStatus=0 1
+
+# The whole-run deadline inside swinv defaults to 30m; give systemd headroom.
+TimeoutStartSec=45min
+
+# Inventory collection is background work. Stay out of the way of real load.
+Nice=10
+IOSchedulingClass=idle
+CPUSchedulingPolicy=idle
+
+# Creates and owns /var/lib/swinv (0755) on first start.
+StateDirectory=swinv
+StateDirectoryMode=0755
+WorkingDirectory=/var/lib/swinv
+
+# --- hardening -------------------------------------------------------------
+#
+# DELIBERATE TRADE-OFF: swinv's entire job is to read the whole filesystem and
+# enumerate installed software. Sandboxing directives that HIDE parts of the
+# tree would silently truncate the inventory, which is worse than useless — a
+# short report looks like a clean machine. So the following are intentionally
+# NOT set, and must not be added:
+#
+#   ProtectHome=            hides /home and /root; both hold real software
+#                           (virtualenvs, node_modules, ~/.local, ~/go/bin)
+#   PrivateDevices=         replaces /dev and drops device access
+#   PrivateUsers=           breaks reading root-owned package databases
+#   ProtectProc=invisible   hides /proc, which is where the mount table lives
+#   ProcSubset=pid          same
+#   RootDirectory=/         no chroot; the real tree is the subject of the scan
+#
+# What IS set below either makes the filesystem read-only (fine: swinv only
+# reads) or blocks capabilities and syscalls swinv never needs.
+
+# Read-only everywhere except the output directory. Reading is unaffected.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/swinv
+
+# /tmp and /var/tmp are private to this unit. Both are in swinv's default
+# exclusion list anyway, so nothing scannable is lost.
+PrivateTmp=yes
+
+NoNewPrivileges=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+KeyringMode=private
+
+# Read-only views of the kernel interfaces; swinv reads /proc and /sys but
+# never writes to them.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+
+# swinv runs as root so it can read root-only paths (dpkg/rpm databases, DMI
+# serials). These are the only privileges it actually uses.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+
+# AF_NETLINK is required by net.Interfaces(); AF_INET/AF_INET6 by the
+# best-effort FQDN lookup.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# --- logging ---------------------------------------------------------------
+# All human-readable output goes to stderr; data files go to /var/lib/swinv.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=swinv
+
+[Install]
+WantedBy=multi-user.target

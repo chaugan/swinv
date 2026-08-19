@@ -1,0 +1,27 @@
+# Audited exceptions to the licence gate.
+#
+# `go-licenses` classifies a dependency by pattern-matching its LICENSE file.
+# A few projects ship a permissive licence in prose that the classifier does not
+# recognise, and reports as "Unknown". Listing a module here records that a
+# human read the actual licence text and confirmed it is permissive.
+#
+# SCOPE OF THIS FILE — read before adding an entry:
+#   * An entry ONLY suppresses an "Unknown"/undetected classification.
+#   * It does NOT and MUST NOT suppress a detected GPL, AGPL, or LGPL licence.
+#     `make license-check` fails on those regardless of what is listed here.
+#   * Every entry must name the licence found and where it was read from.
+#
+# Format: <module path> <SPDX-ish licence> <justification>
+
+# LICENSE file states: "All these files have been put into the public domain.
+# You can do whatever you want with these files." Verified in the module cache
+# at github.com/xi2/xz@v0.0.0-20171230120015-48954b6210f8/LICENSE.
+# Pulled in transitively by Syft for xz decompression.
+github.com/xi2/xz  public-domain  LICENSE declares public domain; no copyleft obligation
+
+# LICENSE file is the verbatim 3-clause BSD text ("Redistributions of source
+# code must retain the above copyright notice ... Neither the names of the
+# authors nor the names of the contributors may be used to endorse ...").
+# Verified in the module cache at modernc.org/mathutil@v1.7.1/LICENSE.
+# Pulled in transitively by modernc.org/sqlite, our pure-Go SQLite driver.
+modernc.org/mathutil  BSD-3-Clause  LICENSE is verbatim 3-clause BSD

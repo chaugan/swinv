@@ -1,0 +1,161 @@
+{
+  "schema_version": "1.1",
+  "tool": {
+    "name": "swinv",
+    "version": "test",
+    "commit": "testcommit",
+    "syft_version": "pinned"
+  },
+  "host": {
+    "hostname": "fixture-host",
+    "machine_id": "0123456789abcdef0123456789abcdef",
+    "os_id": "debian",
+    "os_version_id": "12",
+    "os_pretty_name": "Debian GNU/Linux 12 (bookworm)",
+    "architecture": "amd64"
+  },
+  "scan": {
+    "started_at": "2024-01-02T03:04:05Z",
+    "finished_at": "2024-01-02T03:04:05Z",
+    "duration_ms": 0,
+    "root": "testdata/rootfs",
+    "catalogers": [
+      "installed",
+      "directory"
+    ],
+    "ran_as_root": false,
+    "incomplete": false
+  },
+  "components": [
+    {
+      "name": "bash",
+      "version": "5.2.15-2+b7",
+      "type": "deb",
+      "purl": "pkg:deb/debian/bash@5.2.15-2%2Bb7?arch=amd64&distro=debian-12",
+      "cpes": [
+        "cpe:2.3:a:bash:bash:5.2.15-2\\+b7:*:*:*:*:*:*:*"
+      ],
+      "locations": [
+        "/var/lib/dpkg/status"
+      ],
+      "found_by": "dpkg-db-cataloger"
+    },
+    {
+      "name": "openssl",
+      "version": "3.0.11-1~deb12u2",
+      "type": "deb",
+      "purl": "pkg:deb/debian/openssl@3.0.11-1~deb12u2?arch=amd64&distro=debian-12",
+      "cpes": [
+        "cpe:2.3:a:openssl:openssl:3.0.11-1\\~deb12u2:*:*:*:*:*:*:*"
+      ],
+      "locations": [
+        "/var/lib/dpkg/status"
+      ],
+      "found_by": "dpkg-db-cataloger"
+    },
+    {
+      "name": "zlib1g",
+      "version": "1:1.2.13.dfsg-1",
+      "type": "deb",
+      "purl": "pkg:deb/debian/zlib1g@1%3A1.2.13.dfsg-1?arch=amd64&distro=debian-12&upstream=zlib",
+      "cpes": [
+        "cpe:2.3:a:zlib1g:zlib1g:1\\:1.2.13.dfsg-1:*:*:*:*:*:*:*"
+      ],
+      "locations": [
+        "/var/lib/dpkg/status"
+      ],
+      "found_by": "dpkg-db-cataloger"
+    },
+    {
+      "name": "fixture-app",
+      "version": "0.1.0",
+      "type": "npm",
+      "language": "javascript",
+      "purl": "pkg:npm/fixture-app@0.1.0",
+      "cpes": [
+        "cpe:2.3:a:fixture-app:fixture-app:0.1.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:fixture-app:fixture_app:0.1.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:fixture:fixture-app:0.1.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:fixture:fixture_app:0.1.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:fixture_app:fixture-app:0.1.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:fixture_app:fixture_app:0.1.0:*:*:*:*:*:*:*"
+      ],
+      "licenses": [
+        "MIT"
+      ],
+      "locations": [
+        "/srv/app/package.json"
+      ],
+      "found_by": "javascript-package-cataloger"
+    },
+    {
+      "name": "left-pad",
+      "version": "1.3.0",
+      "type": "npm",
+      "language": "javascript",
+      "purl": "pkg:npm/left-pad@1.3.0",
+      "cpes": [
+        "cpe:2.3:a:left-pad:left-pad:1.3.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:left-pad:left_pad:1.3.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:left:left-pad:1.3.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:left:left_pad:1.3.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:left_pad:left-pad:1.3.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:left_pad:left_pad:1.3.0:*:*:*:*:*:*:*"
+      ],
+      "licenses": [
+        "WTFPL"
+      ],
+      "locations": [
+        "/srv/app/node_modules/left-pad/package.json"
+      ],
+      "found_by": "javascript-package-cataloger"
+    },
+    {
+      "name": "flask",
+      "version": "3.0.0",
+      "type": "python",
+      "language": "python",
+      "purl": "pkg:pypi/flask@3.0.0",
+      "cpes": [
+        "cpe:2.3:a:flask:flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:flask:python-flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:flask:python_flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:python-flask:flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:python-flask:python-flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:python-flask:python_flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:python:flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:python:python-flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:python:python_flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:python_flask:flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:python_flask:python-flask:3.0.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:python_flask:python_flask:3.0.0:*:*:*:*:*:*:*"
+      ],
+      "licenses": [
+        "BSD-3-Clause"
+      ],
+      "locations": [
+        "/usr/lib/python3/dist-packages/flask-3.0.0.dist-info/METADATA",
+        "/usr/lib/python3/dist-packages/flask-3.0.0.dist-info/RECORD"
+      ],
+      "found_by": "python-installed-package-cataloger"
+    },
+    {
+      "name": "requests",
+      "version": "2.31.0",
+      "type": "python",
+      "language": "python",
+      "purl": "pkg:pypi/requests@2.31.0",
+      "cpes": [
+        "cpe:2.3:a:python:requests:2.31.0:*:*:*:*:*:*:*"
+      ],
+      "licenses": [
+        "Apache 2.0"
+      ],
+      "locations": [
+        "/usr/lib/python3/dist-packages/requests-2.31.0.dist-info/METADATA",
+        "/usr/lib/python3/dist-packages/requests-2.31.0.dist-info/RECORD"
+      ],
+      "found_by": "python-installed-package-cataloger"
+    }
+  ]
+}

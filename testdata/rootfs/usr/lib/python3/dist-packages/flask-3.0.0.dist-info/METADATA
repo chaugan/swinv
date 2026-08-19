@@ -1,0 +1,5 @@
+Metadata-Version: 2.1
+Name: flask
+Version: 3.0.0
+Summary: A simple framework for building complex web applications.
+License: BSD-3-Clause
