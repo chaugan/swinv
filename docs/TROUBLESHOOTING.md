@@ -513,6 +513,41 @@ find /var/lib/swinv -maxdepth 1 -type f \( -name '*.json' -o -name '*.csv' \
 `*.json` also covers `*.cdx.json`. Do not use `-delete` on the whole directory:
 `-type f` matters, because it is what leaves the `-latest` symlinks alone.
 
+### Running under WSL2
+
+`swinv` works under WSL2 — verified on Fedora 44 — but two things differ from a
+bare-metal host, and both are correct rather than faults.
+
+**Windows drives are not scanned.** WSL mounts them under `/mnt`, which is a
+default exclusion, and the mount-table rule catches `/mnt/wsl`, `/mnt/wslg` and
+`/usr/lib/wsl/lib` besides. If you ever see a scan of `/` taking hours under
+WSL, check that `/mnt/**` is still in `scan.excluded` — walking a mounted C:
+drive is the one way to make this tool unusable:
+
+```sh
+jq -r '.scan.excluded[]' ~/inv/*-latest.json | grep mnt
+```
+
+**Kernel modules are not inventoried.** WSL supplies its own kernel and mounts
+the modules from outside the distribution, so the tree appears in
+`scan.warnings` as an auto-excluded non-local filesystem:
+
+```
+auto-excluded 23 non-local filesystem mount point(s):
+/usr/lib/modules/6.6.87.2-microsoft-standard-WSL2, /mnt/wsl, /mnt/wslg, ...
+```
+
+The effect is large. On a bare-metal Ubuntu host the kernel cataloger accounted
+for 6,905 of 14,190 components; under WSL it contributes none. That is the
+right answer — those modules belong to WSL, not to the installed
+distribution — but do not compare component counts between a WSL guest and a
+physical host and expect them to line up.
+
+**systemd may not be running.** WSL2 only starts it when `/etc/wsl.conf`
+contains `[boot]` with `systemd=true`, followed by `wsl --shutdown`. Check with
+`systemctl is-system-running`; if it reports `offline`, the shipped timer unit
+cannot be enabled. That is a WSL configuration matter, not a `swinv` problem.
+
 ### `hostname: command not found`, or a path with nothing before `-latest.json`
 
 `hostname` is not installed on a minimal Fedora, on many container images, or

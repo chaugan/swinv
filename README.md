@@ -231,7 +231,7 @@ register a pure-Go SQLite driver — see [Building](#building).
 |---|---|
 | Ubuntu / dpkg / amd64 | **Tested** on a real host, full scan and packaging |
 | `.deb` install, systemd run, purge | **Tested** on a real Ubuntu host |
-| Fedora / rpm / amd64 | **Tested** on a real host (Fedora 44 under WSL2) |
+| Fedora / rpm / amd64 | **Tested** on a real host (Fedora 44 under WSL2); `os_id` and PURL distro stamping confirmed |
 | `.rpm` install and run | **Tested** on Fedora via `dnf install` |
 | apk / pacman / portage / nix cataloging | Wired via Syft; **not** run on a real host of that family |
 | `linux/arm64` | Cross-compiled; **never executed** |
