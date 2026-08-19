@@ -254,6 +254,12 @@ packages-verify:
 #   SHA256SUMS                            checksums over all of the above
 RELEASE_ARCHES := amd64 arm64
 
+# Each binary is published twice: once carrying the version, and once without
+# it. The version-less name is what makes
+#   https://github.com/chaugan/swinv/releases/latest/download/swinv-linux-amd64
+# resolve for every release, so install instructions never carry a version
+# number that goes stale the moment the next tag lands. Same bytes, second name.
+
 release: $(DIST_DIR)/man/swinv.8.gz $(LICENSE_DOC)
 	@mkdir -p $(DIST_DIR) $(BIN_DIR)
 	@rm -f $(DIST_DIR)/SHA256SUMS
@@ -262,6 +268,7 @@ release: $(DIST_DIR)/man/swinv.8.gz $(LICENSE_DOC)
 	    echo ">> building $$out"; \
 	    CGO_ENABLED=0 GOOS=linux GOARCH=$$arch \
 	        $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $$out $(PKG) || exit 1; \
+	    cp $$out $(DIST_DIR)/swinv-linux-$$arch || exit 1; \
 	    echo ">> packaging $$arch"; \
 	    cp $$out $(BIN_DIR)/swinv || exit 1; \
 	    PKG_VERSION=$(PKG_VERSION) PKG_ARCH=$$arch \

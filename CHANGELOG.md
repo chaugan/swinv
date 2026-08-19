@@ -9,6 +9,10 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.2] — 2026-08-19
+
 ### Fixed
 
 - **A `--root` other than `/` got no exclusions at all**, so scanning a mounted
@@ -24,6 +28,9 @@ schema and cataloger coverage may still change between releases. See
 
 ### Verified
 
+- Each binary is now published twice, once with the version in its name and
+  once without, so `releases/latest/download/swinv-linux-amd64` resolves for
+  every release and install instructions never carry a version that goes stale.
 - **Seven package managers checked against their own tooling**, each an exact
   match: Alpine apk 16/16, Debian dpkg 78/78, Fedora rpm 147/147 (257/257 on a
   real host), Arch pacman 137/137, openSUSE rpm 123/123, Gentoo portage
@@ -123,6 +130,7 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/chaugan/swinv/releases/tag/v0.1.2
 [0.1.1]: https://github.com/chaugan/swinv/releases/tag/v0.1.1
 [0.1.0]: https://github.com/chaugan/swinv/releases/tag/v0.1.0

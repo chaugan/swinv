@@ -181,15 +181,21 @@ Pick whichever fits how you manage machines.
 ### Debian, Ubuntu and derivatives
 
 ```sh
-curl -LO https://github.com/chaugan/swinv/releases/download/v0.1.1/swinv_0.1.1-1_amd64.deb
-sudo dpkg -i swinv_0.1.1-1_amd64.deb
+VER=$(curl -sI https://github.com/chaugan/swinv/releases/latest | sed -n 's|.*/tag/v\([0-9.]*\).*|\1|p' | tr -d '\r')
+curl -LO "https://github.com/chaugan/swinv/releases/download/v$VER/swinv_${VER}-1_amd64.deb"
+sudo dpkg -i "swinv_${VER}-1_amd64.deb"
 ```
+
+Package filenames must carry their version, so this resolves the current one
+first. Or just take the `.deb` from the
+[releases page](https://github.com/chaugan/swinv/releases/latest).
 
 ### RHEL, Fedora, SUSE and derivatives
 
 ```sh
-curl -LO https://github.com/chaugan/swinv/releases/download/v0.1.1/swinv-0.1.1-1.x86_64.rpm
-sudo dnf install --nogpgcheck ./swinv-0.1.1-1.x86_64.rpm   # upgrade with: dnf upgrade
+VER=$(curl -sI https://github.com/chaugan/swinv/releases/latest | sed -n 's|.*/tag/v\([0-9.]*\).*|\1|p' | tr -d '\r')
+curl -LO "https://github.com/chaugan/swinv/releases/download/v$VER/swinv-${VER}-1.x86_64.rpm"
+sudo dnf install --nogpgcheck "./swinv-${VER}-1.x86_64.rpm"   # upgrade with: dnf upgrade
 ```
 
 The `./` prefix is required, or `dnf` searches the repositories for a package by
@@ -201,38 +207,40 @@ It has no dependencies of any kind, not even libc, so this works everywhere
 including Alpine and distroless images:
 
 ```sh
-curl -LO https://github.com/chaugan/swinv/releases/download/v0.1.1/swinv-v0.1.1-linux-amd64
-curl -LO https://github.com/chaugan/swinv/releases/download/v0.1.1/SHA256SUMS
+curl -LO https://github.com/chaugan/swinv/releases/latest/download/swinv-linux-amd64
+curl -LO https://github.com/chaugan/swinv/releases/latest/download/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
-sudo install -m0755 swinv-v0.1.1-linux-amd64 /usr/bin/swinv
+sudo install -m0755 swinv-linux-amd64 /usr/bin/swinv
 ```
 
-Use `-linux-arm64` for 64-bit ARM. **Always check the digest** — you are about
+Use `swinv-linux-arm64` for 64-bit ARM. Every release publishes each binary
+twice — once with the version in the name for archival, and once without, so
+these `latest/download` URLs keep working and never need editing. **Always check the digest** — you are about
 to run this as root against your whole filesystem.
 
 ### With Go
 
 ```sh
-go install github.com/chaugan/swinv/cmd/swinv@v0.1.1
+go install github.com/chaugan/swinv/cmd/swinv@latest
 ```
 
 `go install` applies no `-ldflags`, so `swinv --version` falls back to the module
-version recorded in the build info. It will read `v0.1.1` rather than a git
-description, which is correct but differs from a release binary.
+version recorded in the build info. It reports the module version rather than a
+git description, which is correct but differs from a release binary.
 
 ### Ansible, for a fleet
 
 ```yaml
 - name: Install swinv
   ansible.builtin.get_url:
-    url: "https://github.com/chaugan/swinv/releases/download/v0.1.1/swinv-v0.1.1-linux-{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+    url: "https://github.com/chaugan/swinv/releases/latest/download/swinv-linux-{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
     dest: /usr/bin/swinv
     mode: "0755"
-    checksum: sha256:https://github.com/chaugan/swinv/releases/download/v0.1.1/SHA256SUMS
+    checksum: sha256:https://github.com/chaugan/swinv/releases/latest/download/SHA256SUMS
 
 - name: Install the systemd units
   ansible.builtin.get_url:
-    url: "https://raw.githubusercontent.com/chaugan/swinv/v0.1.1/packaging/swinv.{{ item }}"
+    url: "https://raw.githubusercontent.com/chaugan/swinv/main/packaging/swinv.{{ item }}"
     dest: "/usr/lib/systemd/system/swinv.{{ item }}"
     mode: "0644"
   loop: [service, timer]
@@ -255,7 +263,7 @@ A static binary needs no base image at all:
 
 ```dockerfile
 FROM scratch
-COPY swinv-v0.1.1-linux-amd64 /swinv
+COPY swinv-linux-amd64 /swinv
 ENTRYPOINT ["/swinv"]
 ```
 
@@ -264,7 +272,7 @@ that path rather than `/`:
 
 ```sh
 docker run --rm -v /:/host:ro -v "$PWD":/out \
-  swinv:0.1.1 --root /host --out /out --offline
+  swinv:latest --root /host --out /out --offline
 ```
 
 `swinv` recognises a mounted tree as a root filesystem when it contains

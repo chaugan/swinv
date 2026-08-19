@@ -168,6 +168,7 @@ jobs:
           name: swinv-${{ steps.version.outputs.version }}
           path: |
             dist/swinv-*-linux-*
+            dist/swinv-linux-*
             dist/*.deb
             dist/*.rpm
             dist/SHA256SUMS
@@ -184,6 +185,7 @@ jobs:
           generate_release_notes: true
           files: |
             dist/swinv-*-linux-*
+            dist/swinv-linux-*
             dist/*.deb
             dist/*.rpm
             dist/SHA256SUMS
