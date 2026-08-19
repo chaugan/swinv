@@ -246,7 +246,7 @@ assume the others do.
 | **`syft` CLI** | The same detection engine — `swinv` imports it | Adds host identity, stable dated/rotating filenames, atomic writes, day-over-day deltas, and a flat CSV built for SQL. One binary, no JSON round-trip |
 | **osquery** | Far broader host telemetry, SQL over live state | `swinv` is a oneshot binary, not an always-on agent with a daemon and its own query language. Nothing listens, nothing persists |
 | **`dpkg -l` / `rpm -qa`** | Fast, already installed | OS packages only. Misses every language ecosystem and every unmanaged binary, and the output differs per distro |
-| **A vulnerability scanner** | CVE matching | Different job. `swinv` emits CycloneDX and hands off — see [below](#vulnerability-scanning) |
+| **`grype dir:/`** | Package discovery *and* CVE matching in one pass — also Anchore's, also Syft-powered | A complement, not a competitor. `grype` needs a vulnerability database it downloads and refreshes; `swinv` runs `--offline` with no network at all. `grype` produces findings, `swinv` produces an inventory: host identity, dated files, deltas, CSV. Keep the SBOM and you can re-match new CVEs daily **without re-walking the filesystem** — see [below](#vulnerability-scanning) |
 
 ## Output file naming
 
@@ -443,12 +443,32 @@ and have never run on a real host of that family.
 ## Vulnerability scanning
 
 `swinv` deliberately does not scan for vulnerabilities. Emit CycloneDX and hand
-it to a scanner — for example Anchore's `grype`, which is a separate tool:
+it to a scanner — for example Anchore's [`grype`](https://github.com/anchore/grype),
+whose Syft library `swinv` is built on:
 
 ```sh
-swinv --format cyclonedx-json --stdout > sbom.json
+swinv --format cyclonedx-json --stdout --offline > sbom.json
 grype sbom:sbom.json
 ```
+
+**Why separate them at all**, when `grype dir:/` would do both?
+
+- **The expensive half is the filesystem walk.** Matching an SBOM against a CVE
+  database takes seconds; walking a million files takes minutes. Store the
+  SBOM and you can re-match every morning as new advisories land, without
+  touching the host again.
+- **CVE results go stale when the host has not changed.** An inventory is a
+  fact about a machine at a point in time and stays true; a vulnerability
+  report is a join against a database that moves daily. Keeping them separate
+  means you can tell "the machine changed" from "the advisories changed" —
+  which is exactly what `--since` answers.
+- **`grype` needs the network to fetch and refresh its database.** `swinv
+  --offline` performs no network activity whatsoever, which matters on
+  air-gapped or egress-restricted fleets. Collect the SBOMs and match them
+  somewhere with connectivity.
+
+> Not yet verified: this handoff is documented but the CycloneDX output has not
+> been fed to `grype` end to end. If you try it, please report the result.
 
 ## Building
 
