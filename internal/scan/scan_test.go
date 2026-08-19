@@ -954,3 +954,27 @@ func TestParseMountinfoExcludesHostSharedFilesystems(t *testing.T) {
 		}
 	}
 }
+
+// TestUnquoteDistroValues is the regression test for a bug found on Gentoo,
+// whose /etc/os-release writes ID='gentoo' with single quotes. Syft's parser
+// leaves them in the value, so host.os_id arrived as 'gentoo' — five extra
+// characters in a CSV column and a fleet grouping key, making a query as
+// ordinary as WHERE os_id = 'gentoo' match nothing.
+func TestUnquoteDistroValues(t *testing.T) {
+	cases := map[string]string{
+		"'gentoo'":       "gentoo",
+		`"debian"`:       "debian",
+		"'Gentoo Linux'": "Gentoo Linux",
+		"'2.18'":         "2.18",
+		"fedora":         "fedora", // already clean
+		"":               "",
+		"'":              "'", // a lone quote is not a pair
+		`"`:              `"`,
+		"'mixed\"":       "'mixed\"", // mismatched, leave alone
+	}
+	for in, want := range cases {
+		if got := unquote(in); got != want {
+			t.Errorf("unquote(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

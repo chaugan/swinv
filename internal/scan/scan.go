@@ -373,10 +373,28 @@ func distroFrom(s *sbom.SBOM) *Distro {
 	}
 	d := s.Artifacts.LinuxDistribution
 	return &Distro{
-		ID:         d.ID,
-		VersionID:  d.VersionID,
-		PrettyName: d.PrettyName,
+		ID:         unquote(d.ID),
+		VersionID:  unquote(d.VersionID),
+		PrettyName: unquote(d.PrettyName),
 	}
+}
+
+// unquote strips a matched pair of surrounding quotes.
+//
+// Syft's os-release parser leaves single quotes in the value, and Gentoo writes
+// its file that way: ID='gentoo' arrives as the five characters 'gentoo'
+// rather than the six letters. That value reaches host.os_id, a CSV column and
+// a fleet-wide grouping key, so a query as ordinary as WHERE os_id = 'gentoo'
+// silently matches nothing. Verified against gentoo/stage3, where every field
+// was affected. internal/hostfacts parses the same file correctly; this only
+// exists because the Syft value takes precedence when it is populated.
+func unquote(v string) string {
+	if len(v) >= 2 {
+		if (v[0] == '\'' && v[len(v)-1] == '\'') || (v[0] == '"' && v[len(v)-1] == '"') {
+			return v[1 : len(v)-1]
+		}
+	}
+	return v
 }
 
 // componentFromPackage converts one Syft package into a model component.
