@@ -73,6 +73,11 @@ type Options struct {
 	// reserved for --stdout report data.
 	Verbose bool
 
+	// SkipNestedRootfs drops components that exist only because the scan walked
+	// into a second root filesystem stored inside this one. Off by default:
+	// scanning a chroot or a mounted image is a legitimate thing to want.
+	SkipNestedRootfs bool
+
 	// Hash fills Component.SHA256 with the digest of each component's primary
 	// on-disk file. Off by default: it reads every such file in full.
 	Hash bool
@@ -186,7 +191,9 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	// "/abs/root/proc/**" instead of the "./proc/**" the operator configured,
 	// and the recorded list would change with the scan root. Pass a copy.
 	res.QuarantinedSymlinks = quarantined
-	res.Warnings = append(res.Warnings, preflightWarnings...)
+	for _, w := range preflightWarnings {
+		res.addWarning(w)
+	}
 
 	excludes := append(append([]string(nil), opts.Excludes...), quarantined...)
 	src, err := syft.GetSource(ctx, absRoot, syft.DefaultGetSourceConfig().
@@ -248,10 +255,26 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 		res.Components = model.Normalize(components)
 	}
+	if nested := NestedRoots(opts.Root, res.Components); len(nested) > 0 {
+		if opts.SkipNestedRootfs {
+			kept, dropped := DropNestedRootComponents(res.Components, nested)
+			res.Components = kept
+			res.addWarning(fmt.Sprintf(
+				"--skip-nested-rootfs dropped %d component(s) belonging to %d nested root filesystem(s): %s",
+				dropped, len(nested), summarizeList(nested)))
+		} else {
+			for _, w := range DetectNestedRoots(opts.Root, res.Components) {
+				res.addWarning(w)
+			}
+		}
+	}
+
 	if opts.Hash {
 		hashStart := time.Now()
 		hashed, hashWarnings := HashComponents(ctx, absRoot, opts.Parallelism, res.Components)
-		res.Warnings = append(res.Warnings, hashWarnings...)
+		for _, w := range hashWarnings {
+			res.addWarning(w)
+		}
 		opts.logf("hashed %d of %d component files in %s",
 			hashed, len(res.Components), roundDuration(time.Since(hashStart)))
 	}

@@ -1,10 +1,8 @@
 # `swinv`
 
 [![CI](https://github.com/chrzz/swinv/actions/workflows/ci.yml/badge.svg)](https://github.com/chrzz/swinv/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/chrzz/swinv?sort=semver)](https://github.com/chrzz/swinv/releases/latest)
 [![Go](https://img.shields.io/github/go-mod/go-version/chrzz/swinv)](go.mod)
-[![Go Report Card](https://goreportcard.com/badge/github.com/chrzz/swinv)](https://goreportcard.com/report/github.com/chrzz/swinv)
-[![License](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 **Local software inventory for Linux: one static binary, files on disk, nothing
 leaves the host.**
@@ -20,7 +18,7 @@ leaves the machine**. Collecting the files afterwards is deliberately your job:
 
 The one piece of network activity is an optional reverse-DNS lookup used to
 fill in the host's FQDN — ordinary name resolution against your configured
-resolver, carrying no inventory data. `--no-fqdn` turns it off, at which point
+resolver, carrying no inventory data. `--offline` turns it off, at which point
 the run performs no network activity at all.
 
 Detection comes from [Syft](https://github.com/anchore/syft), imported as a
@@ -32,12 +30,12 @@ in-process with no subprocess overhead.
 ## Quickstart
 
 ```sh
-sudo dpkg -i swinv_1.0.0-1_amd64.deb   # or: sudo rpm -i swinv-1.0.0-1.x86_64.rpm
+sudo dpkg -i swinv_0.1.0-1_amd64.deb   # or: sudo rpm -i swinv-0.1.0-1.x86_64.rpm
 swinv --out /tmp/inv                   # scan /, write JSON + CSV
 ```
 
 No package? The binary is static and has no dependencies, so
-`install -m0755 swinv-v1.0.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
+`install -m0755 swinv-v0.1.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
 That writes dated files plus `-latest` symlinks:
@@ -182,19 +180,19 @@ and `linux/arm64`, with a `SHA256SUMS` file to check them against.
 Debian / Ubuntu:
 
 ```sh
-sudo dpkg -i swinv_1.0.0-1_amd64.deb
+sudo dpkg -i swinv_0.1.0-1_amd64.deb
 ```
 
 RHEL / Fedora / SUSE:
 
 ```sh
-sudo rpm -i swinv-1.0.0-1.x86_64.rpm
+sudo rpm -i swinv-0.1.0-1.x86_64.rpm
 ```
 
 Or just drop the static binary on `PATH` — it has no dependencies at all:
 
 ```sh
-install -m0755 swinv-v1.0.0-linux-amd64 /usr/bin/swinv
+install -m0755 swinv-v0.1.0-linux-amd64 /usr/bin/swinv
 ```
 
 The packages install the binary to `/usr/bin/swinv`, the systemd units to
@@ -216,6 +214,24 @@ inventories in `/var/lib/swinv`** rather than deleting a fleet's history.
 | OS packages | dpkg/deb, rpm, apk, pacman, portage |
 | Language packages | Python, npm/yarn, Go modules, Rust crates, Java/JVM, Ruby, PHP, .NET, … |
 | Loose binaries | ELF binaries and statically-linked programs never installed by a package manager |
+
+## Platform testing status
+
+`swinv` is `v0.x`. Detection for every ecosystem below comes from Syft and is
+wired in, but **only the first two rows have been exercised on real hardware**.
+Treat the rest as expected-to-work rather than verified, and please report what
+you find.
+
+| Surface | Status |
+|---|---|
+| Ubuntu / dpkg / amd64 | **Tested** on a real host, full scan and packaging |
+| `.deb` install, systemd run, purge | **Tested** on a real Ubuntu host |
+| `.rpm` package | Built and payload inspected; **not** installed on Fedora/RHEL/SUSE |
+| rpm / apk / pacman / portage / nix cataloging | Wired via Syft; **not** run on a real host of that family |
+| `linux/arm64` | Cross-compiled; **never executed** |
+
+You are entitled to assume dpkg-on-amd64 works. You are not yet entitled to
+assume the others do.
 
 ## Why not just use…?
 
@@ -259,7 +275,8 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--format LIST` | `json,csv` | `json`, `csv`, `ndjson`, `cyclonedx-json` |
 | `--stdout` | false | Write to stdout; requires exactly one `--format` |
 | `--include-home` | false | Also scan `/home` and `/root` |
-| `--no-fqdn` | false | Skip the reverse-DNS lookup; no network activity at all |
+| `--offline` | false | Perform no network activity at all (skips the FQDN lookup) |
+| `--skip-nested-rootfs` | false | Drop packages that came from a nested root filesystem (see Known limitations) |
 | `--since PATH` | — | Diff against a previous report |
 | `--hash` | false | Record a SHA-256 per component |
 | `--max-memory SIZE` | — | Soft memory limit, e.g. `1536MiB` |
@@ -329,7 +346,7 @@ Worth knowing before you roll this out fleet-wide:
   best-effort reverse-DNS lookup that fills `host.fqdn` — a normal name
   resolution against your configured resolver, bounded to two seconds and never
   fatal. It carries no scan data, but it does tell that resolver the host
-  looked itself up. **`--no-fqdn` disables it**, making the run completely
+  looked itself up. **`--offline` disables it**, making the run completely
   network-silent at the cost of one field. It is skipped automatically whenever
   `--root` is not `/`.
 - **It records host identity**: hostname, `/etc/machine-id`, boot ID, kernel,
@@ -373,6 +390,48 @@ Two findings that will save you time, both measured:
   speed lever, not a memory lever, despite looking like one.
 
 **[Measured numbers, tuning guide and the full analysis →](docs/PERFORMANCE.md)**
+
+## Known limitations
+
+Read these before trusting the output.
+
+### Nested root filesystems produce phantom packages
+
+Scanning `/` walks into **any second root filesystem stored on the disk** — an
+extracted tarball, a container rootfs backup, a chroot, a VM image, or a test
+fixture — reads its package database, and reports those packages as installed.
+
+Worse, they wear *this* host's distribution label, because distro detection
+happens once per scan. On the machine `swinv` was developed on, the repository's
+own 7-package test fixture appeared in the inventory as a Debian 12 `openssl`
+on an Ubuntu 26.04 host, with nothing marking it as foreign.
+
+`swinv` **warns** when it detects this, naming the directories it found:
+
+```
+found 1 nested root filesystem(s) containing their own package databases:
+/opt/code/swinv/testdata/rootfs. Their packages are reported as installed and
+carry this host's distribution label …
+```
+
+`--skip-nested-rootfs` drops them. It is off by default because scanning a
+chroot or a mounted image is sometimes exactly what you want, and silently
+discarding it would be its own surprise. The filter keys on *package-database
+evidence*, so a genuinely installed package is never removed even when a nested
+tree also references its files.
+
+### Performance does not meet the original targets
+
+A full scan takes minutes, not seconds, and peaks well above 512 MB. The cost is
+Syft's whole-filesystem index, and `--catalogers os` does not avoid it. The
+numbers are measured and published in [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
+rather than restated as goals.
+
+### Only one platform has been exercised
+
+See [Platform testing status](#platform-testing-status). dpkg on amd64 is
+tested; the rpm, apk, pacman, portage and nix paths are wired in through Syft
+and have never run on a real host of that family.
 
 ## Vulnerability scanning
 
@@ -453,6 +512,8 @@ touching the writers.
 | [Performance](docs/PERFORMANCE.md) | Measured numbers and the tuning guide |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Symptom → cause → fix |
 | [Contributing](CONTRIBUTING.md) | Build, test, architecture, the Syft landmines |
+| [Security](SECURITY.md) | Reporting, and exactly what data a report contains |
+| [Changelog](CHANGELOG.md) | What changed, and the versioning policy |
 | [Specification](docs/INVENTORYCOLLECTORSPEC.md) | The spec of record, with rationale |
 
 ## Non-goals

@@ -60,32 +60,33 @@ func main() {
 
 // config holds every flag value, so run stays testable.
 type config struct {
-	root            string
-	out             string
-	name            string
-	outputMode      string
-	format          string
-	toStdout        bool
-	latestSymlink   bool
-	excludes        stringList
-	noAutoExclude   bool
-	noSnap          bool
-	noFlatpak       bool
-	includeHome     bool
-	hash            bool
-	noFQDN          bool
-	maxMemory       string
-	maxMemoryBytes  int64
-	since           string
-	deltaOnly       bool
-	catalogers      string
-	noFileOwnership bool
-	parallelism     int
-	timeout         time.Duration
-	requireHostID   bool
-	quiet           bool
-	verbose         bool
-	showVersion     bool
+	root             string
+	out              string
+	name             string
+	outputMode       string
+	format           string
+	toStdout         bool
+	latestSymlink    bool
+	excludes         stringList
+	noAutoExclude    bool
+	noSnap           bool
+	noFlatpak        bool
+	includeHome      bool
+	hash             bool
+	offline          bool
+	skipNestedRootfs bool
+	maxMemory        string
+	maxMemoryBytes   int64
+	since            string
+	deltaOnly        bool
+	catalogers       string
+	noFileOwnership  bool
+	parallelism      int
+	timeout          time.Duration
+	requireHostID    bool
+	quiet            bool
+	verbose          bool
+	showVersion      bool
 
 	nameSet bool // whether --name was given explicitly
 }
@@ -152,8 +153,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	defer cancel()
 
 	// --- host facts -------------------------------------------------------
+	// --offline is an intent ("touch no network"); hostfacts states the
+	// mechanism ("skip the FQDN lookup"). Keeping the two layers separate means
+	// a future network-touching feature is disabled by the same flag without
+	// renaming anything.
 	var hostOpts []hostfacts.Option
-	if cfg.noFQDN {
+	if cfg.offline {
 		hostOpts = append(hostOpts, hostfacts.WithoutFQDN())
 	}
 	host := hostfacts.Collect(ctx, cfg.root, hostOpts...)
@@ -195,13 +200,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// --- scan -------------------------------------------------------------
 	logf("scanning %s ...", cfg.root)
 	result, err := scan.Run(ctx, scan.Options{
-		Root:          cfg.root,
-		Excludes:      patterns,
-		CatalogerExpr: cfg.catalogers,
-		FileOwnership: !cfg.noFileOwnership,
-		Parallelism:   cfg.parallelism,
-		Hash:          cfg.hash,
-		Verbose:       cfg.verbose && !cfg.quiet,
+		Root:             cfg.root,
+		Excludes:         patterns,
+		CatalogerExpr:    cfg.catalogers,
+		FileOwnership:    !cfg.noFileOwnership,
+		Parallelism:      cfg.parallelism,
+		Hash:             cfg.hash,
+		SkipNestedRootfs: cfg.skipNestedRootfs,
+		Verbose:          cfg.verbose && !cfg.quiet,
 	})
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {

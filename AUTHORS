@@ -10,10 +10,13 @@
 # dual-licensed without the agreement of everyone listed here.
 #
 # If you contribute, add yourself to this file in the same commit. Order is
-# alphabetical by name. Either form is fine:
+# alphabetical. Any of these forms is fine — an email address is optional, and
+# a GitHub handle is enough to identify you:
 #
+#     @octocat
+#     Ada Lovelace
 #     Ada Lovelace <ada@example.org>
 #     Example Corp Ltd
 #
 # Names below this line.
-chaugan <christian@chrzz.no>
+@chaugan

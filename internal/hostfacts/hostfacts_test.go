@@ -841,7 +841,7 @@ func TestTrailingBackslashes(t *testing.T) {
 	}
 }
 
-// TestWithoutFQDNSkipsTheOnlyNetworkCall proves the --no-fqdn guarantee: the
+// TestWithoutFQDNSkipsTheOnlyNetworkCall proves the --offline guarantee: the
 // reverse-DNS lookup is the only network activity in swinv, and this option is
 // what makes "nothing leaves the machine" literally true.
 func TestWithoutFQDNSkipsTheOnlyNetworkCall(t *testing.T) {

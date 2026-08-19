@@ -13,7 +13,8 @@ document. Read it before proposing a design change.
 
 ## Getting set up
 
-There is no published release and no prebuilt binary. Build from source.
+Tagged releases publish static binaries and `.deb`/`.rpm` packages for
+`linux/amd64` and `linux/arm64`. To work on `swinv` itself, build from source.
 
 | Component | Pinned version | Why pinned |
 |---|---|---|

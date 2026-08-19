@@ -34,7 +34,8 @@ that would otherwise be rejected.
 |---|---|---|
 | `--root PATH` | `/` | Filesystem root to scan |
 | `--include-home` | `false` | Also scan `/home` and `/root` |
-| `--no-fqdn` | `false` | Skip the reverse-DNS lookup used for `host.fqdn`. The only network activity swinv performs; with this set the run is completely network-silent. |
+| `--offline` | `false` | Skip the reverse-DNS lookup used for `host.fqdn`. The only network activity swinv performs; with this set the run is completely network-silent. |
+| `--skip-nested-rootfs` | `false` | Drop components whose package-database evidence comes from a nested root filesystem (an extracted image, container rootfs, chroot or test fixture) rather than the scanned host. Off by default: scanning such a tree is sometimes the point. |
 | `--no-snap` | `false` | Exclude `/snap` |
 | `--no-flatpak` | `false` | Exclude `/var/lib/flatpak` |
 | `--catalogers EXPR` | *(none)* | Cataloger selection expression, e.g. `os` |
@@ -143,7 +144,7 @@ swinv: found 7 components in 1663ms
 |---|---|---|
 | `dated` *(default)* | `{hostname}-{date}` | `web-01-20240309.json` — one file per day; a second run the same day replaces it |
 | `overwrite` | `{hostname}` | `web-01.json` — one fixed file, replaced atomically every run |
-| `timestamped` | `{hostname}-{datetime}` | `web-01-20240309T140506Z.json` — a brand-new file every run, kept forever |
+| `timestamped` | `{hostname}-{datetime}` | `web-01-20240309T140506.000Z.json` — a brand-new file every run, kept forever |
 
 One file is produced per requested `--format`, sharing the basename and
 differing only in extension. With `--latest-symlink` (on by default) a
@@ -344,7 +345,7 @@ Running as a non-root user is fully supported and is **not** an error. Such a
 run misses root-only paths and the DMI serial and UUID; `scan.ran_as_root` is
 `false`, a warning is recorded, and the exit code is unaffected.
 
-`swinv -h` prints usage to stderr and exits 2. `swinv --version` prints to
+`swinv -h` prints usage to stderr and exits 0 — asking for help is not an error. `swinv --version` prints to
 stdout and exits 0.
 
 ## Environment

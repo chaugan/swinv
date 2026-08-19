@@ -16,7 +16,8 @@ Usage:
 
 Scans this machine, enumerates installed software (OS packages, language
 packages, and loose binaries), and writes the result to local files.
-Nothing is ever sent over the network.
+No inventory data ever leaves the machine. The only network activity is a
+reverse-DNS lookup for the host's FQDN; --offline disables it.
 
 Flags:
 `
@@ -44,7 +45,8 @@ func parseFlags(args []string, stderr io.Writer) (*config, int, error) {
 	fs.BoolVar(&cfg.noFlatpak, "no-flatpak", false, "exclude /var/lib/flatpak")
 	fs.BoolVar(&cfg.includeHome, "include-home", false, "also scan user home directories (/home and /root); off by default because they dominate scan time and are privacy-sensitive")
 	fs.StringVar(&cfg.maxMemory, "max-memory", "", "soft memory limit, e.g. 512MiB or 2GiB; makes the GC work harder near the limit (empty = unlimited)")
-	fs.BoolVar(&cfg.noFQDN, "no-fqdn", false, "skip the reverse-DNS lookup for the host FQDN; makes the run perform no network activity whatsoever")
+	fs.BoolVar(&cfg.offline, "offline", false, "perform no network activity at all; skips the reverse-DNS lookup that fills host.fqdn, which is the only thing swinv uses the network for")
+	fs.BoolVar(&cfg.skipNestedRootfs, "skip-nested-rootfs", false, "drop components that exist only because the scan walked into a second root filesystem (an extracted image, a container rootfs, a chroot); off by default because scanning those is sometimes the point")
 	fs.BoolVar(&cfg.hash, "hash", false, "record a SHA-256 of each component's primary file; useful for change detection and integrity, at the cost of reading every such file")
 	fs.StringVar(&cfg.since, "since", "", "path to a previous swinv JSON report; adds a delta of added/removed/changed components")
 	fs.BoolVar(&cfg.deltaOnly, "delta-only", false, "with --since, emit only the changed components instead of the full inventory")

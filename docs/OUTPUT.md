@@ -84,7 +84,7 @@ escaping is disabled, so PURLs and CPEs are written literally rather than with
 
   "tool": {                                  // what produced this file
     "name": "swinv",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "commit": "a1b2c3d",
     "syft_version": "v1.51.0"
   },

@@ -20,7 +20,8 @@
 .Op Fl -no-snap
 .Op Fl -no-flatpak
 .Op Fl -include-home
-.Op Fl -no-fqdn
+.Op Fl -offline
+.Op Fl -skip-nested-rootfs
 .Op Fl -max-memory Ar size
 .Op Fl -hash
 .Op Fl -since Ar path
@@ -191,7 +192,7 @@ The skipped paths are always recorded in
 and announced in
 .Va scan.warnings ,
 so a consumer can tell what was left out.
-.It Fl -no-fqdn
+.It Fl -offline
 Skip the reverse-DNS lookup used to fill
 .Va host.fqdn .
 That lookup is the only network activity
@@ -213,6 +214,15 @@ approached, trading CPU time for resident memory.
 This is a soft limit: if the genuinely live data exceeds it the process still
 allocates rather than failing, because a truncated inventory would be worse
 than a larger one. It reduces peak memory; it does not guarantee a ceiling.
+.It Fl -skip-nested-rootfs
+Drop components whose package-database evidence comes from a second root
+filesystem stored inside the one being scanned — an extracted image, a
+container rootfs, a chroot, or a test fixture.
+Such packages are otherwise reported as installed and carry this host's
+distribution label.
+Off by default, because scanning such a tree is sometimes exactly the intent;
+.Nm
+warns about them either way.
 .It Fl -hash
 Record a SHA-256 digest of each component's primary on-disk file in the
 .Va sha256

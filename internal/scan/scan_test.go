@@ -751,3 +751,158 @@ func TestHashComponentsEmpty(t *testing.T) {
 		t.Errorf("hashed = %d, want 0", n)
 	}
 }
+
+// --- nested root filesystems ------------------------------------------------
+
+// TestDetectNestedRoots covers the most confusing thing swinv can do: walking
+// into a second root filesystem stored inside this one — an extracted image, a
+// container rootfs, a chroot, or this repository's own test fixture — and
+// reporting its packages as installed, wearing the host's distribution label.
+func TestDetectNestedRoots(t *testing.T) {
+	components := []model.Component{
+		// The real host database: must never be flagged.
+		{Name: "bash", Type: "deb", Locations: []string{"/var/lib/dpkg/status"}},
+		// A fixture tree carried in a source checkout.
+		{Name: "openssl", Type: "deb", Locations: []string{"/opt/app/testdata/rootfs/var/lib/dpkg/status"}},
+		// An extracted RPM-based image.
+		{Name: "glibc", Type: "rpm", Locations: []string{"/srv/images/el9/var/lib/rpm"}},
+		// Something with no database at all.
+		{Name: "left-pad", Type: "npm", Locations: []string{"/srv/app/node_modules/left-pad/package.json"}},
+	}
+
+	warnings := DetectNestedRoots("/", components)
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v, want exactly one", warnings)
+	}
+	w := warnings[0]
+	for _, want := range []string{"/opt/app/testdata/rootfs", "/srv/images/el9", "--exclude"} {
+		if !strings.Contains(w, want) {
+			t.Errorf("warning should mention %q; got: %s", want, w)
+		}
+	}
+	if strings.Contains(w, "found 3 nested") {
+		t.Errorf("the real root database was counted as nested: %s", w)
+	}
+}
+
+// TestNestedRootPrefixCoversEveryPackageManager: the first implementation
+// matched only the exact dpkg "status" path, so a nested RPM, apk, pacman or
+// portage tree was invisible. Anchor on the database directory instead.
+func TestNestedRootPrefixCoversEveryPackageManager(t *testing.T) {
+	nested := []string{
+		"/image/var/lib/dpkg/status",
+		"/image/var/lib/dpkg/status.d/foo",
+		"/image/var/lib/rpm",
+		"/image/var/lib/rpm/Packages",
+		"/image/var/lib/rpm/rpmdb.sqlite",
+		"/image/usr/lib/sysimage/rpm/Packages.db",
+		"/image/usr/share/rpm/Packages",
+		"/image/lib/apk/db/installed",
+		"/image/var/lib/pacman/local/bash-5.2/desc",
+		"/image/var/db/pkg/app-shells/bash-5.2/CONTENTS",
+	}
+	for _, p := range nested {
+		prefix, ok := nestedRootPrefix(p)
+		if !ok {
+			t.Errorf("%s was not recognised as a nested package database", p)
+			continue
+		}
+		if prefix != "/image" {
+			t.Errorf("%s -> prefix %q, want /image", p, prefix)
+		}
+	}
+
+	// The scanned root's own databases must never be flagged.
+	for _, p := range []string{
+		"/var/lib/dpkg/status", "/var/lib/rpm", "/var/lib/rpm/Packages", "/lib/apk/db/installed",
+		"/var/lib/pacman/local/bash-5.2/desc", "/var/db/pkg/app-shells/bash-5.2/CONTENTS",
+	} {
+		if _, ok := nestedRootPrefix(p); ok {
+			t.Errorf("%s is the host's own database and must not be flagged", p)
+		}
+	}
+
+	// Whole-segment matching: a lookalike path must not match.
+	for _, p := range []string{"/srv/myvar/lib/rpmthing/x", "/opt/varlibdpkg/status"} {
+		if _, ok := nestedRootPrefix(p); ok {
+			t.Errorf("%s matched on a partial segment", p)
+		}
+	}
+}
+
+func TestDetectNestedRootsCleanHost(t *testing.T) {
+	clean := []model.Component{
+		{Name: "bash", Type: "deb", Locations: []string{"/var/lib/dpkg/status"}},
+		{Name: "glibc", Type: "rpm", Locations: []string{"/var/lib/rpm"}},
+		{Name: "musl", Type: "apk", Locations: []string{"/lib/apk/db/installed"}},
+	}
+	if got := DetectNestedRoots("/", clean); got != nil {
+		t.Errorf("a host with only its own package databases must produce no warning, got %v", got)
+	}
+}
+
+// TestDetectNestedRootsOnlyForRealRoot: scanning a fixture tree deliberately IS
+// scanning a nested root, so warning about it would be noise.
+func TestDetectNestedRootsOnlyForRealRoot(t *testing.T) {
+	components := []model.Component{
+		{Name: "openssl", Type: "deb", Locations: []string{"/opt/app/testdata/rootfs/var/lib/dpkg/status"}},
+	}
+	if got := DetectNestedRoots("/some/fixture", components); got != nil {
+		t.Errorf("no warning expected for a non-root scan, got %v", got)
+	}
+}
+
+// TestDropNestedRootComponents: --skip-nested-rootfs must remove only the
+// components that exist *because of* a nested tree, never a real package that
+// merely also appears in one.
+func TestDropNestedRootComponents(t *testing.T) {
+	roots := []string{"/opt/app/testdata/rootfs"}
+	components := []model.Component{
+		{Name: "bash", Type: "deb", Locations: []string{"/var/lib/dpkg/status"}},
+		{Name: "phantom", Type: "deb", Locations: []string{"/opt/app/testdata/rootfs/var/lib/dpkg/status"}},
+		// Read from the nested database, but Syft's file-ownership overlap also
+		// attached a real host path. This is the case that made the naive
+		// "every location is inside the tree" rule useless: it must still be
+		// dropped, because its defining evidence is the nested database.
+		{Name: "overlapped", Type: "deb", Locations: []string{
+			"/opt/app/testdata/rootfs/var/lib/dpkg/status",
+			"/usr/share/doc/libssl3/copyright",
+		}},
+		// A real host package that merely lives under a path resembling the
+		// nested tree must survive: its evidence is the host's own database.
+		{Name: "realpkg", Type: "deb", Locations: []string{"/var/lib/dpkg/status", "/opt/app/testdata/rootfs/usr/bin/thing"}},
+		// Syft merged a genuinely installed package with a same-name entry from
+		// the nested tree. It cites BOTH databases, so it must be kept: losing
+		// real installed software is far worse than one package too many.
+		{Name: "merged", Type: "deb", Locations: []string{
+			"/var/lib/dpkg/status",
+			"/opt/app/testdata/rootfs/var/lib/dpkg/status",
+		}},
+		{Name: "nolocation", Type: "deb"},
+	}
+
+	kept, dropped := DropNestedRootComponents(components, roots)
+	if dropped != 2 {
+		t.Errorf("dropped = %d, want 2 (phantom and overlapped)", dropped)
+	}
+	names := map[string]bool{}
+	for _, c := range kept {
+		names[c.Name] = true
+	}
+	for _, gone := range []string{"phantom", "overlapped"} {
+		if names[gone] {
+			t.Errorf("%q came from a nested package database and should have been dropped", gone)
+		}
+	}
+	for _, want := range []string{"bash", "realpkg", "merged", "nolocation"} {
+		if !names[want] {
+			t.Errorf("%q cites the host's own database and must be kept", want)
+		}
+	}
+
+	// No detected roots means nothing is touched.
+	same, n := DropNestedRootComponents(components, nil)
+	if n != 0 || len(same) != len(components) {
+		t.Errorf("with no nested roots nothing should change, got %d dropped", n)
+	}
+}

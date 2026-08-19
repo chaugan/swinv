@@ -96,7 +96,11 @@ jobs:
             echo "::error::refusing unsafe version string '$VERSION'"
             exit 1
           fi
+          # Package filenames drop the leading "v" (rpm rejects it), so the
+          # install instructions in the release notes must use that form or
+          # they name files that do not exist.
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "pkgversion=${VERSION#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build binaries and packages
         env:
@@ -173,12 +177,12 @@ jobs:
 
             Debian / Ubuntu:
             ```sh
-            sudo dpkg -i swinv_${{ steps.version.outputs.version }}-1_amd64.deb
+            sudo dpkg -i swinv_${{ steps.version.outputs.pkgversion }}-1_amd64.deb
             ```
 
             RHEL / Fedora / SUSE:
             ```sh
-            sudo rpm -i swinv-${{ steps.version.outputs.version }}-1.x86_64.rpm
+            sudo rpm -i swinv-${{ steps.version.outputs.pkgversion }}-1.x86_64.rpm
             ```
 
             Or just drop the static binary somewhere on `PATH`:

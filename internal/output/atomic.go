@@ -151,7 +151,10 @@ func syncDir(dir string) error {
 	}
 	defer d.Close()
 	if err := d.Sync(); err != nil {
-		if errors.Is(err, fs.ErrInvalid) || errors.Is(err, fs.ErrPermission) {
+		// Some filesystems simply do not implement directory fsync. The data
+		// and the rename are already in place, so this is not a failure.
+		if errors.Is(err, fs.ErrInvalid) || errors.Is(err, fs.ErrPermission) ||
+			errors.Is(err, errors.ErrUnsupported) {
 			return nil
 		}
 		return fmt.Errorf("output: syncing directory %s: %w", dir, err)
