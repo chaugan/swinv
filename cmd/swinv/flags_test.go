@@ -177,7 +177,7 @@ func TestExpandName(t *testing.T) {
 	tests := []struct{ tmpl, want string }{
 		{"{hostname}-{date}", "web-01-20240309"},
 		{"{hostname}", "web-01"},
-		{"{hostname}-{datetime}", "web-01-20240309T140506Z"},
+		{"{hostname}-{datetime}", "web-01-20240309T140506.000Z"},
 		{"{machine_id}", "abc123"},
 		{"inventory", "inventory"},
 	}
@@ -240,5 +240,48 @@ func TestParseFormats(t *testing.T) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestHelpExitsZero: -h is a successful request for help, not a usage error.
+// Exiting 2 makes every `swinv -h` in a script or a Dockerfile look like a
+// failure.
+func TestHelpExitsZero(t *testing.T) {
+	for _, arg := range []string{"-h", "--help"} {
+		t.Run(arg, func(t *testing.T) {
+			var out bytes.Buffer
+			cfg, code, err := parseFlags([]string{arg}, &out)
+			if err != nil {
+				t.Errorf("err = %v, want nil", err)
+			}
+			if code != exitOK {
+				t.Errorf("exit code = %d, want %d", code, exitOK)
+			}
+			if cfg != nil {
+				t.Error("cfg should be nil so the caller exits without scanning")
+			}
+			if !strings.Contains(out.String(), "swinv") {
+				t.Error("usage text should have been written")
+			}
+		})
+	}
+}
+
+// TestDatetimeTemplateIsCollisionResistant: with second precision, two runs
+// started in the same second silently overwrote each other in timestamped mode.
+func TestDatetimeTemplateIsCollisionResistant(t *testing.T) {
+	base := time.Date(2026, 8, 19, 14, 5, 6, 0, time.UTC)
+	mk := func(ns int) string {
+		return expandName("{hostname}-{datetime}", &model.Report{
+			Host: model.Host{Hostname: "web-01"},
+			Scan: model.ScanMeta{StartedAt: base.Add(time.Duration(ns))},
+		})
+	}
+	a, b := mk(0), mk(int(200*time.Millisecond))
+	if a == b {
+		t.Errorf("two runs 200ms apart produced the same basename %q", a)
+	}
+	if !strings.HasPrefix(a, "web-01-20260819T140506") {
+		t.Errorf("unexpected format %q", a)
 	}
 }

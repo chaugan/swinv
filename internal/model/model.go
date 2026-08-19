@@ -135,9 +135,10 @@ type Component struct {
 	SHA256 string `json:"sha256,omitempty"`
 
 	// Change labels this component against the --since baseline: one of
-	// ChangeAdded, ChangeChanged, ChangeRemoved, or empty for unchanged.
-	// It is never written to the JSON components list, only to the CSV
-	// "change" column and to --delta-only output.
+	// ChangeAdded, ChangeChanged, ChangeRemoved, or empty for unchanged. It is
+	// populated only when --since was given, and is omitted from every format
+	// otherwise. ChangeRemoved appears only in --delta-only output, since a
+	// removed component is by definition absent from the current inventory.
 	Change string `json:"change,omitempty"`
 }
 
@@ -156,39 +157,50 @@ func (c Component) identity() identity {
 // ComputeDelta compares the current components against a baseline and reports
 // what was added, removed, and version-changed.
 //
-// Matching is on (Name, Type). A component present in both with a different
-// Version is a Change, not a removal plus an addition — which is the whole
-// point of running a delta on a daily inventory. Both inputs are assumed to
-// have been through Normalize, so the outputs inherit its ordering.
+// Matching is on (Name, Type), then on version within that group. A component
+// present in both at a different version is a Change, not a removal plus an
+// addition — which is the whole point of running a delta on a daily inventory.
+//
+// An identity can legitimately hold several versions at once: a Debian host
+// normally has two or three linux-image packages installed side by side. Those
+// are matched version-by-version first, so an unchanged multi-version identity
+// produces no delta at all. Only when exactly one version is left unmatched on
+// each side is that pair reported as a Change; anything else is reported as
+// explicit additions and removals rather than an invented version move.
+//
+// Both inputs are assumed to have been through Normalize, so the outputs
+// inherit its ordering.
 func ComputeDelta(current, baseline []Component) *Delta {
-	base := make(map[identity]Component, len(baseline))
-	for _, c := range baseline {
-		// Normalize sorts by version, so the last write wins deterministically.
-		base[c.identity()] = c
-	}
-	seen := make(map[identity]struct{}, len(current))
+	currentByID := groupByIdentity(current)
+	baselineByID := groupByIdentity(baseline)
 
 	d := &Delta{}
-	for _, c := range current {
-		id := c.identity()
-		seen[id] = struct{}{}
-		prev, existed := base[id]
+
+	for id, cur := range currentByID {
+		base := baselineByID[id]
+		addedVersions, _ := diffVersions(cur, base)
+		removedVersions, _ := diffVersions(base, cur)
+
 		switch {
-		case !existed:
-			d.Added = append(d.Added, c)
-		case prev.Version != c.Version:
+		case len(addedVersions) == 1 && len(removedVersions) == 1:
+			// Exactly one version moved: a genuine upgrade or downgrade.
 			d.Changed = append(d.Changed, Change{
-				Name:        c.Name,
-				Type:        c.Type,
-				FromVersion: prev.Version,
-				ToVersion:   c.Version,
-				PURL:        c.PURL,
+				Name:        id.name,
+				Type:        id.typ,
+				FromVersion: removedVersions[0].Version,
+				ToVersion:   addedVersions[0].Version,
+				PURL:        addedVersions[0].PURL,
 			})
+		default:
+			d.Added = append(d.Added, addedVersions...)
+			d.Removed = append(d.Removed, removedVersions...)
 		}
 	}
-	for _, c := range baseline {
-		if _, still := seen[c.identity()]; !still {
-			d.Removed = append(d.Removed, c)
+
+	// Identities that vanished entirely.
+	for id, base := range baselineByID {
+		if _, still := currentByID[id]; !still {
+			d.Removed = append(d.Removed, base...)
 		}
 	}
 
@@ -203,16 +215,80 @@ func ComputeDelta(current, baseline []Component) *Delta {
 	return d
 }
 
+// groupByIdentity buckets components by (Name, Type), keeping every version.
+func groupByIdentity(components []Component) map[identity][]Component {
+	out := make(map[identity][]Component, len(components))
+	for _, c := range components {
+		id := c.identity()
+		out[id] = append(out[id], c)
+	}
+	return out
+}
+
+// diffVersions returns the members of a whose Version does not appear in b.
+func diffVersions(a, b []Component) (only []Component, matched int) {
+	inB := make(map[string]int, len(b))
+	for _, c := range b {
+		inB[c.Version]++
+	}
+	for _, c := range a {
+		if inB[c.Version] > 0 {
+			inB[c.Version]--
+			matched++
+			continue
+		}
+		only = append(only, c)
+	}
+	return only, matched
+}
+
+// Tag marks each component in the current inventory with how it differs from
+// the baseline, leaving unchanged components with an empty Change.
+//
+// Tagging is keyed on (Name, Type, Version), not just identity, because an
+// identity can hold several versions at once and only some of them may have
+// moved.
+//
+// This is what makes a plain --since run useful: the file keeps the complete
+// inventory *and* a consumer can filter it to just what moved, without having
+// to join against the delta block by hand. --delta-only uses DeltaComponents
+// instead, which drops the unchanged entries entirely.
+func (d *Delta) Tag(components []Component) {
+	if d == nil {
+		return
+	}
+	type versioned struct {
+		id      identity
+		version string
+	}
+	kind := make(map[versioned]string, len(d.Added)+len(d.Changed))
+	for _, c := range d.Added {
+		kind[versioned{c.identity(), c.Version}] = ChangeAdded
+	}
+	for _, ch := range d.Changed {
+		kind[versioned{identity{ch.Name, ch.Type}, ch.ToVersion}] = ChangeChanged
+	}
+	for i := range components {
+		if k, ok := kind[versioned{components[i].identity(), components[i].Version}]; ok {
+			components[i].Change = k
+		}
+	}
+}
+
 // DeltaComponents flattens a Delta into a component list with Change set on
 // each entry, for --delta-only output. Removed components keep the version
-// they had in the baseline.
+// they had in the baseline. Unchanged components are omitted entirely.
 func (d *Delta) DeltaComponents(current []Component) []Component {
 	if d == nil {
 		return []Component{}
 	}
-	byIdentity := make(map[identity]Component, len(current))
+	type versioned struct {
+		id      identity
+		version string
+	}
+	byVersion := make(map[versioned]Component, len(current))
 	for _, c := range current {
-		byIdentity[c.identity()] = c
+		byVersion[versioned{c.identity(), c.Version}] = c
 	}
 
 	out := make([]Component, 0, len(d.Added)+len(d.Removed)+len(d.Changed))
@@ -225,7 +301,7 @@ func (d *Delta) DeltaComponents(current []Component) []Component {
 		out = append(out, c)
 	}
 	for _, ch := range d.Changed {
-		c, ok := byIdentity[identity{ch.Name, ch.Type}]
+		c, ok := byVersion[versioned{identity{ch.Name, ch.Type}, ch.ToVersion}]
 		if !ok {
 			c = Component{Name: ch.Name, Type: ch.Type, Version: ch.ToVersion, PURL: ch.PURL}
 		}
@@ -234,31 +310,6 @@ func (d *Delta) DeltaComponents(current []Component) []Component {
 	}
 	sort.SliceStable(out, func(i, j int) bool { return Less(out[i], out[j]) })
 	return out
-}
-
-// Tag marks each component in the current inventory with how it differs from
-// the baseline, leaving unchanged components with an empty Change.
-//
-// This is what makes a plain --since run useful: the file keeps the complete
-// inventory *and* a consumer can filter it to just what moved, without having
-// to join against the delta block by hand. --delta-only uses DeltaComponents
-// instead, which drops the unchanged entries entirely.
-func (d *Delta) Tag(components []Component) {
-	if d == nil {
-		return
-	}
-	kind := make(map[identity]string, len(d.Added)+len(d.Changed))
-	for _, c := range d.Added {
-		kind[c.identity()] = ChangeAdded
-	}
-	for _, ch := range d.Changed {
-		kind[identity{ch.Name, ch.Type}] = ChangeChanged
-	}
-	for i := range components {
-		if k, ok := kind[components[i].identity()]; ok {
-			components[i].Change = k
-		}
-	}
 }
 
 // IsEmpty reports whether nothing changed between the two scans.

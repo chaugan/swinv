@@ -506,12 +506,12 @@ Pick one of these:
 **Retain 90 days with `find`** (run from cron, or as an `ExecStartPost=`):
 
 ```sh
-find /var/lib/swinv -maxdepth 1 -type f -name '*.json' -mtime +90 -delete
-find /var/lib/swinv -maxdepth 1 -type f -name '*.csv'  -mtime +90 -delete
+find /var/lib/swinv -maxdepth 1 -type f \( -name '*.json' -o -name '*.csv' \
+     -o -name '*.ndjson' \) -mtime +90 -delete
 ```
 
-Do not use `-delete` on the whole directory: `-type f` matters, because it is
-what leaves the `-latest` symlinks alone.
+`*.json` also covers `*.cdx.json`. Do not use `-delete` on the whole directory:
+`-type f` matters, because it is what leaves the `-latest` symlinks alone.
 
 **Or use logrotate** with `daily`/`rotate 90` on `/var/lib/swinv/*.json`.
 

@@ -137,6 +137,15 @@ func HashComponents(ctx context.Context, root string, parallelism int, component
 	}
 
 	if skipped := len(paths) - len(digests); skipped > 0 {
+		// A cancelled or timed-out run leaves digests missing for a completely
+		// different reason; reporting those as "unreadable" would send the
+		// operator looking for a permissions problem that does not exist.
+		if err := ctx.Err(); err != nil {
+			warnings = append(warnings, fmt.Sprintf(
+				"hashing stopped early after %d of %d component file(s): %v",
+				len(digests), len(paths), err))
+			return hashed, warnings
+		}
 		warnings = append(warnings, fmt.Sprintf(
 			"%d of %d component file(s) could not be hashed (unreadable, too large, or removed mid-scan)",
 			skipped, len(paths)))

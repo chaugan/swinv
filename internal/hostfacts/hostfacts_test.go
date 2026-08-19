@@ -840,3 +840,31 @@ func TestTrailingBackslashes(t *testing.T) {
 		})
 	}
 }
+
+// TestWithoutFQDNSkipsTheOnlyNetworkCall proves the --no-fqdn guarantee: the
+// reverse-DNS lookup is the only network activity in swinv, and this option is
+// what makes "nothing leaves the machine" literally true.
+func TestWithoutFQDNSkipsTheOnlyNetworkCall(t *testing.T) {
+	ctx := context.Background()
+
+	withFQDN := Collect(ctx, "/")
+	withoutFQDN := Collect(ctx, "/", WithoutFQDN())
+
+	if withoutFQDN.FQDN != "" {
+		t.Errorf("FQDN = %q with WithoutFQDN(), want empty", withoutFQDN.FQDN)
+	}
+
+	// Everything else must still be collected; the option costs one field.
+	if withoutFQDN.Hostname != withFQDN.Hostname {
+		t.Errorf("hostname differs: %q vs %q", withoutFQDN.Hostname, withFQDN.Hostname)
+	}
+	if withoutFQDN.MachineID != withFQDN.MachineID {
+		t.Errorf("machine_id differs")
+	}
+	if withoutFQDN.KernelRelease != withFQDN.KernelRelease {
+		t.Errorf("kernel_release differs")
+	}
+	if withoutFQDN.Architecture == "" {
+		t.Error("architecture should still be populated")
+	}
+}

@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/chrzz/swinv/internal/model"
@@ -77,7 +78,29 @@ const (
 // ctx bounds the DNS work only; cancelling it does not abort the (purely
 // local, non-blocking) file reads. The returned Host has already been passed
 // through (*model.Host).Normalize, so its slices are sorted and deduplicated.
-func Collect(ctx context.Context, fsRoot string) (h model.Host) {
+// Option adjusts what Collect gathers.
+type Option func(*options)
+
+type options struct {
+	skipFQDN bool
+}
+
+// WithoutFQDN suppresses the reverse-DNS lookup used to fill Host.FQDN.
+//
+// That lookup is the only thing in swinv that talks to the network at all. It
+// sends no inventory data — just the ordinary name resolution any program does
+// — but it does reveal to the configured resolver that this host looked itself
+// up. Callers that need "nothing leaves the machine" to be literally true pass
+// this and lose only the FQDN field.
+func WithoutFQDN() Option {
+	return func(o *options) { o.skipFQDN = true }
+}
+
+func Collect(ctx context.Context, fsRoot string, opts ...Option) (h model.Host) {
+	var cfg options
+	for _, apply := range opts {
+		apply(&cfg)
+	}
 	root, isSystemRoot := normalizeRoot(fsRoot)
 
 	// Belt and braces: this package promises never to panic, and it is called
@@ -114,7 +137,9 @@ func Collect(ctx context.Context, fsRoot string) (h model.Host) {
 	h.Virtualization = detectVirtualization(root, h.ProductName, h.SystemVendor)
 
 	if isSystemRoot {
-		h.FQDN = lookupFQDN(ctx, h.Hostname)
+		if !cfg.skipFQDN {
+			h.FQDN = lookupFQDN(ctx, h.Hostname)
+		}
 		h.IPv4, h.IPv6, h.MACs = interfaceAddrs()
 	}
 
@@ -520,11 +545,23 @@ func cleanDMI(v string) string {
 // is missing, is a directory, or cannot be read because the caller is not root
 // — yields "" with no error and no log line.
 func readFile(root, rel string) string {
-	f, err := os.Open(filepath.Join(root, filepath.FromSlash(rel)))
+	// O_NONBLOCK matters: every source this package reads is a small regular
+	// file, but if one of those paths is a FIFO — whether by accident or
+	// because someone put it there — a plain Open would block until a writer
+	// appeared and hang the whole inventory run on a cosmetic field.
+	f, err := os.OpenFile(filepath.Join(root, filepath.FromSlash(rel)),
+		os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return ""
 	}
 	defer func() { _ = f.Close() }()
+
+	// Check the descriptor we actually opened rather than stat-ing the path
+	// separately, so the answer cannot change underneath us.
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
+		return ""
+	}
 
 	b, err := io.ReadAll(io.LimitReader(f, maxFileSize))
 	if err != nil {

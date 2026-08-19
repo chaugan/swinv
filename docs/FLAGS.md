@@ -34,6 +34,7 @@ that would otherwise be rejected.
 |---|---|---|
 | `--root PATH` | `/` | Filesystem root to scan |
 | `--include-home` | `false` | Also scan `/home` and `/root` |
+| `--no-fqdn` | `false` | Skip the reverse-DNS lookup used for `host.fqdn`. The only network activity swinv performs; with this set the run is completely network-silent. |
 | `--no-snap` | `false` | Exclude `/snap` |
 | `--no-flatpak` | `false` | Exclude `/var/lib/flatpak` |
 | `--catalogers EXPR` | *(none)* | Cataloger selection expression, e.g. `os` |
@@ -157,7 +158,7 @@ Placeholders available in `--name`:
 | `{hostname}` | `host.hostname` |
 | `{machine_id}` | `host.machine_id` (`/etc/machine-id`) |
 | `{date}` | Scan start, UTC, `20060102` |
-| `{datetime}` | Scan start, UTC, `20060102T150405Z` |
+| `{datetime}` | Scan start, UTC, `20060102T150405.000Z` |
 
 Both the substituted values and the finished basename are **sanitised**: every
 character outside `[A-Za-z0-9._-]` is dropped, so a hostile or merely odd

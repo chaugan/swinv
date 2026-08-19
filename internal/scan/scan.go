@@ -203,7 +203,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 	defer func() { _ = src.Close() }()
 	opts.logf("source constructed in %s (root %s, %d exclusion patterns)",
-		roundDuration(time.Since(started)), absRoot, len(opts.Excludes))
+		roundDuration(time.Since(started)), absRoot, len(excludes))
 
 	// --- stage 2: cataloging ----------------------------------------------
 	selection, applied := catalogerSelection(opts.CatalogerExpr)

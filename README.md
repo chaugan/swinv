@@ -14,9 +14,14 @@ software it can find — OS packages, language packages, and loose binaries that
 package manager ever installed — then writes the result to local JSON and CSV
 files.
 
-There is no server, no daemon, no database, and no network transmission of any
-kind. Collecting the files afterwards is deliberately your job: `rsync`, Ansible,
-a log shipper, or `scp`.
+There is no server, no daemon and no database, and **no inventory data ever
+leaves the machine**. Collecting the files afterwards is deliberately your job:
+`rsync`, Ansible, a log shipper, or `scp`.
+
+The one piece of network activity is an optional reverse-DNS lookup used to
+fill in the host's FQDN — ordinary name resolution against your configured
+resolver, carrying no inventory data. `--no-fqdn` turns it off, at which point
+the run performs no network activity at all.
 
 Detection comes from [Syft](https://github.com/anchore/syft), imported as a
 library, which gives roughly 40 package ecosystems and a binary classifier
@@ -229,10 +234,11 @@ inventories in `/var/lib/swinv`** rather than deleting a fleet's history.
 |---|---|---|
 | `dated` *(default)* | `web-01-20260819.json` | One file per day; re-running the same day replaces it |
 | `overwrite` | `web-01.json` | **One fixed file, replaced every run** |
-| `timestamped` | `web-01-20260819T140506Z.json` | **A new file for every run**, kept |
+| `timestamped` | `web-01-20260819T140506.123Z.json` | **A new file for every run**, kept |
 
 `--name` overrides the mode entirely and supports `{hostname}`, `{machine_id}`,
-`{date}` and `{datetime}`.
+`{date}` and `{datetime}` (millisecond precision, so two runs in the same
+second cannot collide).
 
 Every write is atomic — temp file, `fsync`, `rename` — so a collector can never
 pick up a half-written inventory, and killing `swinv` mid-write leaves the
@@ -253,6 +259,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--format LIST` | `json,csv` | `json`, `csv`, `ndjson`, `cyclonedx-json` |
 | `--stdout` | false | Write to stdout; requires exactly one `--format` |
 | `--include-home` | false | Also scan `/home` and `/root` |
+| `--no-fqdn` | false | Skip the reverse-DNS lookup; no network activity at all |
 | `--since PATH` | — | Diff against a previous report |
 | `--hash` | false | Record a SHA-256 per component |
 | `--max-memory SIZE` | — | Soft memory limit, e.g. `1536MiB` |
@@ -317,9 +324,14 @@ swinv --out /var/lib/swinv --output-mode timestamped \
 
 Worth knowing before you roll this out fleet-wide:
 
-- **No network egress, ever.** `swinv` opens no sockets to send data. The only
-  outbound name resolution is an optional, best-effort reverse lookup for the
-  host's FQDN, bounded to two seconds and never fatal.
+- **No inventory data is ever transmitted.** `swinv` opens no sockets to send
+  results anywhere. The single exception to "no network at all" is a
+  best-effort reverse-DNS lookup that fills `host.fqdn` — a normal name
+  resolution against your configured resolver, bounded to two seconds and never
+  fatal. It carries no scan data, but it does tell that resolver the host
+  looked itself up. **`--no-fqdn` disables it**, making the run completely
+  network-silent at the cost of one field. It is skipped automatically whenever
+  `--root` is not `/`.
 - **It records host identity**: hostname, `/etc/machine-id`, boot ID, kernel,
   DMI vendor/product, and non-loopback IPs and MAC addresses. That is what makes
   reports joinable across a fleet — but it means the files identify the machine.

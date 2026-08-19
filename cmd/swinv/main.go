@@ -73,6 +73,7 @@ type config struct {
 	noFlatpak       bool
 	includeHome     bool
 	hash            bool
+	noFQDN          bool
 	maxMemory       string
 	maxMemoryBytes  int64
 	since           string
@@ -133,12 +134,29 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
+	// Load the --since baseline up front. Validating it only after the scan
+	// means a typo in the path costs a full multi-minute scan before the
+	// error appears.
+	var baseline *model.Report
+	if cfg.since != "" {
+		var err error
+		baseline, err = loadBaseline(cfg.since)
+		if err != nil {
+			fmt.Fprintf(stderr, "swinv: --since: %v\n", err)
+			return exitUsage
+		}
+	}
+
 	startedAt := time.Now().UTC()
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.timeout)
 	defer cancel()
 
 	// --- host facts -------------------------------------------------------
-	host := hostfacts.Collect(ctx, cfg.root)
+	var hostOpts []hostfacts.Option
+	if cfg.noFQDN {
+		hostOpts = append(hostOpts, hostfacts.WithoutFQDN())
+	}
+	host := hostfacts.Collect(ctx, cfg.root, hostOpts...)
 	if cfg.requireHostID && host.MachineID == "" {
 		fmt.Fprintln(stderr, "swinv: --require-host-id given but /etc/machine-id is empty or unreadable")
 		return exitFatal
@@ -234,12 +252,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	// --- delta against a previous report ----------------------------------
-	if cfg.since != "" {
-		baseline, err := loadBaseline(cfg.since)
-		if err != nil {
-			fmt.Fprintf(stderr, "swinv: --since: %v\n", err)
-			return exitUsage
-		}
+	if baseline != nil {
 		delta := model.ComputeDelta(report.Components, baseline.Components)
 		delta.Since = cfg.since
 		delta.BaselineAt = baseline.Scan.StartedAt
@@ -388,7 +401,9 @@ func expandName(tmpl string, r *model.Report) string {
 		"{hostname}", sanitize(host),
 		"{machine_id}", sanitize(r.Host.MachineID),
 		"{date}", r.Scan.StartedAt.UTC().Format("20060102"),
-		"{datetime}", r.Scan.StartedAt.UTC().Format("20060102T150405Z"),
+		// Millisecond precision: with second precision two runs started in the
+		// same second silently overwrite each other in --output-mode timestamped.
+		"{datetime}", r.Scan.StartedAt.UTC().Format("20060102T150405.000Z"),
 	)
 	out := sanitize(repl.Replace(tmpl))
 	if out == "" {

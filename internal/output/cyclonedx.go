@@ -90,8 +90,18 @@ func cdxComponent(c model.Component, refs map[string]int) cyclonedx.Component {
 		out.CPE = c.CPEs[0]
 	}
 
+	// SHA-256 has a first-class home in CycloneDX, so use it rather than
+	// smuggling the digest through a custom property.
+	if c.SHA256 != "" {
+		out.Hashes = &[]cyclonedx.Hash{{
+			Algorithm: cyclonedx.HashAlgoSHA256,
+			Value:     c.SHA256,
+		}}
+	}
+
 	var props []cyclonedx.Property
 	props = appendProp(props, propComponentPrefix+"type", c.Type)
+	props = appendProp(props, propComponentPrefix+"change", c.Change)
 	props = appendProp(props, propComponentPrefix+"language", c.Language)
 	props = appendProp(props, propComponentPrefix+"found_by", c.FoundBy)
 	if len(c.CPEs) > 1 {

@@ -104,5 +104,6 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=swinv
 
-[Install]
-WantedBy=multi-user.target
+# No [Install] section on purpose. This unit is driven by swinv.timer, and
+# enabling it directly would run a multi-minute filesystem scan during boot.
+# "systemctl start swinv.service" still works for a one-off run.

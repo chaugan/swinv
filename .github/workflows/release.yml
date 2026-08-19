@@ -69,7 +69,10 @@ jobs:
           cache: true
 
       - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+        # Pinned, and kept in step with the NFPM_VERSION fallback in the
+        # Makefile: an unpinned build tool can change what ships in a package
+        # between two builds of the same tag.
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
 
       # Untrusted input is passed through the environment, never interpolated
       # into the shell, and is validated before it reaches make/nfpm.
@@ -153,7 +156,10 @@ jobs:
 
       - name: Publish GitHub release
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
+        # Pinned to a SHA, not the mutable v2 tag: this step runs with
+        # contents:write, so a compromised or retagged action could publish
+        # arbitrary assets under our release.
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           draft: true          # review the notes before it goes public
           generate_release_notes: true

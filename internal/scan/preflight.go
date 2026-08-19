@@ -88,7 +88,7 @@ func QuarantineSymlinks(ctx context.Context, root string, excludes []string) (pa
 			if !ok {
 				return nil
 			}
-			quarantined = append(quarantined, "./"+rel)
+			quarantined = append(quarantined, "./"+escapeGlobMeta(rel))
 		}
 		return nil
 	})
@@ -187,6 +187,24 @@ func relativeTo(root, p string) (string, bool) {
 		return "", false
 	}
 	return p[len(root)+1:], true
+}
+
+// escapeGlobMeta backslash-escapes the characters doublestar treats as pattern
+// syntax, so a symlink whose name legitimately contains one of them still
+// produces a pattern that matches exactly that file. A link called
+// "libfoo[1].so" would otherwise become a character-class pattern that matches
+// something else entirely, or nothing at all.
+func escapeGlobMeta(p string) string {
+	var b strings.Builder
+	b.Grow(len(p) + 8)
+	for _, r := range p {
+		switch r {
+		case '*', '?', '[', ']', '{', '}', '\\':
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // truncateList returns at most n elements.

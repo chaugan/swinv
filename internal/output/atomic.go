@@ -19,6 +19,16 @@ func tempSuffix(path string) string {
 	return path + ".tmp-" + strconv.Itoa(os.Getpid())
 }
 
+// clearStaleTemp removes debris left at the legacy "<target>.tmp-<pid>" name by
+// an earlier crashed run that happened to share this PID. Remove never follows
+// symlinks, so this cannot be redirected somewhere else.
+func clearStaleTemp(target string) error {
+	if err := os.Remove(tempSuffix(target)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("output: removing stale temp file %s: %w", tempSuffix(target), err)
+	}
+	return nil
+}
+
 // AtomicWriteFile writes a file by staging it alongside its target and
 // renaming it into place, so that a reader never observes a partial file and
 // an existing file is only ever replaced by a complete one.
@@ -37,20 +47,19 @@ func AtomicWriteFile(path string, perm os.FileMode, fn func(io.Writer) error) er
 	}
 
 	dir := filepath.Dir(path)
-	tmp := tempSuffix(path)
-
-	// Clear any debris left by an earlier crashed run that happened to share
-	// this PID. Remove never follows symlinks, so this cannot be redirected.
-	if err := os.Remove(tmp); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("output: removing stale temp file %s: %w", tmp, err)
+	if err := clearStaleTemp(path); err != nil {
+		return err
 	}
 
-	// O_EXCL keeps a pre-existing symlink at the temp path from redirecting
-	// the write somewhere else.
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	// os.CreateTemp guarantees a name no other writer holds, which the PID
+	// alone does not: two writers inside one process, or a live process that
+	// reused this PID, would otherwise collide on the same staging file. It
+	// also creates O_EXCL, so a pre-existing symlink cannot redirect the write.
+	f, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
 	if err != nil {
-		return fmt.Errorf("output: creating temp file %s: %w", tmp, err)
+		return fmt.Errorf("output: creating temp file next to %s: %w", path, err)
 	}
+	tmp := f.Name()
 
 	// Until the rename succeeds, every exit path must leave nothing behind.
 	committed := false

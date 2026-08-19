@@ -48,7 +48,7 @@ make golden         # rebuild, then regenerate testdata/golden from testdata/roo
 make bench          # wall time and peak RSS of a scan over testdata/rootfs
 make licenses       # run license-check, then regenerate THIRD_PARTY_LICENSES.md
 make license-check  # fail on any GPL/AGPL/LGPL/unknown dependency
-make release        # linux/amd64 + linux/arm64 + bin/SHA256SUMS
+make release        # linux/amd64 + linux/arm64 + dist/SHA256SUMS
 make clean          # remove bin/, coverage output, and the bench output tree
 ```
 

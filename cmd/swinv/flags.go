@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -43,6 +44,7 @@ func parseFlags(args []string, stderr io.Writer) (*config, int, error) {
 	fs.BoolVar(&cfg.noFlatpak, "no-flatpak", false, "exclude /var/lib/flatpak")
 	fs.BoolVar(&cfg.includeHome, "include-home", false, "also scan user home directories (/home and /root); off by default because they dominate scan time and are privacy-sensitive")
 	fs.StringVar(&cfg.maxMemory, "max-memory", "", "soft memory limit, e.g. 512MiB or 2GiB; makes the GC work harder near the limit (empty = unlimited)")
+	fs.BoolVar(&cfg.noFQDN, "no-fqdn", false, "skip the reverse-DNS lookup for the host FQDN; makes the run perform no network activity whatsoever")
 	fs.BoolVar(&cfg.hash, "hash", false, "record a SHA-256 of each component's primary file; useful for change detection and integrity, at the cost of reading every such file")
 	fs.StringVar(&cfg.since, "since", "", "path to a previous swinv JSON report; adds a delta of added/removed/changed components")
 	fs.BoolVar(&cfg.deltaOnly, "delta-only", false, "with --since, emit only the changed components instead of the full inventory")
@@ -61,6 +63,11 @@ func parseFlags(args []string, stderr io.Writer) (*config, int, error) {
 	}
 
 	if err := fs.Parse(args); err != nil {
+		// -h/--help is a successful request for help, not a usage error, so it
+		// must exit 0 or every `swinv -h` in a script looks like a failure.
+		if errors.Is(err, flag.ErrHelp) {
+			return nil, exitOK, nil
+		}
 		// flag has already printed the problem and the usage block.
 		return nil, exitUsage, fmt.Errorf("invalid flags")
 	}

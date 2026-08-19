@@ -443,3 +443,69 @@ func TestDeltaTag(t *testing.T) {
 	var nilDelta *Delta
 	nilDelta.Tag(current) // must not panic
 }
+
+// TestComputeDeltaMultipleVersionsOfOneIdentity is a regression test for a bug
+// that would have fired on essentially every Debian host: two kernels are
+// normally installed side by side, and keying the baseline on (name, type)
+// alone kept only the last one, so an *unchanged* pair was reported as a
+// version change every single run.
+func TestComputeDeltaMultipleVersionsOfOneIdentity(t *testing.T) {
+	both := []Component{
+		{Name: "linux-image", Version: "6.8.0-40", Type: "deb"},
+		{Name: "linux-image", Version: "6.8.0-45", Type: "deb"},
+	}
+	if d := ComputeDelta(both, both); !d.IsEmpty() {
+		t.Errorf("identical multi-version inventories must produce an empty delta, got %+v", d)
+	}
+
+	// Adding a third kernel is an addition, not a change.
+	plusOne := append(append([]Component(nil), both...),
+		Component{Name: "linux-image", Version: "6.8.0-50", Type: "deb"})
+	d := ComputeDelta(plusOne, both)
+	if len(d.Added) != 1 || d.Added[0].Version != "6.8.0-50" {
+		t.Errorf("Added = %+v, want just 6.8.0-50", d.Added)
+	}
+	if len(d.Changed) != 0 || len(d.Removed) != 0 {
+		t.Errorf("Changed=%+v Removed=%+v, want both empty", d.Changed, d.Removed)
+	}
+
+	// Dropping the oldest kernel is a removal, not a change.
+	d = ComputeDelta(both[1:], both)
+	if len(d.Removed) != 1 || d.Removed[0].Version != "6.8.0-40" {
+		t.Errorf("Removed = %+v, want just 6.8.0-40", d.Removed)
+	}
+	if len(d.Changed) != 0 || len(d.Added) != 0 {
+		t.Errorf("Changed=%+v Added=%+v, want both empty", d.Changed, d.Added)
+	}
+
+	// A single version moving is still reported as one change.
+	d = ComputeDelta(
+		[]Component{{Name: "openssl", Version: "3.0.14", Type: "deb"}},
+		[]Component{{Name: "openssl", Version: "3.0.11", Type: "deb"}})
+	if len(d.Changed) != 1 {
+		t.Errorf("a lone version move should be one Changed entry, got %+v", d)
+	}
+}
+
+// TestTagIsVersionAware: when an identity holds several versions, only the one
+// that actually moved may be tagged.
+func TestTagIsVersionAware(t *testing.T) {
+	baseline := []Component{{Name: "linux-image", Version: "6.8.0-40", Type: "deb"}}
+	current := Normalize([]Component{
+		{Name: "linux-image", Version: "6.8.0-40", Type: "deb"},
+		{Name: "linux-image", Version: "6.8.0-50", Type: "deb"},
+	})
+	d := ComputeDelta(current, baseline)
+	d.Tag(current)
+
+	got := map[string]string{}
+	for _, c := range current {
+		got[c.Version] = c.Change
+	}
+	if got["6.8.0-40"] != ChangeUnchanged {
+		t.Errorf("the pre-existing kernel was tagged %q, want untagged", got["6.8.0-40"])
+	}
+	if got["6.8.0-50"] != ChangeAdded {
+		t.Errorf("the new kernel was tagged %q, want %q", got["6.8.0-50"], ChangeAdded)
+	}
+}
