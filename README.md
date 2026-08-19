@@ -222,10 +222,16 @@ wired in, but only the rows marked **Tested** have been exercised on real
 hardware. Treat the rest as expected-to-work rather than verified, and please
 report what you find.
 
-On Fedora the rpm cataloger was verified against `rpm -qa`: 254 packages found
-against 254 installed, with no package missed and none invented. That path
+On Fedora the rpm cataloger was verified against `rpm -qa`: 257 packages found
+against 257 installed, with no package missed and none invented. That path
 matters because Fedora keeps its database in SQLite, which is why `swinv` must
 register a pure-Go SQLite driver — see [Building](#building).
+
+The same run found a real bug, which is why the table below is careful about
+what "tested" means: half that host's inventory turned out to be the Windows
+host's driver software, reaching the guest through a `9p` mount that was not
+being excluded. The ELF and binary classifiers therefore remain unverified on
+a non-Debian host — the binaries they were cataloguing were Windows ones.
 
 | Surface | Status |
 |---|---|

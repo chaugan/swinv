@@ -88,27 +88,69 @@ const (
 )
 
 // nonLocalFilesystems are the mountinfo filesystem types that must not be
-// walked: network filesystems (which turn a local scan into a remote one),
-// automounters (which would be triggered by the walk itself), and virtual or
-// in-memory filesystems that hold no installed software. Skipping these is the
-// single biggest determinant of whether a full-root scan takes seconds or
-// hours.
+// walked. Three groups, all of which describe storage that is not part of this
+// machine's own installation:
+//
+//   - Network filesystems, which would turn a local scan into a remote one.
+//   - Host-shared filesystems, where a hypervisor or WSL projects the *host's*
+//     directories into this guest. Software found there belongs to another
+//     operating system entirely.
+//   - Virtual and in-memory filesystems, which hold no installed software.
+//
+// The host-shared group is the one that bites hardest, because the software it
+// exposes looks completely genuine. On a Fedora guest under WSL2, /usr/lib/wsl
+// is a 9p mount carrying the Windows host's drivers; before 9p was listed here
+// it contributed 477 of 1,003 components — 48% of the inventory — as ASUS,
+// Intel and NVIDIA binaries and .NET assemblies reported as installed Linux
+// software. Nothing in the report marked them as foreign.
+//
+// Skipping these is also the single biggest determinant of whether a full-root
+// scan takes seconds or hours.
 var nonLocalFilesystems = map[string]struct{}{
-	"nfs":         {},
-	"nfs4":        {},
-	"cifs":        {},
-	"smb3":        {},
-	"fuse.sshfs":  {},
-	"fuse.rclone": {},
-	"autofs":      {},
-	"overlay":     {},
-	"squashfs":    {},
-	"tmpfs":       {},
-	"devtmpfs":    {},
-	"proc":        {},
-	"sysfs":       {},
-	"cgroup":      {},
-	"cgroup2":     {},
+	// Network filesystems.
+	"nfs":           {},
+	"nfs4":          {},
+	"cifs":          {},
+	"smbfs":         {},
+	"smb3":          {},
+	"ceph":          {},
+	"glusterfs":     {},
+	"lustre":        {},
+	"beegfs":        {},
+	"afs":           {},
+	"sshfs":         {},
+	"fuse.sshfs":    {},
+	"fuse.rclone":   {},
+	"fuse.s3fs":     {},
+	"fuse.gcsfuse":  {},
+	"fuse.blobfuse": {},
+
+	// Host-shared: a hypervisor or WSL projecting the host's files into a
+	// guest. 9p is WSL2 and QEMU/KVM virtfs; virtiofs is the modern
+	// replacement; drvfs and lxfs are WSL1; the rest are the desktop
+	// hypervisors' shared-folder drivers.
+	"9p":            {},
+	"virtiofs":      {},
+	"fuse.virtiofs": {},
+	"drvfs":         {},
+	"lxfs":          {},
+	"vboxsf":        {},
+	"vmhgfs":        {},
+	"fuse.vmhgfs":   {},
+	"prl_fs":        {},
+
+	// Automounters, which the walk itself would otherwise trigger.
+	"autofs": {},
+
+	// Virtual, in-memory and image filesystems.
+	"overlay":  {},
+	"squashfs": {},
+	"tmpfs":    {},
+	"devtmpfs": {},
+	"proc":     {},
+	"sysfs":    {},
+	"cgroup":   {},
+	"cgroup2":  {},
 }
 
 // maxListedMounts caps how many mount points a single warning enumerates. A

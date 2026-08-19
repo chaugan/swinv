@@ -528,6 +528,15 @@ drive is the one way to make this tool unusable:
 jq -r '.scan.excluded[]' ~/inv/*-latest.json | grep mnt
 ```
 
+**The Windows host's software is not inventoried, and must not be.** WSL
+projects host directories into the guest over `9p`: `/usr/lib/wsl/drivers`
+carries the Windows driver packages, complete with vendor `.exe`, `.dll` and
+.NET assemblies. Before `9p` was treated as a non-local filesystem, a Fedora 44
+guest reported **477 of 1,003 components (48% of the inventory)** as ASUS,
+Intel and NVIDIA software installed on Linux. If you see vendor names you
+recognise from Windows in a Linux inventory, that is what happened — upgrade,
+or add `--exclude './usr/lib/wsl/**'`.
+
 **Kernel modules are not inventoried.** WSL supplies its own kernel and mounts
 the modules from outside the distribution, so the tree appears in
 `scan.warnings` as an auto-excluded non-local filesystem:

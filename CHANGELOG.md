@@ -9,6 +9,20 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Fixed
+
+- **Host-shared filesystems were scanned, so another operating system's
+  software was reported as installed on this one.** The non-local filesystem
+  list covered network and virtual filesystems but not the ones a hypervisor
+  or WSL uses to project the *host's* directories into a guest. On a Fedora 44
+  guest under WSL2, `/usr/lib/wsl` is a `9p` mount carrying the Windows host's
+  driver packages: 477 of that host's 1,003 components — 48% of the whole
+  inventory — were ASUS, Intel and NVIDIA binaries and .NET assemblies
+  reported as installed Linux software, with nothing marking them foreign.
+  `9p`, `virtiofs`, `drvfs`, `lxfs`, `vboxsf`, `vmhgfs`, `prl_fs` and the
+  network filesystems `ceph`, `glusterfs`, `lustre`, `beegfs`, `afs`, `smbfs`
+  and the cloud-storage FUSE drivers are now excluded alongside the rest.
+
 ### Changed
 
 - Documentation no longer uses `$(hostname)` in example commands. `hostname` is

@@ -906,3 +906,51 @@ func TestDropNestedRootComponents(t *testing.T) {
 		t.Errorf("with no nested roots nothing should change, got %d dropped", n)
 	}
 }
+
+// TestParseMountinfoExcludesHostSharedFilesystems is the regression test for a
+// bug found on a real Fedora 44 guest under WSL2. /usr/lib/wsl is a 9p mount
+// carrying the *Windows host's* driver packages, and 9p was not in the
+// non-local list — so 477 of that host's 1,003 components (48% of the whole
+// inventory) were ASUS, Intel and NVIDIA binaries and .NET assemblies reported
+// as installed Linux software, with nothing marking them foreign.
+//
+// The same shape applies to every hypervisor's shared-folder driver, which is
+// why they are all listed rather than just the one that was caught.
+func TestParseMountinfoExcludesHostSharedFilesystems(t *testing.T) {
+	const table = `100 28 0:89 / /usr/lib/wsl/drivers ro,relatime - 9p drivers ro
+101 28 0:90 / /usr/lib/wsl/lib ro,relatime - overlay overlay ro
+102 28 0:91 / /media/host rw,relatime - virtiofs myfs rw
+103 28 0:92 / /mnt/hgfs rw,relatime - vmhgfs .host:/ rw
+104 28 0:93 / /media/sf_share rw,relatime - vboxsf share rw
+105 28 0:94 / /media/psf rw,relatime - prl_fs share rw
+106 28 0:95 / /mnt/win rw,relatime - drvfs C:\134 rw
+107 28 0:96 / /srv/ceph rw,relatime - ceph 1.2.3.4:/ rw
+108 28 0:97 / /srv/gluster rw,relatime - glusterfs gv0 rw
+109 28 0:98 / /srv/bucket rw,relatime - fuse.s3fs s3fs rw
+28 1 259:2 / / rw,relatime shared:1 - ext4 /dev/nvme0n1p2 rw
+110 28 0:99 / /data rw,relatime - xfs /dev/sdb1 rw
+`
+	got := ParseMountinfo(strings.NewReader(table))
+
+	for _, want := range []string{
+		"/usr/lib/wsl/drivers", // 9p — the one that actually bit
+		"/usr/lib/wsl/lib",     // overlay
+		"/media/host",          // virtiofs
+		"/mnt/hgfs",            // VMware
+		"/media/sf_share",      // VirtualBox
+		"/media/psf",           // Parallels
+		"/mnt/win",             // WSL1 drvfs
+		"/srv/ceph", "/srv/gluster", "/srv/bucket",
+	} {
+		if !contains(got, want) {
+			t.Errorf("%q should have been excluded as a non-local filesystem; got %v", want, got)
+		}
+	}
+
+	// Genuinely local storage must still be scanned, and / never excluded.
+	for _, unwanted := range []string{"/", "/data"} {
+		if contains(got, unwanted) {
+			t.Errorf("%q is local storage and must not be excluded", unwanted)
+		}
+	}
+}
