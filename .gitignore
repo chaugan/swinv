@@ -26,10 +26,10 @@ coverage.txt
 # nothing under testdata/ is ignored.
 !testdata/**
 
-# Pre-existing data that is NOT part of swinv. This directory was in the
-# working tree before the project was created and contains a Lance vector
-# index of unknown provenance. It is ignored so it can never be pushed to a
-# public repository; delete it if it is no longer wanted.
+# Not part of swinv. A Lance vector index and a TF-IDF pickle were written here
+# by unrelated local tooling before the project existed; they have since been
+# deleted. The rule stays as a guard: if that tooling runs again it recreates
+# the directory, and nothing about it belongs in this repository.
 /vectors/
 
 # Editor / OS noise
