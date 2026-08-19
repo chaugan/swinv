@@ -52,7 +52,7 @@ Look at what came out, pipe a single format, or ask what changed since last time
 ```sh
 jq '.components | length' /tmp/inv/web-01-latest.json
 swinv --format json --stdout | jq '.components[0]'
-swinv --since /var/lib/swinv/$(hostname)-latest.json      # added/removed/changed
+swinv --since /var/lib/swinv/*-latest.json      # added/removed/changed
 ```
 
 To run it daily across a fleet, install the `.deb` or `.rpm` and enable the
@@ -218,16 +218,22 @@ inventories in `/var/lib/swinv`** rather than deleting a fleet's history.
 ## Platform testing status
 
 `swinv` is `v0.x`. Detection for every ecosystem below comes from Syft and is
-wired in, but **only the first two rows have been exercised on real hardware**.
-Treat the rest as expected-to-work rather than verified, and please report what
-you find.
+wired in, but only the rows marked **Tested** have been exercised on real
+hardware. Treat the rest as expected-to-work rather than verified, and please
+report what you find.
+
+On Fedora the rpm cataloger was verified against `rpm -qa`: 254 packages found
+against 254 installed, with no package missed and none invented. That path
+matters because Fedora keeps its database in SQLite, which is why `swinv` must
+register a pure-Go SQLite driver — see [Building](#building).
 
 | Surface | Status |
 |---|---|
 | Ubuntu / dpkg / amd64 | **Tested** on a real host, full scan and packaging |
 | `.deb` install, systemd run, purge | **Tested** on a real Ubuntu host |
-| `.rpm` package | Built and payload inspected; **not** installed on Fedora/RHEL/SUSE |
-| rpm / apk / pacman / portage / nix cataloging | Wired via Syft; **not** run on a real host of that family |
+| Fedora / rpm / amd64 | **Tested** on a real host (Fedora 44 under WSL2) |
+| `.rpm` install and run | **Tested** on Fedora via `dnf install` |
+| apk / pacman / portage / nix cataloging | Wired via Syft; **not** run on a real host of that family |
 | `linux/arm64` | Cross-compiled; **never executed** |
 
 You are entitled to assume dpkg-on-amd64 works. You are not yet entitled to
@@ -333,7 +339,7 @@ addition. `--delta-only` emits just the diff.
 
 ```sh
 swinv --out /var/lib/swinv --output-mode timestamped \
-      --since /var/lib/swinv/$(hostname)-latest.json
+      --since /var/lib/swinv/*-latest.json
 ```
 
 **[Output formats, schema and SQL loading →](docs/OUTPUT.md)**

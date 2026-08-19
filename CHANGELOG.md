@@ -9,7 +9,22 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- Documentation no longer uses `$(hostname)` in example commands. `hostname` is
+  not installed on a minimal Fedora, in many container images, or on hardened
+  builds, so those commands expanded to a path with nothing before
+  `-latest.json` and failed confusingly. They use a glob instead, which needs
+  no external command.
+
+### Verified
+
+- The rpm cataloger was exercised on a real Fedora 44 host for the first time
+  and matched `rpm -qa` exactly: 254 found against 254 installed, nothing
+  missed and nothing invented. This is the first confirmation that the
+  pure-Go SQLite driver reads Fedora's `rpmdb.sqlite`, a code path no
+  Debian-family host can reach.
+- The `.rpm` package installs and runs on Fedora via `dnf install`.
 
 ## [0.1.0] — unreleased
 
@@ -43,9 +58,10 @@ First public release.
 - Scanning `/` walks into any nested root filesystem on disk and reports its
   packages as installed, labelled with the host's distribution. `swinv` warns
   when it detects this; `--skip-nested-rootfs` removes them.
-- Only Ubuntu/dpkg on amd64 has been exercised on real hardware. The rpm, apk,
-  pacman, portage and nix catalogers are wired in but untested on a real host
-  of that family. The arm64 binary cross-compiles and has never been executed.
+- Ubuntu/dpkg and Fedora/rpm on amd64 have been exercised on real hardware. The
+  apk, pacman, portage and nix catalogers are wired in but untested on a real
+  host of that family. The arm64 binary cross-compiles and has never been
+  executed.
 - A full scan takes minutes and peaks above 512 MB. The cost is Syft's
   whole-filesystem index; `--catalogers os` does not avoid it. Measured numbers
   are in `docs/PERFORMANCE.md`.

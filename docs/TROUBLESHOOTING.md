@@ -165,7 +165,7 @@ So: **the files are there and are valid.** Read them, then read the warning.
 
 ```sh
 swinv --out /var/lib/swinv; rc=$?
-jq -r '.scan.warnings[]?' /var/lib/swinv/$(hostname)-latest.json
+jq -r '.scan.warnings[]?' /var/lib/swinv/*-latest.json
 ```
 
 The warning that sets `incomplete` reads:
@@ -451,7 +451,7 @@ Use each host's own baseline. The `-latest` symlink is what makes this easy:
 
 ```sh
 swinv --out /var/lib/swinv --output-mode timestamped \
-      --since /var/lib/swinv/$(hostname)-latest.json
+      --since /var/lib/swinv/*-latest.json
 ```
 
 ### You compared against a `--delta-only` file
@@ -513,6 +513,31 @@ find /var/lib/swinv -maxdepth 1 -type f \( -name '*.json' -o -name '*.csv' \
 `*.json` also covers `*.cdx.json`. Do not use `-delete` on the whole directory:
 `-type f` matters, because it is what leaves the `-latest` symlinks alone.
 
+### `hostname: command not found`, or a path with nothing before `-latest.json`
+
+`hostname` is not installed on a minimal Fedora, on many container images, or
+on hardened builds — it is a separate package, not part of coreutils. A command
+written as `$(hostname)-latest.json` then expands to just `-latest.json` and
+fails with a confusing "no such file" naming a path you never typed:
+
+```console
+$ swinv --since /var/lib/swinv/$(hostname)-latest.json
+bash: hostname: command not found
+swinv: --since: reading baseline report: open /var/lib/swinv/-latest.json: no such file or directory
+```
+
+Use a glob instead. `swinv` writes exactly one `-latest.<ext>` per host into a
+given `--out` directory, so it can only match one file:
+
+```sh
+swinv --since /var/lib/swinv/*-latest.json
+```
+
+If you genuinely need the name, `uname -n` is in coreutils and is always
+present. Note it may differ from the filename: `swinv` strips characters that
+have no business in a path, so a host called `web-01.corp.example` writes
+`web-01.corp.example-latest.json` but one with unusual characters may not.
+
 **Or use logrotate** with `daily`/`rotate 90` on `/var/lib/swinv/*.json`.
 
 **Or stop accumulating files at all.** If you only ever consume the newest
@@ -528,7 +553,7 @@ Whatever you choose, **consumers should follow the `-latest` symlink**, not
 guess at filenames:
 
 ```sh
-rsync -a /var/lib/swinv/$(hostname)-latest.json collector:/inventory/
+rsync -a /var/lib/swinv/*-latest.json collector:/inventory/
 ```
 
 `{hostname}-latest.json` / `.csv` are maintained on by default
@@ -555,14 +580,14 @@ swinv dev (commit none, syft v1.51.0, linux/amd64)
 `swinv` records everything that degraded the scan.
 
 ```sh
-jq -r '.scan.warnings[]?' /var/lib/swinv/$(hostname)-latest.json
+jq -r '.scan.warnings[]?' /var/lib/swinv/*-latest.json
 ```
 
 **3. The effective exclusion list**, including anything the mount-table guard or
 the symlink preflight added:
 
 ```sh
-jq -r '.scan.excluded[]' /var/lib/swinv/$(hostname)-latest.json
+jq -r '.scan.excluded[]' /var/lib/swinv/*-latest.json
 ```
 
 **4. Stage timings from `--verbose`**, so a slowdown or failure is attributable to
@@ -577,7 +602,7 @@ swinv --root / --out /tmp/inv --verbose 2>&1 | tee /tmp/swinv-verbose.log
 ```sh
 jq -r '.host.os_pretty_name, .host.kernel_release, .host.architecture,
        .scan.ran_as_root, .scan.incomplete, .scan.duration_ms' \
-   /var/lib/swinv/$(hostname)-latest.json
+   /var/lib/swinv/*-latest.json
 ```
 
 **6. The exit code**, and the full `stderr` text of the run.

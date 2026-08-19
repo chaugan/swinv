@@ -811,6 +811,10 @@ Status as built:
 - [x] Killing the process mid-write leaves no partial `.json`/`.csv` in `--out`.
 - [ ] **Peak RSS < 512 MB.** Not met — 1085 MB is the lowest measured
       configuration. See §10.
+- [x] The RPM path works. Verified on Fedora 44: 254 packages found against 254
+      reported by `rpm -qa`, nothing missed and nothing invented. This is the
+      only environment that exercises the `modernc.org/sqlite` requirement in
+      §4, since Fedora stores its database as `rpmdb.sqlite`.
 
 ---
 

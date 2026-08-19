@@ -391,7 +391,7 @@ via the `-latest` symlink. Read the symlink *before* this run overwrites it.
 ```sh
 swinv --out /var/lib/swinv \
       --output-mode timestamped \
-      --since "/var/lib/swinv/$(hostname)-latest.json"
+      --since "/var/lib/swinv/*-latest.json"
 ```
 
 Memory-constrained host — the lowest peak RSS measured, at roughly twice the
