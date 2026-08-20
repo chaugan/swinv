@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"runtime"
 	"time"
 )
@@ -64,11 +65,10 @@ func startHeartbeat(quiet bool, deadline, stacksAfter time.Duration, dir string,
 			case <-t.C:
 				elapsed := time.Since(start).Round(time.Second)
 				if deadline > 0 {
-					logf("still scanning (%s elapsed, deadline %s)", elapsed, deadline)
+					logf("still scanning (%s elapsed, %s, deadline %s)", elapsed, memoryInUse(), deadline)
 				} else {
-					logf("still scanning (%s elapsed)", elapsed)
+					logf("still scanning (%s elapsed, %s)", elapsed, memoryInUse())
 				}
-
 			}
 		}
 	}()
@@ -104,4 +104,25 @@ func resolveParallelism(requested int, fast bool) int {
 		return n
 	}
 	return 1
+}
+
+// memoryInUse reports what the process has taken from the operating system, in
+// a form fit for a status line.
+//
+// It is on the heartbeat because memory is the one resource whose growth
+// explains a scan slowing down rather than merely taking a while: once the
+// index exceeds physical memory the machine pages, and everything degrades at
+// once -- including, on one Windows run, the heartbeat itself, which stopped
+// reporting for nine minutes and left no way to tell a starved process from a
+// stalled one. A number on every line makes that visible as it happens instead
+// of afterwards.
+//
+// Sys is used rather than HeapAlloc because it counts everything reserved from
+// the OS, which is what the machine actually feels.
+func memoryInUse() string {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	const mib = 1 << 20
+	return fmt.Sprintf("%d MiB", m.Sys/mib)
 }

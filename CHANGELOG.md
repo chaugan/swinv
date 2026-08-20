@@ -39,7 +39,11 @@ schema and cataloger coverage may still change between releases. See
   laptops have no Break key — which is exactly the situation the first Windows
   tester was in.
 - **A long scan now says it is still alive**, every 30 seconds, with elapsed
-  time and the deadline. Between "scanning ..." and the result there was
+  time, memory taken from the operating system, and the deadline. Memory is on
+  the line because its growth is what distinguishes a scan that is merely slow
+  from one that has started paging and dragged the whole machine down with it —
+  a distinction that cost an afternoon of diagnosis when the heartbeat itself
+  went silent for nine minutes on a Windows host. Between "scanning ..." and the result there was
   previously no output at all for up to 30 minutes, so a slow scan and a hung
   one were indistinguishable — which is exactly how the first Windows run was
   read, and reasonably so.
