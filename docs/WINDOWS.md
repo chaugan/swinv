@@ -1,0 +1,378 @@
+# Windows support — design
+
+> **Status: proposed. None of this is implemented.**
+>
+> Every other document in `docs/` describes behaviour that ships and has been
+> run. This one does not. It is a design to be argued with, and the estimates
+> in it are reasoned rather than measured — nobody has run `swinv` on Windows
+> yet.
+
+Part of the [swinv](../README.md) documentation.
+
+---
+
+## Why build this at all
+
+There is a real answer and a weak one, and it is worth being honest about which
+is which.
+
+**The weak answer** is "one tool for both platforms". On its own that is not
+enough. [osquery](https://osquery.io) has a Windows `programs` table,
+Wazuh's Syscollector inventories Windows packages and hotfixes, and SCCM and
+Intune do this at fleet scale with far more polish than this project will.
+If all you need is Windows inventory data, use one of those.
+
+**The real answer is air-gapped environments.** Intune and SCCM require a
+management plane the host can reach. osquery works offline but its fleet story
+assumes a server. `swinv`'s model — one static binary, no daemon, no network,
+writes files that something else collects later — is exactly what an isolated
+network can actually use. That is the case for building it, and if that
+requirement disappears then so does most of the justification.
+
+A secondary benefit follows from the same design: identical JSON, CSV, NDJSON
+and CycloneDX from Linux and Windows means one ingestion pipeline, one schema,
+one set of queries.
+
+## What already works
+
+Verified, not assumed:
+
+- **The codebase cross-compiles to Windows today.** `CGO_ENABLED=0
+  GOOS=windows GOARCH=amd64 go build ./cmd/swinv` succeeds with no changes and
+  produces a 110 MB executable. Syft included.
+- **Syft already covers Windows executables.** `pe-binary-package-cataloger`
+  exists and fires today on Linux; `dotnet-packages-lock-cataloger` and the
+  .NET binary cataloger likewise. PE and .NET identification is not new work.
+- **`golang.org/x/sys` v0.47.0 is already a dependency**, so
+  `x/sys/windows/registry` and `DeviceIoControl` are available without adding
+  anything to `go.mod` or to the licence gate.
+
+## What is missing
+
+**Syft has no registry, MSI, Appx/MSIX or winget cataloger.** The entire
+"what is installed" half of Windows does not exist in it and has to be written.
+That is the long pole — not Go portability, not packaging.
+
+---
+
+## Architecture
+
+One repository, one command, per-OS files selected by build tags. Not a
+separate project: that would fork `model`, the writers and the delta logic,
+which are the parts worth sharing.
+
+The seam this needs already exists. `internal/scan` is the only package
+permitted to import Syft, and everything downstream operates on
+`internal/model` types, stated in the spec as existing so that a second
+collection backend can be added without touching the writers. Windows is that
+second backend.
+
+```
+internal/hostfacts/hostfacts_linux.go     /proc, /sys, /etc  (today)
+internal/hostfacts/hostfacts_windows.go   registry, WMI      (new)
+internal/scan/options_linux.go            mountinfo          (today)
+internal/scan/options_windows.go          volumes, reparse   (new)
+internal/scan/windows/                    registry, MSI, Appx, USN (new)
+internal/output/atomic_windows.go         no directory fsync (new)
+cmd/swinv/priv_{linux,windows}.go         Geteuid vs token elevation (new)
+```
+
+Unchanged: `internal/model`, all four writers, `ComputeDelta`, the CLI, and the
+Syft conversion in `internal/scan/scan.go`.
+
+---
+
+## Where installed software comes from
+
+### Not `Win32_Product`
+
+Microsoft documents that enumerating `Win32_Product` triggers an MSI
+consistency check on every installed product. It is slow, it can cause the
+installer to **repair and therefore mutate the machine**, and it still only
+sees MSI installs. For a tool whose entire posture is passive observation, that
+is disqualifying. It must not be used, and this should be a comment in the code
+rather than only here, because it is the obvious-looking wrong answer.
+
+### The sources that are needed
+
+| Source | Where | Covers |
+|---|---|---|
+| ARP, 64-bit | `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` | most installed applications |
+| ARP, 32-bit on 64-bit | `HKLM\SOFTWARE\WOW6432Node\...\Uninstall` | 32-bit applications |
+| ARP, current user | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` | per-user installs |
+| ARP, other users | `HKU\<SID>\SOFTWARE\...\Uninstall` | other loaded profiles; needs elevation |
+| MSI products and patches | `msi.dll` — `MsiEnumProducts`, `MsiEnumPatches`, `MsiGetProductInfo` | MSI products, and patches, which do **not** appear under the uninstall keys |
+| Appx / MSIX | `Windows.Management.Deployment.PackageManager` | Store and modern packaged apps. Enumerate via the API, never by walking `WindowsApps` |
+| Hotfixes | CBS: `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\Packages` | updates. `Win32_QuickFixEngineering` is an incomplete subset on modern servicing |
+
+**winget is deliberately excluded.** It mostly re-reads ARP and Appx, and it
+expects network access. In an air-gapped environment it contributes nothing.
+
+Read from each ARP key: `DisplayName`, `DisplayVersion`, `Publisher`,
+`InstallLocation`, `InstallDate`, `WindowsInstaller`, `SystemComponent`,
+`UninstallString`. Entries flagged `SystemComponent=1` are hidden from
+Add/Remove Programs and should be recorded but marked, not silently dropped.
+
+**`DisplayName` is a trap.** It is localised, and it frequently embeds the
+version (`"Foo Bar 3.2.1 (x64)"`). That makes it a poor identity across
+machines with different locales, and it will produce spurious `--since` deltas
+when a version appears in the name as well as in `DisplayVersion`. This is the
+identity problem to solve, and it is more important than any schema question.
+
+---
+
+## The default scan: a derived allowlist
+
+The default must **not** walk the whole drive.
+
+Take `InstallLocation` from every registry entry, add `%ProgramFiles%`,
+`%ProgramFiles(x86)%` and `%ProgramData%`, and scan exactly those with Syft.
+The allowlist writes itself from what is actually installed, so it is neither a
+guess nor a maintenance burden. `--scan-path` adds roots, `--exclude` subtracts
+within them, matching the existing CLI shape.
+
+This is fast, needs no elevation, and cannot wander into a mapped network drive.
+
+---
+
+## `--full-scan`
+
+Scanning every `.exe` and `.dll` on the system is a genuinely valuable thing to
+be able to do. The software nobody installed through a package manager is
+exactly the software nobody is tracking, which is the same argument that
+justifies the loose-binary cataloger on Linux. In an air-gapped network where
+nothing else inventories these hosts, it may be the most important thing the
+tool finds.
+
+It is opt-in because it is expensive, not because it is wrong.
+
+### Discovery: the MFT, via `FSCTL_ENUM_USN_DATA`
+
+Walking directories to find every PE on a Windows volume is slow, and on
+Windows it is worse than slow: traversing **OneDrive cloud placeholders
+hydrates them**, quietly downloading the user's entire cloud drive.
+
+Instead, enumerate the NTFS Master File Table with the
+`FSCTL_ENUM_USN_DATA` control code. This returns every file record on the
+volume without opening a single file.
+
+**Use the ioctl, not a raw MFT parser.** `FSCTL_ENUM_USN_DATA` is a documented
+Win32 API — the OS parses the MFT for us. `DeviceIoControl` is already exposed
+by `golang.org/x/sys/windows`, so this needs **no new dependency** and no
+on-disk NTFS structure parsing to keep correct across Windows versions.
+(`Velocidex/go-ntfs` is Apache-2.0 and licence-safe if raw access is ever
+genuinely required, but it should not be for this.)
+
+Two problems disappear:
+
+- **Speed.** Reading file records instead of walking directory trees is the
+  difference between seconds and minutes; it is how tools like Everything index
+  a volume instantly.
+- **Cloud hydration.** Metadata records are read, files are never opened, so
+  placeholders stay dehydrated.
+
+### What this does *not* solve
+
+**MFT enumeration gives discovery, not extraction.** Every candidate PE still
+has to be opened and its `VERSIONINFO` resource parsed to get a product and
+version. On a typical Windows install that is 50,000–100,000 files.
+
+The bottleneck moves; it does not vanish. Discovery drops from minutes to
+seconds, extraction remains minutes. `--full-scan` is a minutes-scale
+operation and should be described as one.
+
+### Attribution, so the output is not half duplicates
+
+On Linux, dpkg and rpm ship file manifests, which is what lets Syft's
+`ExcludeBinaryPackagesWithFileOwnershipOverlap` stop a package's own binaries
+being reported a second time as loose binaries. Registry entries have no file
+list, so that mechanism does not exist on Windows — and without a replacement,
+every installed product's `.exe` would appear twice.
+
+Two sources reconstruct most of it:
+
+1. **MSI components.** `MsiEnumComponents` with `MsiGetComponentPath` maps
+   components to products — the precise equivalent of a dpkg `.list`, for every
+   MSI-installed product.
+2. **`InstallLocation` prefix matching** for everything else. A PE under a
+   product's `InstallLocation` belongs to that product.
+
+What remains unattributed after both — portable applications, stray DLLs,
+things dropped into a directory by hand — is **exactly what the full scan
+exists to surface**, and should be reported as unmanaged rather than discarded.
+
+> This is the piece to prototype first. If attribution does not hold,
+> `--full-scan` produces mostly duplicate noise and is worth much less.
+
+### Behaviour on a non-NTFS filesystem
+
+ReFS has no MFT. FAT32 and exFAT have nothing comparable. On those volumes
+`--full-scan` has no fast path and falls back to walking every directory, which
+is the slow behaviour the flag exists to avoid.
+
+**`--full-scan` therefore refuses to run on a non-NTFS volume unless the
+operator explicitly accepts the fallback.**
+
+```console
+$ swinv --full-scan --out C:\inv
+swinv: --full-scan is not recommended on this filesystem.
+       D:\ is ReFS, which has no Master File Table, so the scan would fall back
+       to walking every directory. That is substantially slower and, on volumes
+       holding cloud-backed files, may cause placeholders to be downloaded.
+       Re-run with --accept-slow-scan to proceed anyway.
+```
+
+Exit code **2**, a usage error, consistent with every other refusal.
+
+With `--accept-slow-scan` the scan proceeds by directory traversal and records
+a warning in `scan.warnings` naming each volume that took the slow path, so the
+choice is visible in the report and not only in the operator's shell history.
+
+The check is per volume. A machine with NTFS on `C:` and ReFS on `D:` is the
+normal case, not an edge case: `C:` takes the fast path and only `D:` triggers
+the refusal. Skipping the ReFS volume entirely, with `--exclude`, is a third
+valid answer and the message should not imply the only options are "accept" or
+"give up".
+
+### Elevation
+
+A raw volume handle requires Administrator. Without it there is no MFT access
+at all.
+
+Unelevated, `--full-scan` falls back to directory traversal and says so in
+`scan.warnings`. It does **not** refuse: running unprivileged is a supported
+mode on Linux and must stay one here. `ran_as_root` becomes a token-elevation
+check rather than `Geteuid() == 0`.
+
+---
+
+## Host facts
+
+| `model.Host` field | Windows source |
+|---|---|
+| `hostname` | `GetComputerNameEx` |
+| `machine_id` | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` — the stable fleet key |
+| `os_id` | `"windows"` |
+| `os_version_id` | `DisplayVersion` (or `ReleaseId` on older builds) under `Windows NT\CurrentVersion` |
+| `os_pretty_name` | `ProductName` from the same key |
+| `kernel_release` | `CurrentBuildNumber` + `UBR`, e.g. `19045.4780` |
+| `architecture` | `runtime.GOARCH`, unchanged |
+| `system_vendor`, `product_name` | `Win32_ComputerSystem` / `Win32_ComputerSystemProduct` |
+| `virtualization` | `Win32_ComputerSystem.Model` heuristics, as the DMI heuristics work today |
+| `boot_id` | no equivalent; leave empty rather than inventing one |
+
+WMI is acceptable *here* — for read-only hardware and OS facts. The objection
+to `Win32_Product` is specific to that class, not to WMI generally.
+
+---
+
+## Schema
+
+**Same `schema_version`, same CSV columns, new `type` values.** The cross-platform
+join is worth more than perfect Windows fidelity, and new types cost nothing:
+`windows` for ARP entries, `msix`, `hotfix`. `dotnet` and `binary` already exist
+and keep their meaning.
+
+**`purl` stays empty for registry entries.** There is no canonical PURL type for
+an ARP row, and inventing `pkg:generic/windows/...` would create false
+confidence — a scanner would silently match nothing against it rather than
+reporting that it could not. Syft-derived PE and .NET components keep their real
+PURLs. Windows consumers join on `(name, type, version)`, which is what
+`ComputeDelta` already does.
+
+Windows-specific identity — `product_code`, `upgrade_code`,
+`package_family_name`, `install_scope`, the originating registry key — is worth
+keeping but does not belong in the fixed CSV columns. Adding a general
+`attributes` map to `Component` is the smaller change, and it would serve Linux
+too.
+
+---
+
+## Exclusion model
+
+There is no `/proc/self/mountinfo`. The equivalent is volume enumeration:
+
+- Skip `DRIVE_REMOTE` (mapped network drives), `DRIVE_CDROM` and
+  `DRIVE_REMOVABLE` by default. Mapped drives are the Windows equivalent of the
+  NFS mount that made a Linux scan take hours.
+- Skip **cloud-placeholder reparse points**. Under `--full-scan` the MFT path
+  avoids hydration for free; under directory traversal it must be explicit.
+- Do not follow junctions across volumes. Windows junctions create cycles and
+  cross-volume jumps exactly as symlinks do on Linux, and the symlink preflight
+  lesson applies unchanged.
+- Default subtree exclusions: `$Recycle.Bin`, `System Volume Information`,
+  `Windows\WinSxS`, `Windows\Installer`.
+
+---
+
+## Running air-gapped
+
+The default posture already fits. Worth stating explicitly:
+
+- No source of installed software requires the network. winget is excluded
+  partly for this reason.
+- `--offline` remains available and, on Windows, there is no FQDN lookup to
+  suppress in the first place unless one is added.
+- For the CycloneDX handoff, `grype` needs a **pre-staged vulnerability
+  database** (`grype db import`) rather than its auto-update. That is a
+  documentation matter for the consuming side, not a change here.
+
+---
+
+## Phasing
+
+| Phase | Scope | Rough effort |
+|---|---|---|
+| 1 | hostfacts, ARP from four hives, Syft on derived install roots | 2–3 weeks |
+| 2 | MSI products and patches, Appx/MSIX, CBS hotfixes, attribution | 3–4 weeks |
+| 3 | `--full-scan` via `FSCTL_ENUM_USN_DATA`, volume policy, `--accept-slow-scan` | 2–3 weeks |
+| 4 | Scheduled-task packaging, MSI or winget manifest, Windows CI | 1–2 weeks |
+
+Phase 1 alone ships something real and answers the question that matters: does
+the model hold on Windows at all? Everything after it is worth more once that
+is known.
+
+**Estimates are reasoned, not measured.** Nobody has written any of this.
+
+## The condition
+
+**If a Windows CI runner and a real Windows 10 machine for validation are not
+available, do not start.** GitHub Actions provides `windows-latest` free, so CI
+is not the obstacle; a real machine is.
+
+The evidence for this is the Linux work. Every significant defect in this
+project — a 9p mount contributing 48% of a bogus inventory, phantom packages
+from a nested root filesystem, Gentoo's quoted `os_id`, a documented container
+command that hung — was found by running the tool on hardware the author did
+not have, and none were found by 110 tests, a three-model review panel, or five
+automated review passes. Windows inventory is substantially more edge cases than
+Linux, and a Windows binary that reports subtly wrong installed software is
+worse than no Windows support.
+
+## Rejected alternatives
+
+| Rejected | Why |
+|---|---|
+| `Win32_Product` | Triggers MSI consistency checks; can repair and mutate the machine; MSI-only |
+| Walking `C:\` by default | Slow, hydrates cloud placeholders, and without ownership data produces mostly duplicates |
+| Operator-supplied allowlist as the primary model | The registry already knows where things are installed; deriving it is more accurate and needs no maintenance |
+| A separate Windows project | Forks `model`, the writers and the delta logic — the parts most worth sharing |
+| `pkg:generic/windows/...` PURLs | False confidence: matches nothing, but looks like it should |
+| Raw MFT parsing | `FSCTL_ENUM_USN_DATA` does it through a documented API with no dependency and no on-disk format risk |
+| winget as a source | Re-reads ARP and Appx, and expects network access |
+
+## Open questions
+
+1. **Does MSI component attribution actually hold?** The whole value of
+   `--full-scan` depends on it. Prototype first.
+2. **How should `DisplayName` be normalised** when it embeds the version and
+   varies by locale? This is the identity problem, and it affects `--since`
+   more than anything else.
+3. **Should `SystemComponent=1` entries be reported by default?** They are real
+   software but hidden from Add/Remove Programs, and including them will make
+   Windows counts look inflated next to what an operator sees in the UI.
+4. **Server-role detection** — deducing that IIS is serving, and which product
+   and version sits behind a listening port — is a different axis from "what is
+   installed" and is not designed here. It deserves its own document, and is
+   arguably worth building on Linux first, where the package file-ownership
+   graph makes the socket → process → binary → product join reliable.

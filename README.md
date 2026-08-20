@@ -655,6 +655,7 @@ touching the writers.
 | [Security](SECURITY.md) | Reporting, and exactly what data a report contains |
 | [Changelog](CHANGELOG.md) | What changed, and the versioning policy |
 | [Specification](docs/INVENTORYCOLLECTORSPEC.md) | The spec of record, with rationale |
+| [Windows design](docs/WINDOWS.md) | Proposed Windows support — **not implemented** |
 
 ## Non-goals
 
