@@ -106,6 +106,88 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  cross-distro:
+    name: cross-distro package catalogers
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build the static binary
+        run: CGO_ENABLED=0 go build -trimpath -o /tmp/swinv ./cmd/swinv
+
+      # Each distribution's own tooling is the oracle. A Syft upgrade that
+      # quietly stops reading one package database shows up here as a count
+      # mismatch rather than as a silently thinner inventory months later.
+      - name: Compare against each distribution's package manager
+        run: |
+          set -u
+          fail=0
+          check() {
+            local name="$1" image="$2" nativecmd="$3"
+            local native swinv
+            native=$(docker run --rm "$image" sh -c "$nativecmd" 2>/dev/null | tr -d '[:space:]')
+            if ! docker run --rm -v /tmp/swinv:/swinv:ro -v /tmp/out:/out "$image" \
+                 /swinv --root / --out /out --quiet --format json --offline \
+                 --catalogers os --name "$name" >/dev/null 2>&1; then
+              echo "::error::$name: swinv failed to run"; fail=1; return
+            fi
+            swinv=$(python3 -c "import json;print(len(json.load(open('/tmp/out/$name.json'))['components']))")
+            if [ "$native" = "$swinv" ]; then
+              echo "  $name: $swinv == $native"
+            else
+              echo "::error::$name: swinv found $swinv, $image reports $native"
+              fail=1
+            fi
+          }
+          mkdir -p /tmp/out
+          check alpine    alpine:latest        'apk info 2>/dev/null | wc -l'
+          check debian    debian:stable-slim   'dpkg-query -f ".\n" -W 2>/dev/null | wc -l'
+          check fedora    fedora:latest        'rpm -qa 2>/dev/null | wc -l'
+          check arch      archlinux:latest     'pacman -Q 2>/dev/null | wc -l'
+          check opensuse  opensuse/tumbleweed  'rpm -qa 2>/dev/null | wc -l'
+          exit $fail
+
+  arm64-smoke:
+    name: arm64 under emulation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Register arm64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build and run the arm64 binary
+        run: |
+          set -eu
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o /tmp/swinv-arm64 ./cmd/swinv
+          mkdir -p /tmp/out
+          docker run --rm --platform linux/arm64 -v /tmp/swinv-arm64:/swinv:ro \
+            alpine:latest /swinv --version
+          # Not just --version: prove it actually catalogues on arm64.
+          docker run --rm --platform linux/arm64 -v /tmp/swinv-arm64:/swinv:ro \
+            -v /tmp/out:/out alpine:latest \
+            /swinv --root / --out /out --quiet --format json --offline --catalogers os --name arm64
+          native=$(docker run --rm --platform linux/arm64 alpine:latest sh -c 'apk info | wc -l' | tr -d '[:space:]')
+          found=$(python3 -c "import json;print(len(json.load(open('/tmp/out/arm64.json'))['components']))")
+          arch=$(python3 -c "import json;print(json.load(open('/tmp/out/arm64.json'))['host']['architecture'])")
+          echo "  arm64: swinv=$found apk=$native arch=$arch"
+          [ "$found" = "$native" ] || { echo "::error::arm64 count mismatch"; exit 1; }
+          [ "$arch" = "arm64" ] || { echo "::error::architecture reported as $arch"; exit 1; }
+
   lint:
     name: lint
     runs-on: ubuntu-latest

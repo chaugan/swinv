@@ -338,11 +338,16 @@ Beyond OS packages, on real hosts:
 | `.rpm` install and upgrade | **Tested** on Fedora via `dnf` |
 | Go modules and ELF binaries | **Tested** on Fedora, CVE-matched via `grype` |
 | CycloneDX → `grype` | **Tested** — 234 matches from a 568-component document |
-| `linux/arm64` | Cross-compiled and checksummed; **never executed** |
+| `linux/arm64` | **Tested** under emulation — apk 16/16, dpkg 78/78, rpm 147/147, `architecture` correctly `arm64` |
 
-The one remaining gap is arm64: the binary builds and ships but no arm64 machine
-has ever run it. If you have one, that is the most useful thing you could
-report.
+All of this runs in CI on every push, so a Syft upgrade that quietly stops
+reading one package database shows up as a count mismatch rather than as a
+thinner inventory noticed months later.
+
+The remaining caveat is honest rather than alarming: arm64 is verified under
+QEMU emulation, not on physical ARM hardware. Emulation exercises the code but
+not the machine, so if you run this on a Raspberry Pi or an ARM instance, that
+is still worth reporting.
 
 ## Why not just use…?
 
@@ -539,11 +544,11 @@ Syft's whole-filesystem index, and `--catalogers os` does not avoid it. The
 numbers are measured and published in [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
 rather than restated as goals.
 
-### arm64 has never been executed
+### arm64 is verified under emulation, not on real hardware
 
-See [Platform testing status](#platform-testing-status). Seven package managers
-are verified against their own tooling, but the arm64 binary has only ever been
-cross-compiled and checksummed — no ARM machine has run it.
+See [Platform testing status](#platform-testing-status). The arm64 binary is
+exercised in CI through QEMU, which runs the code but is not the same as a
+physical ARM machine.
 
 ## Vulnerability scanning
 

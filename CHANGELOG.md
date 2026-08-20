@@ -9,7 +9,19 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
-Nothing yet.
+### Verified
+
+- **arm64 executed for the first time**, under QEMU emulation: apk 16/16,
+  dpkg 78/78, rpm 147/147, with `host.architecture` correctly reporting
+  `arm64`. Previously the binary was only ever cross-compiled and checksummed.
+
+### Added
+
+- CI now runs the cross-distro comparison on every push, checking swinv's count
+  against Alpine, Debian, Fedora, Arch and openSUSE's own package tooling, plus
+  an arm64 smoke test under emulation. A Syft upgrade that stops reading one
+  package database now fails the build instead of silently thinning
+  inventories.
 
 ## [0.1.2] — 2026-08-19
 
