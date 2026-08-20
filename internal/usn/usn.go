@@ -31,6 +31,8 @@ package usn
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 )
 
 var (
@@ -123,4 +125,49 @@ type Result struct {
 // Enumerate reads every MFT record on a volume and returns those Keep accepts.
 func Enumerate(ctx context.Context, opts Options) (*Result, error) {
 	return enumerate(ctx, opts)
+}
+
+// ParseVolumes turns an operator's volume list into normalised drive
+// specifications.
+//
+// The semantics are deliberately *replace*, not supplement: given "D:" the
+// caller scans D: and does not scan C:. An operator who names volumes has said
+// which volumes they want, and quietly adding the system drive to that list
+// would produce a much longer scan than they asked for -- on the machine where
+// they were most likely trying to avoid one.
+//
+// Accepts "D:", "d:", "D:\" and any comma-separated combination, ignoring
+// surrounding whitespace and empty elements so that a trailing comma is not an
+// error. Duplicates are dropped, keeping first-mentioned order, so the output
+// is deterministic and a volume is never enumerated twice.
+//
+// An empty spec returns nil, which the caller should read as "use the default"
+// rather than "scan nothing".
+func ParseVolumes(spec string) ([]string, error) {
+	if strings.TrimSpace(spec) == "" {
+		return nil, nil
+	}
+
+	var (
+		out  []string
+		seen = make(map[string]bool)
+	)
+	for _, field := range strings.Split(spec, ",") {
+		if strings.TrimSpace(field) == "" {
+			continue
+		}
+		v, err := normalizeVolume(field)
+		if err != nil {
+			return nil, err
+		}
+		if seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("usn: %q names no volumes", spec)
+	}
+	return out, nil
 }

@@ -97,7 +97,11 @@ func enumerate(ctx context.Context, opts Options) (*Result, error) {
 			// without its ancestors. Directories are a small fraction of a
 			// volume, so this is the cheap half of the memory cost.
 			if isDir {
-				dirs[r.FileRef] = dirEntry{name: r.Name, parent: r.ParentRef}
+				// Keyed by record index, not by the full reference: a child
+				// stores its parent's reference as it was when the link was
+				// made, and the sequence number in the high 16 bits need not
+				// match the parent's current one.
+				dirs[mftIndex(r.FileRef)] = dirEntry{name: r.Name, parent: r.ParentRef}
 			}
 
 			if !keep(r.Name, isDir, r.Attributes) {

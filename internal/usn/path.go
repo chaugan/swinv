@@ -6,10 +6,23 @@ import (
 )
 
 const (
-	// rootFileRef is the MFT reference of an NTFS volume root directory. It is
-	// fixed by the on-disk format, and is where every path reconstruction
-	// terminates.
-	rootFileRef = 5
+	// rootFileIndex is the MFT record index of an NTFS volume root directory.
+	// It is fixed by the on-disk format, and is where every path
+	// reconstruction terminates.
+	rootFileIndex = 5
+
+	// fileRefMask extracts the record index from a file reference number.
+	//
+	// A reference is not a bare index: the low 48 bits are the MFT record
+	// number and the high 16 are a sequence number, incremented each time the
+	// record is reused for a different file. The root directory's full
+	// reference is therefore 0x0005000000000005, not 5.
+	//
+	// Comparing or keying on the full reference is the obvious mistake and it
+	// fails silently -- on a real volume it left 100% of paths unresolved,
+	// because no chain ever recognised the root. Every identity comparison
+	// here masks first.
+	fileRefMask = 0x0000FFFFFFFFFFFF
 
 	// maxPathDepth guards path reconstruction against a parent cycle. NTFS
 	// should not produce one, but the MFT is read live while the filesystem is
@@ -42,6 +55,10 @@ type dirEntry struct {
 	parent uint64
 }
 
+// mftIndex strips the sequence number from a file reference, leaving the MFT
+// record index that identifies a file within a volume.
+func mftIndex(ref uint64) uint64 { return ref & fileRefMask }
+
 // resolvePath walks the parent chain to the volume root. A missing ancestor is
 // reported rather than guessed at: the MFT is enumerated while the filesystem
 // is live, so a directory can be deleted between its child's record being read
@@ -49,9 +66,9 @@ type dirEntry struct {
 // admitting the gap.
 func resolvePath(volume string, dirs map[uint64]dirEntry, parentRef uint64, name string) (string, bool) {
 	var parts []string
-	ref := parentRef
+	ref := mftIndex(parentRef)
 
-	for depth := 0; ref != rootFileRef; depth++ {
+	for depth := 0; ref != rootFileIndex; depth++ {
 		if depth >= maxPathDepth {
 			return "", false
 		}
@@ -60,12 +77,12 @@ func resolvePath(volume string, dirs map[uint64]dirEntry, parentRef uint64, name
 			return "", false
 		}
 		parts = append(parts, d.name)
-		if d.parent == ref {
+		if mftIndex(d.parent) == ref {
 			// Self-parent: the only legitimate case is the root, handled by
 			// the loop condition. Anything else is a cycle.
 			return "", false
 		}
-		ref = d.parent
+		ref = mftIndex(d.parent)
 	}
 
 	var b strings.Builder
