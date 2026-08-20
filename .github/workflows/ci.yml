@@ -188,6 +188,51 @@ jobs:
           [ "$found" = "$native" ] || { echo "::error::arm64 count mismatch"; exit 1; }
           [ "$arch" = "arm64" ] || { echo "::error::architecture reported as $arch"; exit 1; }
 
+  windows-cross:
+    name: windows cross-compile (experimental)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # There is no Windows collector yet -- see docs/WINDOWS.md. This job
+      # exists so the claim that docs makes, that the tree already builds for
+      # Windows unchanged, keeps being true: a Linux-only syscall or an
+      # unguarded /proc read fails here instead of surfacing months later when
+      # someone starts the port.
+      - name: Build and vet for windows/amd64
+        env:
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          set -eu
+          go vet ./...
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=$(git describe --tags --always)-windows-experimental" \
+            -o swinv.exe ./cmd/swinv
+          ls -l swinv.exe
+
+      # Published so the binary can be exercised on a real Windows machine to
+      # establish a baseline. Deliberately a CI artifact and not a release
+      # asset: on Windows this binary reports host facts it cannot determine
+      # and applies none of the Linux exclusion model, so it is a measuring
+      # instrument, not something anyone should install.
+      - name: Upload the experimental binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: swinv-windows-amd64-experimental
+          path: swinv.exe
+          if-no-files-found: error
+          retention-days: 14
+
   lint:
     name: lint
     runs-on: ubuntu-latest

@@ -9,6 +9,24 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Fixed
+
+- **Every write would have failed on Windows.** The atomic write path fsyncs
+  the target directory after the rename, and Windows has no such operation:
+  `FlushFileBuffers` rejects a directory handle with `ERROR_INVALID_FUNCTION`,
+  which matched none of the three errors the code tolerated. Directory sync is
+  now a documented no-op on Windows, where `MoveFileEx` journals the directory
+  entry itself, and unchanged everywhere else. Found by reading the code before
+  running it, which is not how the other bugs in this file were found.
+
+### Added
+
+- `docs/WINDOWS.md`, the proposed design for Windows support, marked clearly as
+  unimplemented, with a protocol for measuring the current binary on a real
+  Windows machine.
+- CI cross-compiles and vets `windows/amd64` on every push and publishes the
+  binary as an artifact, so the portability the design assumes keeps being true.
+
 ### Verified
 
 - **arm64 executed for the first time**, under QEMU emulation: apk 16/16,

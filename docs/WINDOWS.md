@@ -376,3 +376,190 @@ worse than no Windows support.
    installed" and is not designed here. It deserves its own document, and is
    arguably worth building on Linux first, where the package file-ownership
    graph makes the socket → process → binary → product join reliable.
+
+---
+
+## Appendix: the baseline measurement protocol
+
+The tree cross-compiles for Windows today and produces a `swinv.exe` that has
+never been executed. Running it is not a test of Windows support — there is no
+Windows support — it is the measurement that decides how much of this document
+survives contact with a real machine. Three numbers come out of it, and each one
+moves a decision:
+
+| What you measure | What it decides |
+| --- | --- |
+| How many installed products Syft's PE cataloger finds, against the uninstall registry | Whether the registry collector is the whole job or merely most of it |
+| How long a scoped scan of `Program Files` takes | Whether the derived-allowlist default is necessary or merely tidy |
+| Whether the writers survive an NTFS round trip | Whether Phase 1 is days or weeks |
+
+CI publishes the binary as the `swinv-windows-amd64-experimental` artifact on
+every push to `main`. Download it from the run page under **Actions**, unzip it,
+and keep it out of `PATH` — it is an instrument, not an install.
+
+### Before the first run
+
+Three things about this binary on Windows are worth knowing before it touches a
+disk, because none of them are obvious from the Linux behaviour.
+
+**Do not point it at `C:\`.** The exclusion model keys on `etc/os-release` to
+decide whether a `--root` is a whole filesystem deserving the layout exclusions.
+`C:\` has no such file, so it is treated as an arbitrary directory and gets *no
+exclusions at all* — not the mount table, not the non-local filesystem list, not
+the home-directory rule. The scan walks `System Volume Information`, `WinSxS`,
+every user profile, and the page file.
+
+**Especially do not point it at `C:\` on a machine with OneDrive, or any other
+cloud-sync client.** Files-On-Demand placeholders are reparse points that
+materialise their contents when opened, so a naive directory walk quietly
+downloads the entire cloud drive. On a metered connection or a large tenant this
+is a genuinely expensive mistake, and it is the single strongest argument in
+this document for the USN-journal approach, which never opens a file.
+
+**Run as an ordinary user first.** An unprivileged run tells you what the
+tool can see without help, which is what an air-gapped operator without local
+admin will actually get. Elevate only for the step that asks for it.
+
+Use a throwaway output directory throughout:
+
+```powershell
+mkdir C:\swinv-test
+```
+
+### T0 — does it start
+
+```powershell
+.\swinv.exe --version
+.\swinv.exe --help
+```
+
+Expected: both work. The flag parser, the version stamp and the help text are
+platform-neutral. If `--help` is empty or the binary refuses to start, stop and
+report it — nothing else in this protocol is meaningful.
+
+### T1 — the first real scan
+
+```powershell
+Measure-Command { .\swinv.exe --root "C:\Program Files" --out C:\swinv-test --output-mode timestamped --offline }
+```
+
+`--offline` matters here beyond its usual meaning: it suppresses the FQDN
+lookup, which on a domain-joined machine can block for seconds against a DNS
+server that is not there.
+
+Record the elapsed time and whether a file appeared. **A file appearing at all
+is itself a result** — it exercises the atomic write path end to end on NTFS,
+which is temp file, `fsync`, `MoveFileEx`, and, as of this change, no directory
+flush. If nothing was written and the error mentions syncing a directory, the
+Windows build-tag split did not take effect and that is the finding.
+
+### T2 — what it thinks the host is
+
+```powershell
+$r = Get-Content (Get-ChildItem C:\swinv-test\*.json | Select -Last 1) | ConvertFrom-Json
+$r.host | Format-List
+$r.scan.warnings
+```
+
+Expect most of `host` to be empty: `os_id`, `os_version_id`, `kernel_release`,
+`machine_id` and `boot_id` all come from files under `/etc` and `/proc`.
+`hostname` and `architecture` should survive, since they come from the Go
+runtime rather than the filesystem.
+
+The question worth answering is not *whether* it degrades — it must — but
+*how*: does it degrade quietly into empty strings, or does it announce itself in
+`scan.warnings`? A report that claims a Windows host with a blank `os_id` and
+says nothing about it is a correctness bug in the existing code, not a missing
+feature, and it would be worth fixing before any Windows work starts.
+
+### T3 — what the catalogers actually found
+
+```powershell
+$r.components.Count
+$r.components | Group-Object found_by | Sort-Object Count -Descending | Format-Table Count, Name
+$r.components | Group-Object type      | Sort-Object Count -Descending | Format-Table Count, Name
+$r.components | Where-Object { $_.type -eq 'dotnet' } | Select -First 10 name, version, purl
+```
+
+This is the load-bearing measurement. Syft has `binary-classifier`, `dotnet-deps`
+and `dotnet-portable-executable` catalogers, and the design assumes they produce
+real version data from PE `VERSIONINFO` and `.deps.json`. Confirm it, and check
+whether the versions look like file versions or product versions — they differ
+often enough to matter for CVE matching.
+
+### T4 — the gap against installed-software truth
+
+This is the number that justifies the registry collector. Take the uninstall
+registry as ground truth:
+
+```powershell
+$arp = Get-ItemProperty @(
+    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+  ) -ErrorAction SilentlyContinue |
+  Where-Object { $_.DisplayName -and -not $_.SystemComponent } |
+  Select-Object DisplayName, DisplayVersion, Publisher, InstallLocation
+
+$arp.Count
+(Get-AppxPackage).Count      # Store / MSIX, invisible to the uninstall keys
+(Get-HotFix).Count           # updates, a separate inventory again
+```
+
+> **Never run `Get-WmiObject Win32_Product` or `Get-CimInstance Win32_Product`.**
+> Enumerating that class triggers an MSI consistency check against every
+> installed product, which can silently reconfigure or repair software on the
+> machine. It is the obvious thing to reach for and it is the one query in this
+> protocol that can change the system it is measuring. `Get-HotFix` is safe — it
+> reads `Win32_QuickFixEngineering`, which has no such behaviour.
+
+Then compare, roughly, by hand:
+
+```powershell
+# products the registry knows about that swinv found nothing resembling
+$found = $r.components.name
+$arp | Where-Object { $n = $_.DisplayName; -not ($found | Where-Object { $n -like "*$_*" -or $_ -like "*$n*" }) } |
+  Select-Object DisplayName, DisplayVersion | Format-Table
+```
+
+The match will be fuzzy and that is fine — the output is an order of magnitude,
+not a percentage. If Syft alone accounts for most of the ARP list, the registry
+collector is an enrichment. If it accounts for a fraction, the registry
+collector *is* the product and the file scan is secondary. Everything in the
+phasing table above assumes the second, on reasoning rather than evidence; this
+is where that assumption gets checked.
+
+### T5 — the cost of breadth
+
+```powershell
+Measure-Command { .\swinv.exe --root "C:\Program Files (x86)" --out C:\swinv-test --output-mode timestamped --offline }
+Measure-Command { .\swinv.exe --root "C:\Windows\System32"    --out C:\swinv-test --output-mode timestamped --offline }
+```
+
+`System32` is the interesting one. It is large, it is almost entirely OS
+components already accounted for by the update inventory, and it is the clearest
+test of whether including it by default would drown the report. Run it last:
+if it takes long enough to be annoying, that is the answer.
+
+Do **not** attempt `C:\Windows\WinSxS`. It is a hard-link farm with hundreds of
+thousands of entries and no exclusion model is in place to survive it.
+
+### T6 — durability, if you want to be thorough
+
+```powershell
+.\swinv.exe --root "C:\Program Files" --out C:\swinv-test --output-mode overwrite --offline
+.\swinv.exe --root "C:\Program Files" --out C:\swinv-test --output-mode overwrite --offline
+Get-ChildItem C:\swinv-test
+```
+
+`overwrite` mode must replace one file in place and leave no `.tmp-*` debris. A
+stray temp file means the rename path is behaving differently on NTFS than the
+tests on Linux assume.
+
+### What to send back
+
+The three numbers from T1, T3 and T4, the `scan.warnings` array from T2, and one
+`.json` file. That is enough to either confirm the phasing in this document or
+rewrite it. Nothing in this protocol validates Windows support, and a clean run
+should not be reported as though it did — the tool is finding files on an
+operating system whose notion of installed software it does not yet model.

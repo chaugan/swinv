@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"syscall"
 )
 
 // tempSuffix builds the staging name for path: "<path>.tmp-<pid>" in the same
@@ -140,27 +139,4 @@ func UpdateSymlink(linkPath, target string) error {
 		return fmt.Errorf("output: renaming symlink %s to %s: %w", tmp, linkPath, err)
 	}
 	return syncDir(dir)
-}
-
-// syncDir fsyncs a directory so that a rename performed inside it is durable.
-// A filesystem that refuses to open a directory for reading, or that does not
-// implement directory fsync, is not an error: the data is already in place.
-func syncDir(dir string) error {
-	d, err := os.Open(dir)
-	if err != nil {
-		return fmt.Errorf("output: opening directory %s: %w", dir, err)
-	}
-	defer d.Close()
-	if err := d.Sync(); err != nil {
-		// Some filesystems simply do not implement directory fsync. The data
-		// and the rename are already in place, so this is not a failure.
-		// EINVAL is what Linux returns for a directory on such a filesystem;
-		// errors.ErrUnsupported covers the ENOTSUP/EOPNOTSUPP spellings.
-		if errors.Is(err, syscall.EINVAL) || errors.Is(err, fs.ErrPermission) ||
-			errors.Is(err, errors.ErrUnsupported) {
-			return nil
-		}
-		return fmt.Errorf("output: syncing directory %s: %w", dir, err)
-	}
-	return nil
 }
