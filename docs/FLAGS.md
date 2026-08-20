@@ -105,6 +105,8 @@ and any symlinks quarantined by the preflight — is always recorded in
 
 | Flag | Default | Meaning |
 |---|---|---|
+| `--usn-probe` | `false` | Windows only, experimental: enumerate the MFT and report what it finds |
+| `--volumes SPEC` | *(C:)* | Windows only: volumes to enumerate, e.g. `D:` or `D:,E:` |
 | `--debug-stacks-after DUR` | `0` (never) | If the scan is still running after this long, write every goroutine stack to a file and carry on |
 | `--fast` | `false` | Scan at normal scheduling priority and full parallelism |
 | `--max-memory SIZE` | *(unlimited)* | Soft memory limit, e.g. `1536MiB` |
@@ -122,6 +124,38 @@ observed still going at 5m30s. A watchdog therefore terminates the process if
 the deadline is exceeded by more than ten seconds. Reports are written by
 staging to a temp file and renaming, so a terminated run may leave a `.tmp-*`
 file beside the target but can never leave a half-written report in its place.
+
+#### `--usn-probe` and `--volumes` (Windows, experimental)
+
+`--usn-probe` enumerates the NTFS Master File Table through
+`FSCTL_ENUM_USN_DATA` and reports what it found. It is a measuring instrument,
+not a scan: no inventory is produced and no file is opened. The Windows
+collector described in [docs/WINDOWS.md](WINDOWS.md) does not exist yet, and
+this exercises the one piece of it that does.
+
+It needs an elevated process and an NTFS volume, and says which is missing when
+it refuses. On anything other than Windows it exits 2 immediately.
+
+```console
+> swinv --usn-probe --volumes D:,E:
+swinv: D: 412883 MFT records in 14.2s
+swinv: D: 51204 directories, 38119 executables kept, 0 paths unresolved
+swinv: D: kept 9.2% -- the other 90.8% were never opened
+swinv:        18422  D:\Program Files\Adobe
+swinv:         9110  D:\Program Files\Siemens
+...
+```
+
+`--volumes` **replaces** the default rather than extending it: `--volumes D:`
+enumerates D: and does **not** enumerate C:. An operator who names volumes has
+said which ones they want, and silently adding the system drive would produce a
+far longer run than they asked for. Duplicates are dropped in first-mentioned
+order, so a volume is never enumerated twice.
+
+Passing `--volumes` without `--usn-probe` is a usage error today, because the
+collector it will eventually configure does not exist. It refuses rather than
+being ignored, so that nobody believes they have restricted a scan when they
+have not.
 
 `--debug-stacks-after` is for a scan that appears to have hung. Go dumps every
 goroutine stack on `SIGQUIT`, and on Windows on Ctrl+Break, but neither is

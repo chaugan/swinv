@@ -25,6 +25,7 @@ import (
 	"github.com/chaugan/swinv/internal/privilege"
 	"github.com/chaugan/swinv/internal/scan"
 	"github.com/chaugan/swinv/internal/sched"
+	"github.com/chaugan/swinv/internal/usn"
 )
 
 // Build-time values, injected with -ldflags by the Makefile.
@@ -109,6 +110,8 @@ type config struct {
 	parallelism      int
 	fast             bool
 	stacksAfter      time.Duration
+	usnProbe         bool
+	volumes          string
 	timeout          time.Duration
 	requireHostID    bool
 	quiet            bool
@@ -149,6 +152,29 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "swinv %s (commit %s, syft %s, %s/%s)\n",
 			resolveVersion(), commit, scan.SyftVersion(), runtime.GOOS, runtime.GOARCH)
 		return exitOK
+	}
+
+	// --usn-probe short-circuits: it measures a volume rather than producing
+	// an inventory, so none of the output, delta or host-facts machinery below
+	// applies to it.
+	if cfg.usnProbe {
+		volumes, err := usn.ParseVolumes(cfg.volumes)
+		if err != nil {
+			fmt.Fprintf(stderr, "swinv: %v\n", err)
+			return exitUsage
+		}
+		// Its own context: the probe runs before the scan pipeline is set up,
+		// but --timeout should still bound it. Enumerating a large volume is
+		// not instant, and an operator who asked for a deadline meant it.
+		probeCtx, cancelProbe := context.WithTimeout(context.Background(), cfg.timeout)
+		defer cancelProbe()
+		return runUSNProbe(probeCtx, volumes, stderr, logf)
+	}
+
+	if strings.TrimSpace(cfg.volumes) != "" {
+		fmt.Fprintln(stderr, "swinv: --volumes currently only applies to --usn-probe; "+
+			"the Windows collector it will configure does not exist yet (see docs/WINDOWS.md)")
+		return exitUsage
 	}
 
 	if cfg.maxMemoryBytes > 0 {

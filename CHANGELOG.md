@@ -20,6 +20,15 @@ schema and cataloger coverage may still change between releases. See
   opened all 1.3 million. `C:\Program Files` alone, a fraction of that volume,
   does not finish inside ten minutes through the directory resolver. Not yet
   wired into the scan path.
+- **`--usn-probe` and `--volumes`**, Windows-only and experimental. The probe
+  enumerates the MFT and reports what it found — record count, candidate count,
+  timing, and where the candidates live — without scanning or opening anything,
+  so the numbers that decide the rest of the Windows design come from real
+  machines rather than from a hosted runner with nothing installed on it.
+  `--volumes D:` or `--volumes D:,E:` **replaces** the default of `C:` rather
+  than adding to it. Passing `--volumes` without `--usn-probe` is a usage error
+  rather than being ignored, so nobody believes they have restricted a scan
+  when they have not.
 - **CI now runs natively on `windows-latest`**, which is elevated and NTFS —
   the two things MFT enumeration requires. `docs/WINDOWS.md` set a condition
   that no Windows work should begin without a machine to test on, and a hosted

@@ -29,6 +29,8 @@
 .Op Fl -delta-only
 .Op Fl -catalogers Ar expr
 .Op Fl -no-file-ownership
+.Op Fl -usn-probe
+.Op Fl -volumes Ar spec
 .Op Fl -debug-stacks-after Ar duration
 .Op Fl -fast
 .Op Fl -parallelism Ar n
@@ -290,6 +292,23 @@ Skip package-to-file ownership resolution. Faster, but it reintroduces
 duplicate components: the binary classifier will report files that an OS
 package already claims.
 Default: ownership resolution is on.
+.It Fl -usn-probe
+Windows only, experimental.
+Enumerate the NTFS Master File Table and report what it contains, without
+scanning and without opening any file.
+Requires an elevated process and an NTFS volume.
+Exits 2 on any other platform.
+.It Fl -volumes Ar spec
+Windows only.
+Comma-separated volumes to enumerate, such as
+.Ql D:
+or
+.Ql D:,E: .
+Replaces the default of
+.Ql C:
+rather than adding to it: naming volumes selects exactly those.
+Currently applies only to
+.Fl -usn-probe .
 .It Fl -debug-stacks-after Ar duration
 If the scan is still running after
 .Ar duration ,

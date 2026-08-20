@@ -3,7 +3,14 @@
 /bin/
 /dist/
 /swinv
+/swinv.exe
 /swinv-*-linux-*
+/swinv-*-windows-*
+
+# GOOS=windows go build ./cmd/... writes swinv.exe into whatever directory it
+# is run from, which is how a 109 MB binary once reached a commit and was
+# rejected by the remote. Ignore it wherever it lands, not only at the root.
+swinv.exe
 
 # Test and coverage artefacts
 coverage.out
