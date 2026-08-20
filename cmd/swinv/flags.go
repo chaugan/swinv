@@ -56,6 +56,7 @@ func parseFlags(args []string, stderr io.Writer) (*config, int, error) {
 	fs.StringVar(&cfg.catalogers, "catalogers", "", "cataloger selection expression, e.g. 'os' or '+binary,-python'")
 	fs.BoolVar(&cfg.noFileOwnership, "no-file-ownership", false, "skip package-file ownership (faster, but reintroduces binary/package duplicates)")
 	fs.IntVar(&cfg.parallelism, "parallelism", 0, "cataloger parallelism (0 = automatic: a quarter of the CPUs, or all of them with --fast)")
+	fs.DurationVar(&cfg.stacksAfter, "debug-stacks-after", 0, "if a scan is still running after this long, write every goroutine stack to a file in the output directory and carry on (0 = never); for diagnosing a scan that appears hung")
 	fs.BoolVar(&cfg.fast, "fast", false, "scan at normal scheduling priority and full parallelism; faster, but the scan competes with everything else on the machine")
 	fs.DurationVar(&cfg.timeout, "timeout", 30*time.Minute, "whole-run deadline")
 	fs.BoolVar(&cfg.requireHostID, "require-host-id", false, "fail if /etc/machine-id is unreadable")

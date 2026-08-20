@@ -24,7 +24,7 @@ const heartbeatInterval = 30 * time.Second
 // The elapsed time proves progress is being tracked and the deadline tells the
 // operator the run is bounded, which is the specific reassurance missing when
 // the decision is whether to wait or to hit Ctrl-C.
-func startHeartbeat(quiet bool, deadline time.Duration, logf func(string, ...any)) func() {
+func startHeartbeat(quiet bool, deadline, stacksAfter time.Duration, dir string, logf func(string, ...any)) func() {
 	if quiet {
 		return func() {}
 	}
@@ -37,17 +37,38 @@ func startHeartbeat(quiet bool, deadline time.Duration, logf func(string, ...any
 		start := time.Now()
 		t := time.NewTicker(heartbeatInterval)
 		defer t.Stop()
+
+		// The dump gets its own timer rather than riding the heartbeat tick,
+		// so that --debug-stacks-after 10s means ten seconds and not "the
+		// first heartbeat at or after ten seconds".
+		var dumpAt <-chan time.Time
+		if stacksAfter > 0 {
+			timer := time.NewTimer(stacksAfter)
+			defer timer.Stop()
+			dumpAt = timer.C
+		}
+
 		for {
 			select {
 			case <-done:
 				return
+
+			case <-dumpAt:
+				dumpAt = nil
+				path, err := dumpStacks(dir)
+				if err != nil {
+					logf("could not write goroutine dump: %v", err)
+					continue
+				}
+				logf("wrote goroutine dump to %s after %s", path, stacksAfter)
 			case <-t.C:
 				elapsed := time.Since(start).Round(time.Second)
 				if deadline > 0 {
 					logf("still scanning (%s elapsed, deadline %s)", elapsed, deadline)
-					continue
+				} else {
+					logf("still scanning (%s elapsed)", elapsed)
 				}
-				logf("still scanning (%s elapsed)", elapsed)
+
 			}
 		}
 	}()

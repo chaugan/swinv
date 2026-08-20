@@ -29,6 +29,7 @@
 .Op Fl -delta-only
 .Op Fl -catalogers Ar expr
 .Op Fl -no-file-ownership
+.Op Fl -debug-stacks-after Ar duration
 .Op Fl -fast
 .Op Fl -parallelism Ar n
 .Op Fl -timeout Ar duration
@@ -289,6 +290,17 @@ Skip package-to-file ownership resolution. Faster, but it reintroduces
 duplicate components: the binary classifier will report files that an OS
 package already claims.
 Default: ownership resolution is on.
+.It Fl -debug-stacks-after Ar duration
+If the scan is still running after
+.Ar duration ,
+write every goroutine stack to a file in the output directory and continue.
+For diagnosing a scan that appears to have hung, where
+.Dv SIGQUIT
+or Ctrl+Break is not reachable -- from a timer unit, a scheduled task, or a
+keyboard with no Break key.
+Default:
+.Ql 0 ,
+never.
 .It Fl -fast
 Scan at normal scheduling priority and full parallelism.
 .Pp

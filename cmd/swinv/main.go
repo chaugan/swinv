@@ -107,6 +107,7 @@ type config struct {
 	noFileOwnership  bool
 	parallelism      int
 	fast             bool
+	stacksAfter      time.Duration
 	timeout          time.Duration
 	requireHostID    bool
 	quiet            bool
@@ -247,7 +248,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	// --- scan -------------------------------------------------------------
 	logf("scanning %s ...", cfg.root)
-	stopHeartbeat := startHeartbeat(cfg.quiet, cfg.timeout, logf)
+	stopHeartbeat := startHeartbeat(cfg.quiet, cfg.timeout, cfg.stacksAfter, cfg.out, logf)
 	result, err := scan.Run(ctx, scan.Options{
 		Root:             cfg.root,
 		Excludes:         patterns,

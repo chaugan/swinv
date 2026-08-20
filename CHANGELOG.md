@@ -21,6 +21,12 @@ schema and cataloger coverage may still change between releases. See
   when a person is waiting: measured on `/usr` on an 8-core host, the default
   takes 41.6 s against 30.6 s with `--fast`, so politeness costs about a third
   of the runtime. An explicit `--parallelism N` still overrides both.
+- **`--debug-stacks-after DURATION`** writes every goroutine stack to a file
+  while a scan is still running, for diagnosing one that appears to have hung.
+  Go already does this on `SIGQUIT`, and on Windows on Ctrl+Break, but neither
+  is reachable from a systemd timer or a Windows scheduled task, and many
+  laptops have no Break key — which is exactly the situation the first Windows
+  tester was in.
 - **A long scan now says it is still alive**, every 30 seconds, with elapsed
   time and the deadline. Between "scanning ..." and the result there was
   previously no output at all for up to 30 minutes, so a slow scan and a hung

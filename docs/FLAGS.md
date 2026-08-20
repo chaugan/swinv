@@ -105,6 +105,7 @@ and any symlinks quarantined by the preflight — is always recorded in
 
 | Flag | Default | Meaning |
 |---|---|---|
+| `--debug-stacks-after DUR` | `0` (never) | If the scan is still running after this long, write every goroutine stack to a file and carry on |
 | `--fast` | `false` | Scan at normal scheduling priority and full parallelism |
 | `--max-memory SIZE` | *(unlimited)* | Soft memory limit, e.g. `1536MiB` |
 | `--parallelism N` | `0` | Cataloger parallelism; `0` chooses automatically — see below |
@@ -112,6 +113,24 @@ and any symlinks quarantined by the preflight — is always recorded in
 
 `--parallelism` must not be negative and `--timeout` must be positive;
 either is a usage error.
+
+`--debug-stacks-after` is for a scan that appears to have hung. Go dumps every
+goroutine stack on `SIGQUIT`, and on Windows on Ctrl+Break, but neither is
+reachable from a systemd timer or a scheduled task, and many laptop keyboards
+have no Break key at all. This flag produces the same information on a timer:
+
+```console
+$ swinv --root / --out /var/lib/swinv --debug-stacks-after 60s
+swinv: scanning / ...
+swinv: still scanning (30s elapsed, deadline 30m0s)
+swinv: wrote goroutine dump to /var/lib/swinv/swinv-stacks-20260820T084719Z.txt after 1m0s
+```
+
+The scan is not interrupted; the dump is taken from alongside it, while the
+stacks still show what the scan is doing. Waiting for the run to fail and
+dumping afterwards would be too late — by then the deadline has unwound the
+worker goroutines and the frame that explains the stall is gone. If the output
+directory is not writable the dump falls back to the temp directory.
 
 #### swinv is deliberately slow by default
 
