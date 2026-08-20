@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -109,6 +110,20 @@ func cdxComponent(c model.Component, refs map[string]int) cyclonedx.Component {
 	props = appendProp(props, propComponentPrefix+"change", c.Change)
 	props = appendProp(props, propComponentPrefix+"language", c.Language)
 	props = appendProp(props, propComponentPrefix+"found_by", c.FoundBy)
+
+	// Ecosystem-specific identity has no home in the CycloneDX component
+	// schema, so it goes to properties under the same prefix as everything
+	// else swinv adds. Sorted, because map iteration is not.
+	if len(c.Attributes) > 0 {
+		keys := make([]string, 0, len(c.Attributes))
+		for k := range c.Attributes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			props = appendProp(props, propComponentPrefix+k, c.Attributes[k])
+		}
+	}
 	if len(c.CPEs) > 1 {
 		for _, extra := range c.CPEs[1:] {
 			props = appendProp(props, propComponentPrefix+"cpe", extra)

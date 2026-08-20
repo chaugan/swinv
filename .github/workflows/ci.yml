@@ -268,6 +268,56 @@ jobs:
       - name: Test the MFT enumerator against a real volume
         run: go test ./internal/usn/... -v -count=1
 
+      # End to end: does the Windows collector actually produce an inventory?
+      # Everything above tests components in isolation; this is the only step
+      # that runs the binary the way an operator would.
+      - name: Collect a real inventory
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          go build -o swinv.exe ./cmd/swinv
+          New-Item -ItemType Directory -Force -Path inv | Out-Null
+
+          # Registry only: fast, needs no elevation, and covers machine-wide
+          # installed software.
+          .\swinv.exe --out inv --offline --verbose --timeout 5m
+
+          $file = Get-ChildItem inv\*.json | Select-Object -Last 1
+          $r = Get-Content $file -Raw | ConvertFrom-Json
+          "schema:     $($r.schema_version)"
+          "components: $($r.components.Count)"
+          $r.components | Group-Object found_by | ForEach-Object { "  $($_.Count)  $($_.Name)" }
+          $r.components | Select-Object -First 5 name, version, vendor, type | Format-Table
+
+          if ($r.components.Count -lt 5) {
+            throw "only $($r.components.Count) components: the registry cataloger found essentially nothing"
+          }
+          $withVersion = ($r.components | Where-Object { $_.version }).Count
+          "with a version: $withVersion of $($r.components.Count)"
+          if ($withVersion -eq 0) { throw "no component carries a version" }
+          $withVendor = ($r.components | Where-Object { $_.vendor }).Count
+          "with a vendor:  $withVendor of $($r.components.Count)"
+
+      - name: Collect with --full-scan
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path inv-full | Out-Null
+          .\swinv.exe --out inv-full --offline --verbose --full-scan --timeout 12m
+
+          $file = Get-ChildItem inv-full\*.json | Select-Object -Last 1
+          $r = Get-Content $file -Raw | ConvertFrom-Json
+          "components: $($r.components.Count)"
+          $r.components | Group-Object found_by | ForEach-Object { "  $($_.Count)  $($_.Name)" }
+          $r.scan.warnings | ForEach-Object { "warning: $_" }
+
+          $pe = ($r.components | Where-Object { $_.found_by -eq "windows-pe-cataloger" }).Count
+          if ($pe -eq 0) { throw "--full-scan extracted nothing from any executable" }
+          $r.components |
+            Where-Object { $_.found_by -eq "windows-pe-cataloger" -and $_.vendor } |
+            Select-Object -First 8 name, version, vendor | Format-Table
+
       # Informational. Most of the suite was written for Linux and assumes
       # /proc and /etc; this records what does and does not survive on Windows
       # without holding the build hostage to it.

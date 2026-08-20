@@ -12,6 +12,7 @@ import (
 
 	"github.com/chaugan/swinv/internal/arp"
 	"github.com/chaugan/swinv/internal/usn"
+	"github.com/chaugan/swinv/internal/wincollect"
 )
 
 // executableExtensions are the files worth extracting a version from on
@@ -187,7 +188,7 @@ func reportRegistryCoverage(entries []usn.Entry, volume string, logf func(string
 			withLocation++
 			fromInstallLocation = append(fromInstallLocation, strings.TrimRight(e.InstallLocation, `\`))
 		}
-		if locs := installLocations(e.InstallLocation, e.DisplayIcon, e.UninstallString); len(locs) > 0 {
+		if locs := wincollect.InstallLocations(e.InstallLocation, e.DisplayIcon, e.UninstallString); len(locs) > 0 {
 			withAnySource++
 			fromAllSources = append(fromAllSources, locs...)
 		}
@@ -202,7 +203,7 @@ func reportRegistryCoverage(entries []usn.Entry, volume string, logf func(string
 			continue
 		}
 		all = append(all, e.Path)
-		if !osOrStoreTerritory(e.Path, volume) {
+		if !wincollect.OSOrStoreTerritory(e.Path, volume) {
 			thirdParty = append(thirdParty, e.Path)
 		}
 	}
@@ -214,7 +215,7 @@ func reportRegistryCoverage(entries []usn.Entry, volume string, logf func(string
 		if len(paths) == 0 {
 			return
 		}
-		covered, _ := coverageOf(paths, locations)
+		covered, _ := wincollect.CoverageOf(paths, locations)
 		logf("%s:   %-34s %6d of %6d  (%4.1f%%)", volume, label, covered, len(paths),
 			100*float64(covered)/float64(len(paths)))
 	}

@@ -11,11 +11,27 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.2`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.3`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.2"
+"schema_version": "1.3"
 ```
+
+**1.2 → 1.3** added exactly one thing:
+
+| Addition | Produced by | Appears in |
+|---|---|---|
+| `Component.attributes` | the Windows catalogers | JSON, CycloneDX properties |
+
+A string map for ecosystem-specific identity that does not deserve a column of
+its own: a Windows product code, the originating registry key, an install
+scope, the several version strings a PE resource carries. A map rather than more
+fields, because the alternative is a `Component` that grows a field per platform
+and is mostly empty on every one of them.
+
+**Deliberately not in the CSV.** The fixed column shape is what lets CSV files
+be concatenated across machines, and a map has no fixed shape. JSON and
+CycloneDX carry it; CSV consumers lose nothing they had.
 
 **1.1 → 1.2** added exactly one thing:
 

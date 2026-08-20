@@ -56,6 +56,7 @@ func parseFlags(args []string, stderr io.Writer) (*config, int, error) {
 	fs.StringVar(&cfg.catalogers, "catalogers", "", "cataloger selection expression, e.g. 'os' or '+binary,-python'")
 	fs.BoolVar(&cfg.noFileOwnership, "no-file-ownership", false, "skip package-file ownership (faster, but reintroduces binary/package duplicates)")
 	fs.IntVar(&cfg.parallelism, "parallelism", 0, "cataloger parallelism (0 = automatic: a quarter of the CPUs, or all of them with --fast)")
+	fs.BoolVar(&cfg.fullScan, "full-scan", false, "Windows only: also enumerate the filesystem and extract versions from executables the registry does not account for")
 	fs.BoolVar(&cfg.usnProbe, "usn-probe", false, "Windows only, experimental: enumerate the NTFS Master File Table and report what it finds, without scanning; see docs/WINDOWS.md")
 	fs.StringVar(&cfg.volumes, "volumes", "", "Windows only: comma-separated volumes to enumerate, e.g. \"D:\" or \"D:,E:\". Replaces the default of C: rather than adding to it")
 	fs.DurationVar(&cfg.stacksAfter, "debug-stacks-after", 0, "if a scan is still running after this long, write every goroutine stack to a file in the output directory and carry on (0 = never); for diagnosing a scan that appears hung")

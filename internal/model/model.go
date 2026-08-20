@@ -17,7 +17,7 @@ import (
 // 1.1 added Component.SHA256 (--hash) and Report.Delta (--since). Both are
 // additive and omitted when unused, so a 1.0 consumer still parses a 1.1
 // document.
-const SchemaVersion = "1.2"
+const SchemaVersion = "1.3"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -131,12 +131,26 @@ type Component struct {
 	// vendorFromPackage in internal/scan.
 	//
 	// Frequently empty. Many ecosystems record no such field at all.
-	Vendor    string   `json:"vendor,omitempty"`
-	PURL      string   `json:"purl,omitempty"`
-	CPEs      []string `json:"cpes,omitempty"`
-	Licenses  []string `json:"licenses,omitempty"`
-	Locations []string `json:"locations,omitempty"`
-	FoundBy   string   `json:"found_by,omitempty"`
+	Vendor string `json:"vendor,omitempty"`
+
+	// Attributes carries ecosystem-specific identity that does not deserve a
+	// column of its own: a Windows product code or registry key, an MSIX
+	// package family name, an install scope.
+	//
+	// A map rather than more fields, because the alternative is a Component
+	// struct that grows a field per platform and is mostly empty on every one
+	// of them. Deliberately absent from the CSV, whose fixed column shape is
+	// what lets files be concatenated across machines; JSON and CycloneDX
+	// carry it.
+	//
+	// Keys are lowercase and underscore-separated. Empty values are dropped
+	// rather than written, so a key being present means something was recorded.
+	Attributes map[string]string `json:"attributes,omitempty"`
+	PURL       string            `json:"purl,omitempty"`
+	CPEs       []string          `json:"cpes,omitempty"`
+	Licenses   []string          `json:"licenses,omitempty"`
+	Locations  []string          `json:"locations,omitempty"`
+	FoundBy    string            `json:"found_by,omitempty"`
 
 	// SHA256 is the hex content digest of the component's primary on-disk
 	// location. Populated only when --hash is given, because hashing every

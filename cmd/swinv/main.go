@@ -111,6 +111,7 @@ type config struct {
 	fast             bool
 	stacksAfter      time.Duration
 	usnProbe         bool
+	fullScan         bool
 	volumes          string
 	timeout          time.Duration
 	requireHostID    bool
@@ -279,16 +280,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 	logf("scanning %s ...", cfg.root)
 	stopHeartbeat := startHeartbeat(cfg.quiet, cfg.timeout, cfg.stacksAfter, cfg.out, logf)
 	stopWatchdog := startDeadlineWatchdog(cfg.timeout, watchdogGrace, stderr)
-	result, err := scan.Run(ctx, scan.Options{
-		Root:             cfg.root,
-		Excludes:         patterns,
-		CatalogerExpr:    cfg.catalogers,
-		FileOwnership:    !cfg.noFileOwnership,
-		Parallelism:      parallelism,
-		Hash:             cfg.hash,
-		SkipNestedRootfs: cfg.skipNestedRootfs,
-		Verbose:          cfg.verbose && !cfg.quiet,
-	})
+	result, handled, err := platformScan(ctx, cfg, logf)
+	if !handled {
+		result, err = scan.Run(ctx, scan.Options{
+			Root:             cfg.root,
+			Excludes:         patterns,
+			CatalogerExpr:    cfg.catalogers,
+			FileOwnership:    !cfg.noFileOwnership,
+			Parallelism:      parallelism,
+			Hash:             cfg.hash,
+			SkipNestedRootfs: cfg.skipNestedRootfs,
+			Verbose:          cfg.verbose && !cfg.quiet,
+		})
+	}
 	stopWatchdog()
 	stopHeartbeat()
 	if err != nil {

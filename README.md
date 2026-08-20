@@ -79,7 +79,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 ```jsonc
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "tool": { "name": "swinv", "version": "dev", "syft_version": "v1.51.0" },
   "host": {
     "hostname": "web-01",

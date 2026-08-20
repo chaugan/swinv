@@ -1,4 +1,4 @@
-package main
+package wincollect
 
 import "testing"
 
@@ -28,14 +28,14 @@ func TestDirectoryFromRegistryValue(t *testing.T) {
 	}
 
 	for in, want := range cases {
-		if got := directoryFromRegistryValue(in); got != want {
-			t.Errorf("directoryFromRegistryValue(%q) = %q, want %q", in, got, want)
+		if got := DirectoryFromRegistryValue(in); got != want {
+			t.Errorf("DirectoryFromRegistryValue(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
 
 func TestInstallLocationsPrefersInstallLocationAndDeduplicates(t *testing.T) {
-	got := installLocations(
+	got := InstallLocations(
 		`C:\Program Files\App\`,
 		`C:\Program Files\App\app.exe,0`,
 		`"C:\Program Files\App\unins.exe" /S`,
@@ -46,18 +46,18 @@ func TestInstallLocationsPrefersInstallLocationAndDeduplicates(t *testing.T) {
 	}
 
 	// When InstallLocation is absent -- the common case -- the others carry it.
-	got = installLocations("", `C:\Qt\Tools\QtCreator\bin\qtcreator.exe,0`, `MsiExec.exe /X{G}`)
+	got = InstallLocations("", `C:\Qt\Tools\QtCreator\bin\qtcreator.exe,0`, `MsiExec.exe /X{G}`)
 	if len(got) != 1 || got[0] != `C:\Qt\Tools\QtCreator\bin` {
 		t.Fatalf("got %v, want the directory recovered from DisplayIcon", got)
 	}
 
-	if got := installLocations("", "", "MsiExec.exe /X{G}"); len(got) != 0 {
+	if got := InstallLocations("", "", "MsiExec.exe /X{G}"); len(got) != 0 {
 		t.Errorf("got %v, want none: an MSI product code names no directory", got)
 	}
 }
 
 func TestInstallLocationsIsCaseInsensitiveWhenDeduplicating(t *testing.T) {
-	got := installLocations(`C:\Program Files\App`, `c:\program files\app\x.exe`, "")
+	got := InstallLocations(`C:\Program Files\App`, `c:\program files\app\x.exe`, "")
 	if len(got) != 1 {
 		t.Errorf("got %v, want one: Windows paths differing only in case are the same directory", got)
 	}

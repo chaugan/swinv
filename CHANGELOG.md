@@ -20,6 +20,18 @@ schema and cataloger coverage may still change between releases. See
   opened all 1.3 million. `C:\Program Files` alone, a fraction of that volume,
   does not finish inside ten minutes through the directory resolver. Not yet
   wired into the scan path.
+- **A working Windows collector.** `swinv.exe` now produces a real inventory
+  instead of running the Linux filesystem scan on a platform that keeps its
+  records elsewhere. It reads the uninstall registry for installed products —
+  fast, no elevation, no file opened — and with `--full-scan` enumerates the
+  MFT, attributes each executable to a known product, and opens only what is
+  left to read its PE version resource. `--volumes D:` or `D:,E:` selects which
+  volumes to enumerate, replacing the default of `C:` rather than adding to it.
+- **`Component.attributes`**, a string map for ecosystem-specific identity —
+  Windows product codes, registry keys, install scopes, the several version
+  strings a PE resource carries — and with it schema `1.3`. In JSON and
+  CycloneDX properties, deliberately not in the CSV, whose fixed column shape
+  is what lets files be concatenated across machines.
 - **The Windows architecture is now measured rather than reasoned.** The
   proposed derived allowlist does not hold up — only 106 of 380 installed
   products record an `InstallLocation`, and adding `DisplayIcon` and
