@@ -263,6 +263,90 @@ So the saving is not one cost but three: the directory traversal, the MIME sniff
 on every non-candidate, and the antivirus interception that each of those opens
 provokes.
 
+### Measured: the first real enumeration
+
+Implemented in `internal/usn` and run against a stock Windows 11 volume on a
+hosted CI runner:
+
+| | |
+|---|---|
+| MFT records read | **1,301,728** |
+| elapsed | **42 s – 1 m 41 s** across runs |
+| directories retained for path reconstruction | 199,644 |
+| executables kept (`.exe .dll .sys .ocx .cpl .drv`) | 127,228 |
+| paths that failed to reconstruct | **0** |
+| **fraction of the volume kept** | **9.8%** |
+
+The last row is the result that matters. A directory walk opens all 1.3 million
+files; this opens none, and only 9.8% of them are even candidates for the file
+reads that follow. The other 90.2% cost one MFT record each and are never
+touched again.
+
+For comparison, `C:\Program Files` alone — a fraction of that volume — did not
+finish inside ten minutes through the directory resolver.
+
+### Hard links: a file appears under one path, not all of them
+
+The MFT holds one record per *file*, not per *name*, and `FSCTL_ENUM_USN_DATA`
+reports a single name and parent per record. A file with several hard links
+therefore surfaces under exactly one of its paths.
+
+This is not a corner case on Windows. Component servicing hard-links from the
+WinSxS store into live locations, so on the test volume
+`C:\Windows\System32\kernel32.dll` was reported as
+
+```
+C:\Windows\WinSxS\amd64_microsoft-windows-kernel32_31bf3856ad364e35_10.0.26100.33158_none_...\kernel32.dll
+```
+
+and the `System32` path did not appear at all.
+
+Nothing is missed — the file is enumerated, once — but its reported location may
+not be the one an operator recognises, and a consumer asking "is there something
+at `C:\Windows\System32\X`" will get the wrong answer. Two consequences:
+
+- Reporting a component's location from MFT enumeration alone is
+  under-specified. Where the path matters, it needs corroborating from the
+  registry's `InstallLocation` or by resolving links explicitly.
+- It is another argument against MFT enumeration as the *primary* source. It is
+  a discovery mechanism for software the registry does not know about, which is
+  what `--full-scan` is for. The registry remains the source of truth.
+
+Resolving every name would mean opening each file and calling
+`FindFirstFileNameW`, which reintroduces exactly the per-file open this exists
+to avoid. Not worth it by default; possibly worth it for a narrow set of paths.
+
+### Volume selection replaces the default, it does not extend it
+
+`--volumes D:` scans D: and **does not scan C:**. `--volumes D:,E:` scans both
+and, again, not C:. An operator who names volumes has said which ones they want,
+and silently adding the system drive would produce a far longer scan than they
+asked for — on the machine where they were most likely trying to avoid one.
+
+Duplicates are dropped in first-mentioned order, so a volume is never enumerated
+twice and the output is deterministic. An unset flag means "use the default",
+which is distinct from naming no volumes at all.
+
+Each volume is checked for NTFS independently, so an NTFS `C:` alongside a ReFS
+`D:` behaves as described in [Behaviour on a non-NTFS filesystem](#behaviour-on-a-non-ntfs-filesystem)
+rather than failing the whole run.
+
+### Implementation note: file references carry a sequence number
+
+Recorded because it cost a full CI cycle and failed silently. An NTFS file
+reference is not a record index: the low 48 bits are the MFT record number and
+the high 16 are a sequence number, incremented whenever a record is reused. The
+root directory's reference is `0x0005000000000005`, not `5`.
+
+Code that compares or keys on the full reference finds nothing, reports every
+entry as unresolved, and raises no error — because unresolved entries are a
+legitimate outcome on a live filesystem, just not 100% of them. Every identity
+comparison must mask to the low 48 bits first.
+
+Unit tests written with invented reference numbers pass against this bug,
+because they encode the same wrong model. The tests now construct references the
+way NTFS does.
+
 ### What this does *not* solve
 
 **MFT enumeration gives discovery, not extraction.** Every candidate PE still

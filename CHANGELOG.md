@@ -11,6 +11,19 @@ schema and cataloger coverage may still change between releases. See
 
 ### Added
 
+- **MFT enumeration for Windows** (`internal/usn`), the first piece of the
+  Windows collector that is not the Linux one cross-compiled. It reads a record
+  per file straight from the Master File Table via `FSCTL_ENUM_USN_DATA`,
+  opening nothing. On a stock Windows 11 volume it read **1,301,728 records in
+  42 seconds** and kept the **9.8%** that are executables — the other 90.2% cost
+  one record each and are never touched, where a directory walk would have
+  opened all 1.3 million. `C:\Program Files` alone, a fraction of that volume,
+  does not finish inside ten minutes through the directory resolver. Not yet
+  wired into the scan path.
+- **CI now runs natively on `windows-latest`**, which is elevated and NTFS —
+  the two things MFT enumeration requires. `docs/WINDOWS.md` set a condition
+  that no Windows work should begin without a machine to test on, and a hosted
+  runner satisfies it.
 - **`Component.vendor`**, the organisation behind a component, and with it
   schema `1.2`. It comes from whichever field the ecosystem uses — an rpm
   `Vendor`, a dpkg or apk `Maintainer`, a Python or npm `Author`, `Vendor` from
