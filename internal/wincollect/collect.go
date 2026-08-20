@@ -10,20 +10,6 @@ import (
 // ErrUnsupportedPlatform is returned on anything other than Windows.
 var ErrUnsupportedPlatform = errors.New("wincollect: Windows inventory requires Windows")
 
-// Cataloger names, which appear in each component's found_by and are how a
-// consumer tells where a fact came from.
-const (
-	registryCataloger = "windows-registry-cataloger"
-	peCataloger       = "windows-pe-cataloger"
-)
-
-// Component types. Registry entries get "windows"; extracted executables reuse
-// "binary", which already means the same thing on Linux.
-const (
-	typeWindows = "windows"
-	typeBinary  = "binary"
-)
-
 // Options configures a Windows collection.
 type Options struct {
 	// Volumes to enumerate. Empty means C: alone. Naming volumes replaces the

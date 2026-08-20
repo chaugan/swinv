@@ -233,22 +233,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	// --- exclusions -------------------------------------------------------
-	patterns, warnings, err := scan.BuildExcludes(scan.ExcludeOptions{
-		Root:              cfg.root,
-		UserExcludes:      cfg.excludes,
-		AutoExcludeMounts: !cfg.noAutoExclude,
-		NoSnap:            cfg.noSnap,
-		NoFlatpak:         cfg.noFlatpak,
-		IncludeHome:       cfg.includeHome,
-	})
-	if err != nil {
-		fmt.Fprintf(stderr, "swinv: %v\n", err)
-		return exitUsage
+	// Skipped where the inventory does not come from walking the filesystem.
+	// On Windows this would otherwise compute two dozen Linux layout
+	// exclusions -- /proc, /sys, /home -- and record them in the report as
+	// though they had been applied to something.
+	var patterns []string
+	if !platformHandlesScan() {
+		patterns, err = buildExcludes(cfg, &meta, stderr)
+		if err != nil {
+			return exitUsage
+		}
 	}
-	meta.Excluded = patterns
-	for _, w := range warnings {
-		meta.AddWarning(w)
-	}
+
 	if cfg.verbose {
 		logf("excluding %d path patterns", len(patterns))
 	}
@@ -277,7 +273,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	// --- scan -------------------------------------------------------------
-	logf("scanning %s ...", cfg.root)
+	logf("scanning %s ...", scanTarget(cfg))
 	stopHeartbeat := startHeartbeat(cfg.quiet, cfg.timeout, cfg.stacksAfter, cfg.out, logf)
 	stopWatchdog := startDeadlineWatchdog(cfg.timeout, watchdogGrace, stderr)
 	result, handled, err := platformScan(ctx, cfg, logf)
@@ -564,4 +560,30 @@ func validModes() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// buildExcludes computes the exclusion patterns for a filesystem scan and
+// records them, along with any warnings, in the report metadata.
+//
+// Split out of run so the Windows path can skip it entirely: there is nothing
+// to exclude from a registry read, and recording Linux layout exclusions in a
+// Windows report would describe work that never happened.
+func buildExcludes(cfg *config, meta *model.ScanMeta, stderr io.Writer) ([]string, error) {
+	patterns, warnings, err := scan.BuildExcludes(scan.ExcludeOptions{
+		Root:              cfg.root,
+		UserExcludes:      cfg.excludes,
+		AutoExcludeMounts: !cfg.noAutoExclude,
+		NoSnap:            cfg.noSnap,
+		NoFlatpak:         cfg.noFlatpak,
+		IncludeHome:       cfg.includeHome,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "swinv: %v\n", err)
+		return nil, err
+	}
+	meta.Excluded = patterns
+	for _, w := range warnings {
+		meta.AddWarning(w)
+	}
+	return patterns, nil
 }

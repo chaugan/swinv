@@ -17,6 +17,20 @@ import (
 	"github.com/chaugan/swinv/internal/usn"
 )
 
+// Cataloger names, which appear in each component's found_by and are how a
+// consumer tells where a fact came from.
+const (
+	registryCataloger = "windows-registry-cataloger"
+	peCataloger       = "windows-pe-cataloger"
+)
+
+// Component types. Registry entries get "windows"; extracted executables reuse
+// "binary", which already means the same thing on Linux.
+const (
+	typeWindows = "windows"
+	typeBinary  = "binary"
+)
+
 // executableExtensions is what is worth opening. Everything else on a volume
 // is discovered by enumeration and then left alone.
 var executableExtensions = map[string]bool{
