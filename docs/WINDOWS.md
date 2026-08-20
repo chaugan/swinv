@@ -396,6 +396,68 @@ load-bearing rather than a fallback.** The registry remains the best source of
 *identity* -- name, version, publisher -- and it is nearly free to read. It is
 not a reliable source of *where the files are*.
 
+### The architecture the measurements imply
+
+Adding `DisplayIcon` and `UninstallString` as location sources raises the
+products that yield a directory from 106 to **147**, and coverage of third-party
+executables from 50.9% to **57.8%**:
+
+| denominator | `InstallLocation` only | all three fields |
+|---|---|---|
+| all 99,919 executables | 23,600 (23.6%) | 27,303 (27.3%) |
+| 46,366 third-party executables | 23,600 (50.9%) | **26,817 (57.8%)** |
+
+Every file matched by `InstallLocation` is third-party — the two figures are
+identical — which is expected: uninstall keys do not point into `\Windows`.
+
+That still leaves 42% of third-party executables unreachable from the registry,
+which looks like a poor result for an allowlist. It is, and the reason is that
+**the allowlist was pointed the wrong way round.**
+
+An allowlist was proposed as a way to decide *what to scan*. But enumeration is
+not the expensive part — the whole volume enumerates in under five seconds and
+opens nothing. The expensive part is **extraction**: opening a candidate binary
+to read its `VERSIONINFO`, which is where antivirus interception is paid.
+
+And a file that lies under a known product's install directory is exactly the
+file whose version is **already known**, from the registry, for free. Opening it
+to learn what the registry just said is wasted work.
+
+So the registry coverage is not a scan filter. It is an **extraction filter**,
+and it works in the opposite direction:
+
+```
+  enumerated executables            99,919   0 files opened, 4.7 s
+  - OS / Store territory            53,553   component store + Appx API
+  = third-party                     46,366
+    - attributed to a known product 26,817   version already known
+    = needs a file opened           19,549
+```
+
+**Extraction drops from 99,919 files to 19,549 — 80% fewer opens**, and 0.68% of
+the volume. On the same assumption that a Defender-intercepted open costs
+10–30 ms, that is the difference between roughly 17–50 minutes and roughly
+3–10 minutes.
+
+That number is an estimate, not a measurement: per-file extraction cost has not
+been measured yet and is the next thing worth measuring.
+
+The resulting shape, which is what the collector should be built to:
+
+1. **Registry first.** 380 products with name, version and publisher, no file
+   opened. This is the inventory, and it is the Windows analogue of reading
+   `dpkg/status`.
+2. **Enumerate the MFT.** Every executable on the volume in seconds, no file
+   opened. This is discovery.
+3. **Attribute.** Match enumerated paths against known products' directories.
+   Attributed files need no extraction; they inherit the registry's version.
+4. **Extract only the remainder.** The unattributed third-party files are the
+   software nobody has an inventory record for -- Qt, Anaconda, per-user tools
+   -- which is precisely the software worth finding.
+
+Step 4 is what `--full-scan` should mean. Not "open everything", but "open the
+part nothing else can account for".
+
 ### Measured: the cost of running as SYSTEM
 
 An unattended scan runs from a scheduled task as `NT AUTHORITY\SYSTEM`, which

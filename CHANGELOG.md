@@ -20,6 +20,16 @@ schema and cataloger coverage may still change between releases. See
   opened all 1.3 million. `C:\Program Files` alone, a fraction of that volume,
   does not finish inside ten minutes through the directory resolver. Not yet
   wired into the scan path.
+- **The Windows architecture is now measured rather than reasoned.** The
+  proposed derived allowlist does not hold up — only 106 of 380 installed
+  products record an `InstallLocation`, and adding `DisplayIcon` and
+  `UninstallString` raises that to 147, covering 57.8% of third-party
+  executables. What the measurement showed is that the allowlist was pointed
+  the wrong way: enumeration is cheap (a 2.9-million-record volume in under
+  five seconds, nothing opened) and *extraction* is what costs. A file under a
+  known product's directory already has its version from the registry, so
+  registry coverage is an extraction filter, not a scan filter. Applied that
+  way it cuts files needing to be opened from 99,919 to 19,549 — 80% fewer.
 - **The Windows uninstall registry reader** (`internal/arp`), which is the
   Windows equivalent of reading a package database: names, versions, publishers
   and install locations, with no file opened. It covers all three scopes —
