@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"testing"
@@ -36,7 +37,8 @@ func TestDeadlineWatchdogTerminates(t *testing.T) {
 	select {
 	case err := <-done:
 		var code int
-		if ee, ok := err.(*exec.ExitError); ok {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
 			code = ee.ExitCode()
 		}
 		if code != exitTimeout {
