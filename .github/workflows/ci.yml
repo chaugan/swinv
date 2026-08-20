@@ -233,6 +233,48 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  windows-native:
+    name: windows (native runner)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: "Confirm the runner is elevated and C: is NTFS"
+        shell: pwsh
+        run: |
+          $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $elevated = (New-Object Security.Principal.WindowsPrincipal $id).IsInRole(
+            [Security.Principal.WindowsBuiltInRole]::Administrator)
+          $fs = (Get-Volume -DriveLetter C).FileSystemType
+          "elevated: $elevated"
+          "C: filesystem: $fs"
+          # MFT enumeration needs both. Failing here rather than inside the
+          # tests makes a runner-image change diagnosable in one line.
+          if (-not $elevated) { throw "runner is not elevated; FSCTL_ENUM_USN_DATA will fail" }
+          if ($fs -ne "NTFS")  { throw "C: is $fs, not NTFS; there is no MFT to enumerate" }
+
+      # The gate. This is the code written specifically for Windows, and it is
+      # the reason this job exists: the record parser and path reconstruction
+      # can be tested anywhere, but FSCTL_ENUM_USN_DATA against a real MFT
+      # cannot be tested anywhere else.
+      - name: Test the MFT enumerator against a real volume
+        run: go test ./internal/usn/... -v -count=1
+
+      # Informational. Most of the suite was written for Linux and assumes
+      # /proc and /etc; this records what does and does not survive on Windows
+      # without holding the build hostage to it.
+      - name: Whole suite (informational, not a gate)
+        continue-on-error: true
+        run: go test ./... -count=1
+
   lint:
     name: lint
     runs-on: ubuntu-latest
