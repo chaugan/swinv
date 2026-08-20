@@ -3,9 +3,19 @@
 > **Status: proposed. None of this is implemented.**
 >
 > Every other document in `docs/` describes behaviour that ships and has been
-> run. This one does not. It is a design to be argued with, and the estimates
-> in it are reasoned rather than measured — nobody has run `swinv` on Windows
-> yet.
+> run. This one does not: there is no registry cataloger, no MSI or Appx
+> support, and no USN or MFT enumeration. Not one line of it exists in the tree.
+>
+> What *has* happened since this was written is that the existing Linux
+> collector, cross-compiled unchanged, was run on a real Windows 11 machine.
+> That found five defects and produced the measurements now marked **Measured**
+> throughout. Those sections are evidence; everything else is still reasoning.
+>
+> The distinction matters when reading the performance discussion below. A
+> `swinv.exe` that walks `C:\Program Files` today is the Linux strategy running
+> on a platform it was not designed for — it finds files by walking directories,
+> because that is where Linux keeps its truth. It is not what this document
+> proposes.
 
 Part of the [swinv](../README.md) documentation.
 
@@ -228,6 +238,30 @@ Two problems disappear:
   a volume instantly.
 - **Cloud hydration.** Metadata records are read, files are never opened, so
   placeholders stay dehydrated.
+
+### Measured: the saving is larger than traversal alone
+
+This section originally credited USN enumeration with removing the cost of
+*walking* the tree, and treated the per-file cost as unavoidable. Running the
+current binary on Windows showed that undersells it.
+
+Syft's indexer opens **every regular file** in the tree and reads roughly 3 KB
+of it, purely to determine a MIME type, before any cataloger runs. On a scan of
+`/usr` on Linux that amounted to 5.9 GB read from a 4.8 GB tree — more than the
+tree itself, because most files are opened twice. On Linux the page cache
+absorbs this and it costs almost nothing. On Windows there is no equivalent
+shortcut: every `CreateFile` traverses Defender's filter driver whether the
+content is cached or not.
+
+Enumerating through the USN journal returns every filename without opening
+anything, so candidates can be filtered **by extension before a single handle
+exists**. Most of a Program Files tree is not an executable — it is resources,
+icons, localisation, documentation and data. Those files would never be opened
+at all, rather than being opened, sniffed, and then discarded as uninteresting.
+
+So the saving is not one cost but three: the directory traversal, the MIME sniff
+on every non-candidate, and the antivirus interception that each of those opens
+provokes.
 
 ### What this does *not* solve
 
