@@ -29,6 +29,7 @@
 .Op Fl -delta-only
 .Op Fl -catalogers Ar expr
 .Op Fl -no-file-ownership
+.Op Fl -fast
 .Op Fl -parallelism Ar n
 .Op Fl -timeout Ar duration
 .Op Fl -require-host-id
@@ -288,10 +289,30 @@ Skip package-to-file ownership resolution. Faster, but it reintroduces
 duplicate components: the binary classifier will report files that an OS
 package already claims.
 Default: ownership resolution is on.
+.It Fl -fast
+Scan at normal scheduling priority and full parallelism.
+.Pp
+By default
+.Nm
+treats a scan as background maintenance and steps out of the way of everything
+else on the machine: it lowers CPU priority to
+.Ql nice 10 ,
+requests the idle I/O scheduling class, and uses a quarter of the available
+CPUs as cataloger workers. This makes scans roughly a third slower and is the
+right trade for an unattended run on a machine doing real work.
+.Pp
+The idle I/O class is only honoured by the BFQ scheduler; under
+.Ql mq-deadline
+or
+.Ql none
+it has no effect and only the nice value applies.
+Default: background priority.
 .It Fl -parallelism Ar n
 Number of concurrent catalogers.
 .Ql 0
-means one per CPU.
+selects automatically: a quarter of the CPUs, or one per CPU with
+.Fl -fast .
+An explicit value overrides both, and may exceed the CPU count.
 Default:
 .Ql 0 .
 .It Fl -timeout Ar duration

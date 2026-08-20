@@ -105,12 +105,47 @@ and any symlinks quarantined by the preflight — is always recorded in
 
 | Flag | Default | Meaning |
 |---|---|---|
+| `--fast` | `false` | Scan at normal scheduling priority and full parallelism |
 | `--max-memory SIZE` | *(unlimited)* | Soft memory limit, e.g. `1536MiB` |
-| `--parallelism N` | `0` | Cataloger parallelism; `0` means `runtime.NumCPU()` |
+| `--parallelism N` | `0` | Cataloger parallelism; `0` chooses automatically — see below |
 | `--timeout DURATION` | `30m` | Whole-run deadline (Go duration syntax: `90s`, `10m`, `2h`) |
 
 `--parallelism` must not be negative and `--timeout` must be positive;
 either is a usage error.
+
+#### swinv is deliberately slow by default
+
+An inventory collector is background maintenance. It runs unattended, on a
+timer, on machines doing real work, and nobody is waiting on its result. A scan
+that finishes sooner but makes an interactive session stutter, or starves a
+database of disk, has made a bad trade — so by default swinv steps out of the
+way of everything else on the machine:
+
+| | Default | `--fast` |
+|---|---|---|
+| CPU priority | `nice 10` (Linux) / background mode (Windows) | unchanged |
+| I/O priority | idle class (Linux) / background mode (Windows) | unchanged |
+| Cataloger workers | a quarter of the CPUs | every CPU |
+
+Worker count is part of this and not merely a speed dial: it sets how deep an
+I/O queue the process presents to the kernel, and a shallow queue is most of
+what keeps a scan from making the rest of the machine feel slow.
+
+The cost is real. Scanning `/usr` on an 8-core host took **41.6 s** by default
+and **30.6 s** with `--fast` — about 36% slower for the politeness. Use
+`--fast` when a person is waiting for the answer.
+
+An explicit `--parallelism N` always wins over both modes, including a value
+above the CPU count. That is a legitimate thing to ask for: a scan is usually
+blocked on I/O rather than CPU, so oversubscribing can help on a host with fast
+storage and nothing else to do.
+
+Two honest limitations. On Linux, the idle I/O class is only honoured by the
+**BFQ** scheduler; `mq-deadline` and `none`, which most distributions now
+default to for NVMe, ignore it, and the kernel offers no way to ask in advance.
+The nice value still applies. And neither mode addresses page-cache pressure:
+reading a large tree evicts whatever the machine had cached, which swinv does
+not currently mitigate on either platform.
 
 ### Diagnostics
 

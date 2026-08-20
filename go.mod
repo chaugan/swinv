@@ -6,6 +6,7 @@ require (
 	github.com/CycloneDX/cyclonedx-go v0.11.0
 	github.com/anchore/syft v1.51.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
+	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.55.0
 )
 
@@ -263,7 +264,6 @@ require (
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect

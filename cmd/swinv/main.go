@@ -23,6 +23,7 @@ import (
 	"github.com/chaugan/swinv/internal/model"
 	"github.com/chaugan/swinv/internal/output"
 	"github.com/chaugan/swinv/internal/scan"
+	"github.com/chaugan/swinv/internal/sched"
 )
 
 // Build-time values, injected with -ldflags by the Makefile.
@@ -105,6 +106,7 @@ type config struct {
 	catalogers       string
 	noFileOwnership  bool
 	parallelism      int
+	fast             bool
 	timeout          time.Duration
 	requireHostID    bool
 	quiet            bool
@@ -220,18 +222,43 @@ func run(args []string, stdout, stderr io.Writer) int {
 		logf("excluding %d path patterns", len(patterns))
 	}
 
+	// --- scheduling priority ----------------------------------------------
+	// Applied before the scan rather than at startup so that argument parsing,
+	// --version and --help are unaffected: only the part that actually costs
+	// the machine something runs at a lower priority.
+	mode := sched.Background
+	if cfg.fast {
+		mode = sched.Normal
+	}
+	schedNotes, schedWarnings := sched.Apply(mode)
+	for _, w := range schedWarnings {
+		logf("%s", w)
+	}
+	if cfg.verbose {
+		for _, n := range schedNotes {
+			logf("%s", n)
+		}
+	}
+
+	parallelism := resolveParallelism(cfg.parallelism, cfg.fast)
+	if cfg.verbose {
+		logf("cataloger parallelism %d of %d CPUs", parallelism, runtime.NumCPU())
+	}
+
 	// --- scan -------------------------------------------------------------
 	logf("scanning %s ...", cfg.root)
+	stopHeartbeat := startHeartbeat(cfg.quiet, cfg.timeout, logf)
 	result, err := scan.Run(ctx, scan.Options{
 		Root:             cfg.root,
 		Excludes:         patterns,
 		CatalogerExpr:    cfg.catalogers,
 		FileOwnership:    !cfg.noFileOwnership,
-		Parallelism:      cfg.parallelism,
+		Parallelism:      parallelism,
 		Hash:             cfg.hash,
 		SkipNestedRootfs: cfg.skipNestedRootfs,
 		Verbose:          cfg.verbose && !cfg.quiet,
 	})
+	stopHeartbeat()
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			fmt.Fprintf(stderr, "swinv: timed out after %s\n", cfg.timeout)

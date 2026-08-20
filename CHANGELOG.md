@@ -9,6 +9,24 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Added
+
+- **swinv now gets out of the way of the machine it is inventorying.** By
+  default a scan runs at `nice 10` with the idle I/O scheduling class on Linux,
+  in background priority mode on Windows, and with a quarter of the CPUs as
+  cataloger workers rather than all of them. An inventory collector is
+  background maintenance — unattended, on a timer, on a machine doing real
+  work — and a scan that finishes sooner but makes an interactive session
+  stutter has made a bad trade. `--fast` restores the previous behaviour for
+  when a person is waiting: measured on `/usr` on an 8-core host, the default
+  takes 41.6 s against 30.6 s with `--fast`, so politeness costs about a third
+  of the runtime. An explicit `--parallelism N` still overrides both.
+- **A long scan now says it is still alive**, every 30 seconds, with elapsed
+  time and the deadline. Between "scanning ..." and the result there was
+  previously no output at all for up to 30 minutes, so a slow scan and a hung
+  one were indistinguishable — which is exactly how the first Windows run was
+  read, and reasonably so.
+
 ### Fixed
 
 - **Every write would have failed on Windows.** The atomic write path fsyncs

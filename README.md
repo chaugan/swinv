@@ -396,11 +396,25 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--skip-nested-rootfs` | false | Drop packages that came from a nested root filesystem (see Known limitations) |
 | `--since PATH` | — | Diff against a previous report |
 | `--hash` | false | Record a SHA-256 per component |
+| `--fast` | false | Scan at normal priority and full parallelism (see below) |
 | `--max-memory SIZE` | — | Soft memory limit, e.g. `1536MiB` |
 | `--timeout DURATION` | `30m` | Whole-run deadline |
 | `--verbose` / `--quiet` | false | Per-stage timing / silence |
 
 **[Full flag reference and exit codes →](docs/FLAGS.md)**
+
+### swinv gets out of the way by default
+
+An inventory collector is background maintenance: it runs unattended, on a
+timer, on machines doing real work, and nobody is waiting for its answer. So by
+default swinv runs at `nice 10` with idle I/O priority on Linux, in background
+priority mode on Windows, and with a quarter of the CPUs as cataloger workers.
+Worker count matters here beyond speed — it sets how deep an I/O queue the scan
+presents to the kernel, and that is most of what decides whether the rest of the
+machine feels slow while it runs.
+
+It costs about a third of the runtime: `/usr` on an 8-core host took 41.6 s by
+default and 30.6 s with `--fast`. Pass `--fast` when a person is waiting.
 
 All human-readable output goes to **stderr**; only `--stdout` data goes to
 stdout. Exit codes distinguish complete (`0`), partial (`1`), usage (`2`), fatal
