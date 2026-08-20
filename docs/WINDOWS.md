@@ -373,9 +373,12 @@ worse than no Windows support.
    Windows counts look inflated next to what an operator sees in the UI.
 4. **Server-role detection** — deducing that IIS is serving, and which product
    and version sits behind a listening port — is a different axis from "what is
-   installed" and is not designed here. It deserves its own document, and is
-   arguably worth building on Linux first, where the package file-ownership
-   graph makes the socket → process → binary → product join reliable.
+   installed" and is not designed here. It now has its own document:
+   [Server-role detection](SERVER-ROLES.md). Note one finding from it that bears
+   on this document: IIS does not fit a socket → process → binary pipeline at
+   all, because `HTTP.sys` owns the socket in kernel mode. IIS topology has to
+   come from `applicationHost.config`, which is read offline and suits an
+   air-gapped scan better than anything runtime-derived.
 
 ---
 

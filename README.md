@@ -670,6 +670,7 @@ touching the writers.
 | [Changelog](CHANGELOG.md) | What changed, and the versioning policy |
 | [Specification](docs/INVENTORYCOLLECTORSPEC.md) | The spec of record, with rationale |
 | [Windows design](docs/WINDOWS.md) | Proposed Windows support — **not implemented** |
+| [Server roles](docs/SERVER-ROLES.md) | Proposed detection of what is running and serving — **not implemented** |
 
 ## Non-goals
 

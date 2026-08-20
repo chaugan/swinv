@@ -45,6 +45,13 @@ schema and cataloger coverage may still change between releases. See
 
 ### Added
 
+- `docs/SERVER-ROLES.md`, the proposed design for detecting what is running and
+  serving — as distinct from what is installed — on both platforms, including
+  IIS. Also unimplemented. Its measurements corrected three assumptions it was
+  written to confirm: binary version banners cover far less than expected,
+  deleted-mapping drift detection had a 100% false-positive rate unfiltered, and
+  a container's service is misattributed to the host unless every path
+  resolution goes through `/proc/PID/root`.
 - `docs/WINDOWS.md`, the proposed design for Windows support, marked clearly as
   unimplemented, with a protocol for measuring the current binary on a real
   Windows machine.
