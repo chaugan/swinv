@@ -13,7 +13,6 @@ import (
 	"github.com/chaugan/swinv/internal/model"
 )
 
-
 // defaultExcludeDirs are the directory trees skipped for a scan rooted at "/".
 // They are either kernel-synthetic (proc, sys, dev), volatile (run, tmp),
 // caches that hold no installed software (var/cache), or container image
