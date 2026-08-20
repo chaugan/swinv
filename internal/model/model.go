@@ -17,7 +17,7 @@ import (
 // 1.1 added Component.SHA256 (--hash) and Report.Delta (--since). Both are
 // additive and omitted when unused, so a 1.0 consumer still parses a 1.1
 // document.
-const SchemaVersion = "1.1"
+const SchemaVersion = "1.2"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -119,10 +119,19 @@ type ScanMeta struct {
 
 // Component is one piece of installed software.
 type Component struct {
-	Name      string   `json:"name"`
-	Version   string   `json:"version"`
-	Type      string   `json:"type"`
-	Language  string   `json:"language,omitempty"`
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Type     string `json:"type"`
+	Language string `json:"language,omitempty"`
+
+	// Vendor is the organisation behind the component, as its own ecosystem
+	// records it: an rpm Vendor, a dpkg or apk Maintainer, or CompanyName from
+	// a Windows PE version resource. Those are related but not identical
+	// facts, and the raw value is kept rather than normalised — see
+	// vendorFromPackage in internal/scan.
+	//
+	// Frequently empty. Many ecosystems record no such field at all.
+	Vendor    string   `json:"vendor,omitempty"`
 	PURL      string   `json:"purl,omitempty"`
 	CPEs      []string `json:"cpes,omitempty"`
 	Licenses  []string `json:"licenses,omitempty"`

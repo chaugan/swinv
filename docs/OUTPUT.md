@@ -11,11 +11,27 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.1`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.2`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.1"
+"schema_version": "1.2"
 ```
+
+**1.1 → 1.2** added exactly one thing:
+
+| Addition | Produced by | Appears in |
+|---|---|---|
+| `Component.vendor` | always, where the ecosystem records it | JSON, CSV column 18, CycloneDX `publisher` |
+
+`vendor` is the organisation behind a component, taken from whichever field its
+ecosystem uses: an rpm `Vendor`, a dpkg or apk `Maintainer`, a Python or npm
+`Author`, `Vendor` from a systemd ELF package note, or `CompanyName` from a
+Windows PE version resource. Those are related but not identical facts, so the
+raw value is kept rather than normalised into a single invented definition.
+
+It is frequently empty — measured at 23% of components on a full Debian-family
+host, ranging from 66% for `deb` down to 0% for kernel modules, which have no
+such concept. Treat its absence as "not recorded", never as "no vendor".
 
 **1.0 → 1.1** added exactly two things:
 
@@ -395,6 +411,7 @@ hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,typ
 | 15 | `found_by` | `component.found_by` |
 | 16 | `sha256` | `component.sha256` (schema 1.1) |
 | 17 | `change` | `component.change` (schema 1.1) |
+| 18 | `vendor` | `component.vendor` (schema 1.2) |
 
 A real row, from the test fixture:
 

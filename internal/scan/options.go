@@ -13,10 +13,6 @@ import (
 	"github.com/chaugan/swinv/internal/model"
 )
 
-// defaultMountinfoPath is the kernel's per-process mount table. It is the
-// authoritative list of what is mounted where, including the filesystem type,
-// which is what lets swinv skip network and virtual filesystems.
-const defaultMountinfoPath = "/proc/self/mountinfo"
 
 // defaultExcludeDirs are the directory trees skipped for a scan rooted at "/".
 // They are either kernel-synthetic (proc, sys, dev), volatile (run, tmp),
@@ -449,6 +445,13 @@ func unescapeOctal(s string) string {
 // still correct, only slower.
 func mountExcludes(root, mountinfoPath string, noSnap bool) (patterns, excluded, warnings []string) {
 	if mountinfoPath == "" {
+		if defaultMountinfoPath == "" {
+			// This platform keeps no mount table swinv can read. Reporting a
+			// missing /proc path here would be technically true and useless:
+			// it names a Linux file and gives Linux advice to someone who can
+			// act on neither.
+			return nil, nil, []string{noMountTableWarning}
+		}
 		mountinfoPath = defaultMountinfoPath
 	}
 

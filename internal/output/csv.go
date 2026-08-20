@@ -38,6 +38,10 @@ var csvColumns = []string{
 	// runs. Empty unless --hash / --since were used.
 	"sha256",
 	"change",
+	// Appended in schema 1.2. Appended rather than inserted next to "name" so
+	// that a consumer reading columns by position keeps working unchanged;
+	// every column added since 1.0 has gone on the end for the same reason.
+	"vendor",
 }
 
 // CSVColumns returns a copy of the CSV header row, in order. It exists so
@@ -90,6 +94,7 @@ func WriteCSV(w io.Writer, r *model.Report) error {
 		record[14] = c.FoundBy
 		record[15] = c.SHA256
 		record[16] = c.Change
+		record[17] = c.Vendor
 		if err := cw.Write(record); err != nil {
 			return fmt.Errorf("output: writing csv row for %q: %w", c.Name, err)
 		}

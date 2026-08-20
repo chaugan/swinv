@@ -379,7 +379,7 @@ that silently covers only the current user's processes.
 
 ## Schema
 
-A new top-level `services[]` array, schema `1.1` → `1.2`, additive.
+A new top-level `services[]` array, schema `1.2` → `1.3`, additive.
 
 A service is a **relation**, not a property of a component: one `nginx` backs
 many sites; one service involves the daemon, the OpenSSL it has loaded, and the

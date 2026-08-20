@@ -82,6 +82,11 @@ func cdxComponent(c model.Component, refs map[string]int) cyclonedx.Component {
 		Version:    c.Version,
 		PackageURL: c.PURL,
 		Licenses:   cdxLicenses(c.Licenses),
+		// CycloneDX "publisher" is a free-text organisation name, which is
+		// exactly the shape of what the ecosystems record. "supplier" is the
+		// structured alternative and would require inventing contact details
+		// that no cataloger provides.
+		Publisher: c.Vendor,
 	}
 
 	// CycloneDX carries a single CPE per component; keep the first (the input

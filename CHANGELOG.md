@@ -11,6 +11,17 @@ schema and cataloger coverage may still change between releases. See
 
 ### Added
 
+- **`Component.vendor`**, the organisation behind a component, and with it
+  schema `1.2`. It comes from whichever field the ecosystem uses — an rpm
+  `Vendor`, a dpkg or apk `Maintainer`, a Python or npm `Author`, `Vendor` from
+  a systemd ELF package note, or `CompanyName` from a Windows PE version
+  resource, which is what makes a `.dll` attributable to its publisher. The raw
+  value is kept rather than normalised, because a Debian maintainer and a
+  Microsoft `CompanyName` are related but not identical facts. Additive: JSON
+  omits it when empty, `vendor` is appended as CSV column 18 so positional
+  readers are unaffected, and CycloneDX maps it to `publisher`. Present on 23%
+  of components on a full Debian-family host — 66% of `deb`, 0% of kernel
+  modules — so absence means "not recorded", not "no vendor".
 - **swinv now gets out of the way of the machine it is inventorying.** By
   default a scan runs at `nice 10` with the idle I/O scheduling class on Linux,
   in background priority mode on Windows, and with a quarter of the CPUs as
@@ -34,6 +45,19 @@ schema and cataloger coverage may still change between releases. See
   read, and reasonably so.
 
 ### Fixed
+
+- **`ran_as_root` was always `false` on Windows, including for an elevated
+  Administrator.** `os.Geteuid` returns a hard-coded `-1` there — not an error
+  and not an unsupported marker — so the check reported "unprivileged" for a
+  fully elevated process and put a confident wrong value in the report.
+  Privilege is now detected per platform, via the process token's elevation
+  flag on Windows, and the accompanying warning is phrased for the platform
+  rather than telling a Windows operator they are "not running as root".
+- **The missing-mount-table warning gave Linux advice on Windows.** A Windows
+  run reported that it could not read `/proc/self/mountinfo`, which is true and
+  useless. It now states the consequence an operator can act on: without
+  drive-type filtering, network drives, removable media and cloud-sync folders
+  under the scan root are walked like any local directory.
 
 - **`--timeout` was not a whole-run deadline.** Syft indexes the filesystem with
   `filepath.Walk`, which takes no context and checks no cancellation, so a scan

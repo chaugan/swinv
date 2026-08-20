@@ -22,6 +22,7 @@ import (
 	"github.com/chaugan/swinv/internal/hostfacts"
 	"github.com/chaugan/swinv/internal/model"
 	"github.com/chaugan/swinv/internal/output"
+	"github.com/chaugan/swinv/internal/privilege"
 	"github.com/chaugan/swinv/internal/scan"
 	"github.com/chaugan/swinv/internal/sched"
 )
@@ -193,13 +194,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitFatal
 	}
 
+	priv := privilege.Check()
+
 	meta := model.ScanMeta{
 		StartedAt: startedAt,
 		Root:      cfg.root,
-		RanAsRoot: os.Geteuid() == 0,
+		RanAsRoot: priv.Elevated,
 	}
-	if !meta.RanAsRoot {
-		meta.AddWarning("not running as root: root-only paths and DMI identifiers were skipped")
+	if priv.Warning != "" {
+		meta.AddWarning(priv.Warning)
 	}
 
 	// --- exclusions -------------------------------------------------------

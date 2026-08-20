@@ -408,6 +408,7 @@ func componentFromPackage(p pkg.Package, absRoot string) model.Component {
 		Language: string(p.Language),
 		PURL:     p.PURL,
 		FoundBy:  p.FoundBy,
+		Vendor:   strings.TrimSpace(vendorFromPackage(p)),
 	}
 
 	for _, cp := range p.CPEs {
@@ -532,4 +533,46 @@ func toolVersion() string {
 		return unknownVersion
 	}
 	return info.Main.Version
+}
+
+// vendorFromPackage extracts the organisation behind a component from whatever
+// typed metadata its cataloger produced.
+//
+// The field means something slightly different in each ecosystem, and that
+// difference is preserved rather than normalised away: rpm records a Vendor,
+// which is the organisation that packaged the software; dpkg and apk record a
+// Maintainer, which is a person or team and usually carries an email address;
+// PE files record CompanyName from the VERSIONINFO resource, which is the
+// closest thing Windows has to a publisher. Flattening these into one
+// definition would mean deciding that a Debian maintainer and a Microsoft
+// CompanyName are the same kind of fact, and they are not.
+//
+// An empty string means the cataloger recorded nothing, which is common and is
+// not an error.
+func vendorFromPackage(p pkg.Package) string {
+	switch m := p.Metadata.(type) {
+	case pkg.RpmDBEntry:
+		return m.Vendor
+	case pkg.RpmArchive:
+		return m.Vendor
+	case pkg.DpkgDBEntry:
+		return m.Maintainer
+	case pkg.ApkDBEntry:
+		return m.Maintainer
+	case pkg.DotnetPortableExecutableEntry:
+		return m.CompanyName
+	case pkg.PEBinary:
+		// A .dll or .exe found by the binary cataloger rather than the .NET
+		// one. This is the common case for native Windows components.
+		if v, ok := m.VersionResources.Get("CompanyName"); ok {
+			return v
+		}
+	case pkg.ELFBinaryPackageNoteJSONPayload:
+		return m.Vendor
+	case pkg.NpmPackage:
+		return m.Author
+	case pkg.PythonPackage:
+		return m.Author
+	}
+	return ""
 }

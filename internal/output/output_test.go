@@ -26,7 +26,7 @@ var fixedStart = time.Date(2024, 3, 7, 4, 5, 6, 0, time.FixedZone("CET", 3600))
 // when --hash / --since were not used, so the column shape never varies with
 // flags and CSVs stay concatenable across machines and runs.
 const wantCSVHeader = "hostname,machine_id,os_id,os_version_id,architecture,scanned_at," +
-	"name,version,type,language,purl,cpes,licenses,locations,found_by,sha256,change\n"
+	"name,version,type,language,purl,cpes,licenses,locations,found_by,sha256,change,vendor\n"
 
 // testReport is a report exercising every awkward case at once: embedded
 // commas, quotes, newlines and non-ASCII text, multi-valued fields, and a
@@ -159,6 +159,7 @@ func TestWriteCSVEscapingAndContent(t *testing.T) {
 		c.FoundBy,
 		c.SHA256,
 		c.Change,
+		c.Vendor,
 	}
 	if !reflect.DeepEqual(row, want) {
 		t.Errorf("row round-trip mismatch:\n got %q\nwant %q", row, want)
