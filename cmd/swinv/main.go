@@ -249,6 +249,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// --- scan -------------------------------------------------------------
 	logf("scanning %s ...", cfg.root)
 	stopHeartbeat := startHeartbeat(cfg.quiet, cfg.timeout, cfg.stacksAfter, cfg.out, logf)
+	stopWatchdog := startDeadlineWatchdog(cfg.timeout, watchdogGrace, stderr)
 	result, err := scan.Run(ctx, scan.Options{
 		Root:             cfg.root,
 		Excludes:         patterns,
@@ -259,6 +260,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		SkipNestedRootfs: cfg.skipNestedRootfs,
 		Verbose:          cfg.verbose && !cfg.quiet,
 	})
+	stopWatchdog()
 	stopHeartbeat()
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {

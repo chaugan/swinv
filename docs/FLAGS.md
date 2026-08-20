@@ -114,6 +114,15 @@ and any symlinks quarantined by the preflight — is always recorded in
 `--parallelism` must not be negative and `--timeout` must be positive;
 either is a usage error.
 
+`--timeout` is enforced two ways. Normally the deadline cancels the scan
+cooperatively and swinv exits 4. But Syft indexes the filesystem with
+`filepath.Walk`, which takes no context, so a scan wedged in indexing never
+reaches a cancellation check — a `--timeout 5m` run on a Windows host was
+observed still going at 5m30s. A watchdog therefore terminates the process if
+the deadline is exceeded by more than ten seconds. Reports are written by
+staging to a temp file and renaming, so a terminated run may leave a `.tmp-*`
+file beside the target but can never leave a half-written report in its place.
+
 `--debug-stacks-after` is for a scan that appears to have hung. Go dumps every
 goroutine stack on `SIGQUIT`, and on Windows on Ctrl+Break, but neither is
 reachable from a systemd timer or a scheduled task, and many laptop keyboards

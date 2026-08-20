@@ -133,6 +133,64 @@ within them, matching the existing CLI shape.
 
 This is fast, needs no elevation, and cannot wander into a mapped network drive.
 
+### Measured: why this is necessary rather than merely tidy
+
+This section originally argued for an allowlist from first principles. It has
+since been measured, and the measurement is stronger than the argument.
+
+The first execution of the cross-compiled binary on a real Windows 11 machine
+scanned `C:\Program Files` and **did not finish**. Not slowly — a 5-minute
+deadline elapsed with no result, twice, on a 20-core laptop. A goroutine dump
+taken mid-scan named the cause exactly:
+
+```
+syscall.createFile(...)
+os.Open(...)
+syft/internal/fileresolver.NewMetadataFromPath  metadata.go:24
+directoryIndexer.addFileToIndex                 directory_indexer.go:337
+directoryIndexer.indexPath                      directory_indexer.go:281
+path/filepath.Walk
+```
+
+Syft's directory indexer **opens every regular file in the tree**, before any
+cataloger runs, in order to sniff its MIME type. On Linux that is cheap. On
+Windows every `os.Open` is a `CreateFile` with `GENERIC_READ`, and Defender's
+real-time protection scans a file when it is *opened*, not only when it is read.
+`C:\Program Files` is tens of thousands of large executables, so the indexer
+pays a full antivirus scan for each one.
+
+Three things follow, and all three were confirmed on the machine:
+
+- **Cataloger selection cannot avoid it.** `--catalogers os` selects nothing
+  that can match on Windows and should have returned zero components in about a
+  second. It stalled identically, because indexing happens first and is
+  unaffected by which catalogers are selected.
+- **This is not something swinv can fix from outside Syft.** The only lever
+  available is scanning fewer paths — which is what the allowlist is.
+- **`--full-scan` over a whole volume would be far worse.** If `Program Files`
+  alone cannot complete in five minutes, walking `C:\` is not a slow option; it
+  is not an option.
+
+For comparison, swinv's own symlink pre-flight walks the same tree in **1.8
+seconds**, because `filepath.WalkDir` only `Lstat`s and never opens anything.
+The gap between 1.8 seconds and "did not finish" is the cost of the MIME sniff.
+
+This also strengthens the case in [`--full-scan`](#--full-scan) for discovery
+via the USN journal, which reads MFT records and opens nothing at all.
+
+### A related defect this uncovered
+
+The same run exposed something independent of Windows: a `--timeout 5m` scan was
+still running at 5m30s. Syft's indexer walks with `filepath.Walk`, which takes
+no context and checks no cancellation, so a scan wedged in indexing never
+reaches a point where the deadline is consulted. `--timeout` was documented as a
+whole-run deadline and was not one.
+
+swinv now runs a watchdog that terminates the process if the scan outlives its
+deadline by more than a short grace period. Exiting hard is not elegant, but a
+deadline a caller cannot rely on is worse than no deadline, and atomic writes
+mean termination can never leave a half-written report.
+
 ---
 
 ## `--full-scan`

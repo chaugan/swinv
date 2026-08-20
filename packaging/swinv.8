@@ -328,7 +328,12 @@ An explicit value overrides both, and may exceed the CPU count.
 Default:
 .Ql 0 .
 .It Fl -timeout Ar duration
-Whole-run deadline, as a Go duration string
+Whole-run deadline, as a Go duration string.
+If the scan cannot be cancelled cooperatively -- filesystem indexing takes no
+context and cannot be interrupted -- a watchdog terminates the process ten
+seconds past the deadline.
+.Pp
+Given as
 .Pq Ql 90s , Ql 30m , Ql 2h .
 Default:
 .Ql 30m .

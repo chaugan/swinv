@@ -35,6 +35,14 @@ schema and cataloger coverage may still change between releases. See
 
 ### Fixed
 
+- **`--timeout` was not a whole-run deadline.** Syft indexes the filesystem with
+  `filepath.Walk`, which takes no context and checks no cancellation, so a scan
+  wedged in indexing never reaches a point where the deadline is consulted: a
+  `--timeout 5m` run on a Windows host was observed still going at 5m30s with no
+  sign of stopping. A watchdog now terminates the process ten seconds past the
+  deadline. Atomic writes mean a terminated run can leave a `.tmp-*` file but
+  never a half-written report.
+
 - **Every write would have failed on Windows.** The atomic write path fsyncs
   the target directory after the rename, and Windows has no such operation:
   `FlushFileBuffers` rejects a directory handle with `ERROR_INVALID_FUNCTION`,
