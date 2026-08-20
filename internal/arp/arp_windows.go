@@ -94,6 +94,8 @@ func readEntry(k registry.Key, name string, scope Scope) (Entry, bool) {
 		Publisher:        strValue(k, "Publisher"),
 		InstallLocation:  strings.TrimRight(strValue(k, "InstallLocation"), `\`),
 		InstallDate:      strValue(k, "InstallDate"),
+		DisplayIcon:      strValue(k, "DisplayIcon"),
+		UninstallString:  strValue(k, "UninstallString"),
 		SystemComponent:  intValue(k, "SystemComponent") == 1,
 		WindowsInstaller: intValue(k, "WindowsInstaller") == 1,
 	}, true

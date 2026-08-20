@@ -49,6 +49,18 @@ type Entry struct {
 	InstallLocation string
 	InstallDate     string
 
+	// DisplayIcon and UninstallString are kept because InstallLocation is
+	// frequently absent -- measured at 106 of 380 products on a real machine,
+	// so 72% of entries offer no location at all. Both of these usually point
+	// at a file inside the install directory, so the directory can be
+	// recovered from them when InstallLocation is missing.
+	//
+	// Raw values. DisplayIcon often carries a ",0" icon index and either may
+	// be quoted or carry arguments; interpreting that is the caller's job,
+	// because the right interpretation depends on what the caller wants.
+	DisplayIcon     string
+	UninstallString string
+
 	// SystemComponent is set on entries hidden from the Add/Remove Programs
 	// UI. They are real software -- runtimes, redistributables, driver
 	// packages -- but including them makes a Windows count look inflated next

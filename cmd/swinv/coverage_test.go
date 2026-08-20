@@ -98,3 +98,36 @@ func TestTrimToDepthGoesDeeperUnderUsers(t *testing.T) {
 		}
 	}
 }
+
+func TestOSOrStoreTerritory(t *testing.T) {
+	inside := []string{
+		`C:\Windows\WinSxS\amd64_x\y.dll`,
+		`C:\Windows\System32\kernel32.dll`,
+		`c:\windows\syswow64\x.dll`,
+		`C:\Program Files\WindowsApps\Pkg_1.0\app.exe`,
+		`C:\Program Files (x86)\WindowsApps\Pkg\app.exe`,
+	}
+	for _, p := range inside {
+		if !osOrStoreTerritory(p, "C:") {
+			t.Errorf("%q should be OS or Store territory", p)
+		}
+	}
+
+	outside := []string{
+		`C:\Program Files\Siemens\x.dll`,
+		`C:\Qt\6.7.2\msvc\bin\q.dll`,
+		`C:\ProgramData\anaconda3\python.dll`,
+		`C:\Users\chris\AppData\Local\uv\uv.exe`,
+		// Not under \Windows\ despite the prefix.
+		`C:\WindowsExtra\x.dll`,
+	}
+	for _, p := range outside {
+		if osOrStoreTerritory(p, "C:") {
+			t.Errorf("%q should not be OS or Store territory", p)
+		}
+	}
+
+	if !osOrStoreTerritory(`D:\Windows\System32\x.dll`, `D:\`) {
+		t.Error("a trailing separator on the volume must not break matching")
+	}
+}

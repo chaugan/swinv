@@ -133,6 +133,14 @@ identity problem to solve, and it is more important than any schema question.
 
 ## The default scan: a derived allowlist
 
+> **Superseded in part by measurement.** See
+> [the derived allowlist does not hold up](#measured-the-derived-allowlist-does-not-hold-up)
+> below: only about a quarter of installed products record an `InstallLocation`,
+> so an allowlist derived from that field alone reaches roughly a quarter of the
+> executables on a real machine. The reasoning here about *not* walking the
+> whole drive stands; the conclusion that an allowlist can replace enumeration
+> does not.
+
 The default must **not** walk the whole drive.
 
 Take `InstallLocation` from every registry entry, add `%ProgramFiles%`,
@@ -347,6 +355,65 @@ enumeration sees software the registry cannot.
 That last point is the argument for building both. The registry is the source of
 truth for machine-wide software and is nearly free to read. Enumeration is what
 finds the rest.
+
+### Measured: the derived allowlist does not hold up
+
+This document proposed a **derived allowlist** as the default scan: take
+`InstallLocation` from every uninstall key, scan those paths, and treat
+`--full-scan` as the exception. That was reasoned, not measured. Measuring it
+does not support it.
+
+On the same real machine, comparing what MFT enumeration finds against what the
+registry claims:
+
+| | interactive | as SYSTEM |
+|---|---|---|
+| products in the uninstall keys | 380 | 353 |
+| **of those, with an `InstallLocation`** | **106 (28%)** | **88 (25%)** |
+| executables under a registry location | 23,600 | 17,997 |
+| **coverage** | **23.7%** | **18.0%** |
+
+The failure is upstream of path matching. **Roughly three quarters of installed
+products record no install location at all**, so the allowlist has nothing to
+derive from for most of what is installed. No amount of better matching fixes
+that.
+
+Two mitigations are worth measuring before concluding, and the probe now reports
+both:
+
+- `DisplayIcon` and `UninstallString` usually name a file *inside* the install
+  directory, so the directory can be recovered from them when `InstallLocation`
+  is absent. Cheap, and it needs no new API.
+- The raw 76% miss overstates the gap, because much of it is software that
+  should never come from an uninstall-key allowlist: everything under
+  `\Windows` belongs to the component store and update inventory, and
+  `WindowsApps` belongs to the Appx API. On this machine that is 39,536 +
+  10,703 + 1,438 = over half the uncovered files. The honest denominator is
+  third-party software, and the probe reports coverage both ways.
+
+Even so, the conclusion the design has to absorb is that **MFT enumeration is
+load-bearing rather than a fallback.** The registry remains the best source of
+*identity* -- name, version, publisher -- and it is nearly free to read. It is
+not a reliable source of *where the files are*.
+
+### Measured: the cost of running as SYSTEM
+
+An unattended scan runs from a scheduled task as `NT AUTHORITY\SYSTEM`, which
+reads `HKCU` for the SYSTEM account rather than for any real user. The size of
+that blind spot, measured by running the same probe both ways on one machine:
+
+- **27 fewer products** visible (380 → 353)
+- **18 fewer install locations** (106 → 88)
+- **5,603 fewer executables** attributable to a known product
+
+Per-user software -- editors, language runtimes, Electron applications, package
+manager globals -- is registered per user and is invisible to a service account.
+`C:\Users\chris\AppData\Local\uv` alone holds 1,300 executables.
+
+The files are on disk regardless of which hive is loaded, so enumeration sees
+them and the registry does not. If per-user software matters to an operator,
+either the scan runs interactively, or unloaded user hives get mounted and read
+-- which is considerably more invasive and needs its own decision.
 
 ### Hard links: a file appears under one path, not all of them
 

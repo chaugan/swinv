@@ -176,35 +176,54 @@ func reportRegistryCoverage(entries []usn.Entry, volume string, logf func(string
 		return
 	}
 
-	var locations []string
-	withLocation := 0
+	var (
+		fromInstallLocation []string
+		fromAllSources      []string
+		withLocation        int
+		withAnySource       int
+	)
 	for _, e := range installed {
-		if e.InstallLocation == "" {
+		if e.InstallLocation != "" {
+			withLocation++
+			fromInstallLocation = append(fromInstallLocation, strings.TrimRight(e.InstallLocation, `\`))
+		}
+		if locs := installLocations(e.InstallLocation, e.DisplayIcon, e.UninstallString); len(locs) > 0 {
+			withAnySource++
+			fromAllSources = append(fromAllSources, locs...)
+		}
+	}
+
+	logf("%s: registry lists %d products; %d have InstallLocation, %d yield a directory from any field",
+		volume, len(installed), withLocation, withAnySource)
+
+	var all, thirdParty []string
+	for _, e := range entries {
+		if e.Path == "" || !strings.HasPrefix(strings.ToUpper(e.Path), strings.ToUpper(volume)) {
 			continue
 		}
-		withLocation++
-		locations = append(locations, e.InstallLocation)
-	}
-
-	logf("%s: registry lists %d installed products, %d with an install location",
-		volume, len(installed), withLocation)
-	if len(locations) == 0 {
-		return
-	}
-
-	paths := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.Path != "" && strings.HasPrefix(strings.ToUpper(e.Path), strings.ToUpper(volume)) {
-			paths = append(paths, e.Path)
+		all = append(all, e.Path)
+		if !osOrStoreTerritory(e.Path, volume) {
+			thirdParty = append(thirdParty, e.Path)
 		}
 	}
-
-	covered, _ := coverageOf(paths, locations)
-	if len(paths) == 0 {
+	if len(all) == 0 {
 		return
 	}
-	logf("%s: %d of %d executables (%.1f%%) lie under a registry install location",
-		volume, covered, len(paths), 100*float64(covered)/float64(len(paths)))
-	logf("%s: %d (%.1f%%) do not -- these are invisible to a registry-derived allowlist",
-		volume, len(paths)-covered, 100*float64(len(paths)-covered)/float64(len(paths)))
+
+	report := func(label string, paths, locations []string) {
+		if len(paths) == 0 {
+			return
+		}
+		covered, _ := coverageOf(paths, locations)
+		logf("%s:   %-34s %6d of %6d  (%4.1f%%)", volume, label, covered, len(paths),
+			100*float64(covered)/float64(len(paths)))
+	}
+
+	logf("%s: coverage by a registry-derived allowlist:", volume)
+	report("InstallLocation, all files", all, fromInstallLocation)
+	report("+DisplayIcon/UninstallString", all, fromAllSources)
+	logf("%s: excluding OS and Store territory (%d of %d files):",
+		volume, len(thirdParty), len(all))
+	report("InstallLocation, third-party", thirdParty, fromInstallLocation)
+	report("+DisplayIcon/UninstallString", thirdParty, fromAllSources)
 }

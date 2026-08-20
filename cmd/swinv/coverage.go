@@ -45,3 +45,30 @@ func coverageOf(paths, locations []string) (covered int, byLocation map[string]i
 	}
 	return covered, byLocation
 }
+
+// osOrStoreTerritory reports whether a path belongs to software that should
+// never have come from an uninstall-key allowlist in the first place.
+//
+// Everything under \Windows is an operating system component, serviced by
+// Windows Update and inventoried through the component store and hotfix list.
+// WindowsApps holds Store and MSIX packages, which are enumerated through the
+// Appx API and deliberately have no uninstall key.
+//
+// Counting these against a registry-derived allowlist measures the wrong thing:
+// they are not missing, they belong to a different source. The honest coverage
+// figure is over what is left.
+func osOrStoreTerritory(path, volume string) bool {
+	lower := strings.ToLower(path)
+	vol := strings.ToLower(strings.TrimRight(volume, `\`))
+
+	for _, prefix := range []string{
+		vol + `\windows\`,
+		vol + `\program files\windowsapps\`,
+		vol + `\program files (x86)\windowsapps\`,
+	} {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return false
+}
