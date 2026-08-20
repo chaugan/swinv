@@ -285,6 +285,69 @@ touched again.
 For comparison, `C:\Program Files` alone — a fraction of that volume — did not
 finish inside ten minutes through the directory resolver.
 
+### Measured: a real, loaded machine
+
+The CI figures come from a stock Windows 11 image with almost nothing installed.
+The same probe on a working developer laptop -- NVIDIA, Qt, Anaconda, Visual
+Studio, Office, Siemens tooling -- gives a very different and more useful
+picture:
+
+| | CI runner | real laptop |
+|---|---|---|
+| MFT records | 1,301,728 | **2,888,844** |
+| elapsed | 42 s | **14.4 s** |
+| directories | 199,644 | 510,205 |
+| executables kept | 127,228 | 99,767 |
+| paths unresolved | 0 | **0** |
+| fraction kept | 9.8% | **3.5%** |
+
+Twice the records in a third of the time, and 96.5% of the volume never opened.
+The comparison that matters: `C:\Program Files` alone does not finish inside ten
+minutes through the directory resolver; the *entire volume* enumerates in
+fourteen seconds.
+
+Where the candidates live is more instructive than the totals:
+
+```
+   39536  C:\Windows\WinSxS
+   10703  C:\Program Files\WindowsApps
+    6099  C:\Users\chris
+    5922  C:\Program Files (x86)\Microsoft Visual Studio
+    4718  C:\Program Files\dotnet
+    3096  C:\Program Files\Siemens
+    2081  C:\Qt\6.7.2
+    1687  C:\Qt\Tools
+    1438  C:\Windows\System32
+    1415  C:\Program Files (x86)\Windows Kits
+    1365  C:\Program Files\Microsoft Office
+    1234  C:\ProgramData\anaconda3
+```
+
+Three conclusions, each of which changes a decision:
+
+**WinSxS is 40% of all candidates.** It is the servicing component store:
+hard-linked backing copies of files that also exist in their live locations. It
+is not installed software in any sense an operator cares about, and excluding it
+removes two-fifths of the extraction work before anything else is decided.
+
+**Real software lives outside `%ProgramFiles%`.** `C:\Qt\6.7.2`, `C:\Qt\Tools`
+and `C:\ProgramData\anaconda3` account for roughly five thousand candidates in
+locations no fixed allowlist would guess. An allowlist has to be *derived* from
+the registry's `InstallLocation` values, not hard-coded, and this is the
+evidence for it.
+
+**Per-user software is where the registry is weakest.** `C:\Users\chris` holds
+six thousand candidates -- editors, runtimes, Electron applications, package
+manager globals. Those are registered under `HKCU`, which means a scan running
+as SYSTEM from a scheduled task, or as a different administrator, reads the
+wrong hive; other users' hives are not loaded at all. The files are on disk
+regardless of whose hive is mounted, so this is the clearest case where MFT
+enumeration sees software the registry cannot.
+
+That last point is the argument for building both. The registry is the source of
+truth for machine-wide software and is nearly free to read. Enumeration is what
+finds the rest.
+
 ### Hard links: a file appears under one path, not all of them
 
 The MFT holds one record per *file*, not per *name*, and `FSCTL_ENUM_USN_DATA`

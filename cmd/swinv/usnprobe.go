@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chaugan/swinv/internal/arp"
 	"github.com/chaugan/swinv/internal/usn"
 )
 
@@ -78,6 +79,7 @@ func runUSNProbe(ctx context.Context, volumes []string, out io.Writer, logf func
 		}
 
 		printTopDirectories(res.Entries, volume, logf)
+		reportRegistryCoverage(res.Entries, volume, logf)
 	}
 
 	if len(volumes) > 1 && grandRecords > 0 {
@@ -129,18 +131,80 @@ func printTopDirectories(entries []usn.Entry, volume string, logf func(string, .
 
 // trimToDepth reduces a path to its first n components below the volume, so
 // that C:\Program Files\Adobe\Reader\x.dll groups under C:\Program Files\Adobe.
+//
+// Paths under \Users are given three extra levels. Two components collapses
+// every per-user install into "C:\Users\<name>", which hides the thing worth
+// seeing: per-user software lives at AppData\Local\Programs and similar, it is
+// real installed software -- editors, runtimes, Electron applications -- and it
+// is exactly the category the registry covers least well, since it is
+// registered in HKCU and another user's hive is not loaded.
 func trimToDepth(path, volume string, n int) string {
 	rest := strings.TrimPrefix(path, volume)
 	rest = strings.TrimPrefix(rest, `\`)
 
 	parts := strings.Split(rest, `\`)
+	if len(parts) > 0 && strings.EqualFold(parts[0], "Users") {
+		n += 3
+	}
+
+	// The last component is the file name and must never appear in a grouping:
+	// a file sitting directly in the volume root would otherwise become its
+	// own "directory" and clutter the summary with one-entry rows.
+	if len(parts) > 0 {
+		parts = parts[:len(parts)-1]
+	}
 	if len(parts) > n {
 		parts = parts[:n]
-	} else if len(parts) > 1 {
-		parts = parts[:len(parts)-1] // drop the file name
 	}
 	if len(parts) == 0 {
 		return volume + `\`
 	}
 	return volume + `\` + strings.Join(parts, `\`)
+}
+
+// reportRegistryCoverage answers the question the whole Windows design turns
+// on: how much of what is on disk does the registry already account for?
+//
+// If the uninstall keys' InstallLocation values cover most candidates, an
+// allowlist derived from them is the default scan and full enumeration is a
+// fallback. If they do not, enumeration is load-bearing and --full-scan is the
+// only way to see that software at all.
+func reportRegistryCoverage(entries []usn.Entry, volume string, logf func(string, ...any)) {
+	installed, err := arp.Read()
+	if err != nil {
+		logf("%s: could not read the uninstall registry (%v)", volume, err)
+		return
+	}
+
+	var locations []string
+	withLocation := 0
+	for _, e := range installed {
+		if e.InstallLocation == "" {
+			continue
+		}
+		withLocation++
+		locations = append(locations, e.InstallLocation)
+	}
+
+	logf("%s: registry lists %d installed products, %d with an install location",
+		volume, len(installed), withLocation)
+	if len(locations) == 0 {
+		return
+	}
+
+	paths := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.Path != "" && strings.HasPrefix(strings.ToUpper(e.Path), strings.ToUpper(volume)) {
+			paths = append(paths, e.Path)
+		}
+	}
+
+	covered, _ := coverageOf(paths, locations)
+	if len(paths) == 0 {
+		return
+	}
+	logf("%s: %d of %d executables (%.1f%%) lie under a registry install location",
+		volume, covered, len(paths), 100*float64(covered)/float64(len(paths)))
+	logf("%s: %d (%.1f%%) do not -- these are invisible to a registry-derived allowlist",
+		volume, len(paths)-covered, 100*float64(len(paths)-covered)/float64(len(paths)))
 }

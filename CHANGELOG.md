@@ -20,6 +20,12 @@ schema and cataloger coverage may still change between releases. See
   opened all 1.3 million. `C:\Program Files` alone, a fraction of that volume,
   does not finish inside ten minutes through the directory resolver. Not yet
   wired into the scan path.
+- **The Windows uninstall registry reader** (`internal/arp`), which is the
+  Windows equivalent of reading a package database: names, versions, publishers
+  and install locations, with no file opened. It covers all three scopes —
+  native `HKLM`, `WOW6432Node` for 32-bit installs, which are invisible to code
+  that reads only the native key, and `HKCU`. Never via `Win32_Product`, whose
+  enumeration triggers MSI repair and can modify the machine.
 - **`--usn-probe` and `--volumes`**, Windows-only and experimental. The probe
   enumerates the MFT and reports what it found — record count, candidate count,
   timing, and where the candidates live — without scanning or opening anything,
