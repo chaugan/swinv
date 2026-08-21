@@ -391,6 +391,23 @@ jobs:
           "packages: $($dism.Count)"
           $dism | ForEach-Object { ($_.PackageName -split '~')[0] } | Sort-Object -Unique
 
+          "=== are the KBs Get-HotFix has hiding in CBS *values*? ==="
+          $missing = (Get-HotFix).HotFixID | Where-Object { $_ -notmatch 'KB5120708' }
+          "looking for: $($missing -join ', ')"
+          $cbsRoot = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing'
+          foreach ($kb in $missing) {
+            $inNames = (Get-ChildItem "$cbsRoot\Packages" -EA SilentlyContinue).PSChildName |
+                       Where-Object { $_ -match [regex]::Escape($kb) }
+            "$kb in key names: $($inNames.Count)"
+            if ($inNames) { $inNames | Select-Object -First 2 }
+          }
+          "--- sample of the values a CBS package key carries ---"
+          $one = Get-ChildItem "$cbsRoot\Packages" -EA SilentlyContinue | Select-Object -First 1
+          (Get-ItemProperty $one.PSPath | Format-List | Out-String)
+
+          "--- other CBS subkeys ---"
+          Get-ChildItem $cbsRoot -EA SilentlyContinue | Select-Object -ExpandProperty PSChildName
+
           "=== Windows Update client history keys ==="
           foreach ($p in @(
             'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate',
