@@ -306,6 +306,27 @@ jobs:
           $withVendor = ($r.components | Where-Object { $_.vendor }).Count
           "with a vendor:  $withVendor of $($r.components.Count)"
 
+          # The host block. Without it a Windows report cannot be grouped by OS
+          # or joined to a fleet dataset on a stable identity, which is what
+          # kept the Windows binary out of a release.
+          "--- host ---"
+          $r.host | Format-List
+          foreach ($f in "hostname","os_id","os_version_id","os_pretty_name","machine_id","architecture","kernel_release") {
+            if (-not $r.host.$f) { throw "host.$f is empty" }
+          }
+          if ($r.host.os_id -ne "windows") { throw "host.os_id is '$($r.host.os_id)', want 'windows'" }
+          if ($r.host.machine_id -notmatch '^[0-9a-f]{32}$') {
+            throw "host.machine_id '$($r.host.machine_id)' is not 32 hex characters"
+          }
+          # The registry claims Windows 10 on Windows 11 hosts; the build
+          # number is what distinguishes them, and this asserts we used it.
+          $build = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuild
+          $want = if ([int]$build -ge 22000) { "11" } else { "10" }
+          if ($r.host.os_version_id -ne $want) {
+            throw "os_version_id is '$($r.host.os_version_id)' but build $build means Windows $want"
+          }
+          "os version $($r.host.os_version_id) confirmed against build $build"
+
       - name: Collect with --full-scan
         shell: pwsh
         timeout-minutes: 15

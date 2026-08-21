@@ -136,6 +136,11 @@ func Collect(ctx context.Context, fsRoot string, opts ...Option) (h model.Host) 
 
 	h.Virtualization = detectVirtualization(root, h.ProductName, h.SystemVendor)
 
+	// Where the operating system keeps this somewhere other than the
+	// filesystem, fill it in. On Windows that is the registry; everywhere else
+	// this does nothing.
+	platformFacts(&h, isSystemRoot)
+
 	if isSystemRoot {
 		if !cfg.skipFQDN {
 			h.FQDN = lookupFQDN(ctx, h.Hostname)
