@@ -5,6 +5,7 @@ import (
 	"flag"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // helpFlagNames returns the bare flag names the help page mentions, e.g.
@@ -77,9 +78,12 @@ func TestHelpFitsATerminal(t *testing.T) {
 
 	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
 	for i, line := range lines {
-		if len(line) > helpWidth {
+		// Runes, not bytes: a terminal column holds a character. The em
+		// dashes in the header are three bytes each, so measuring in bytes
+		// fails a line that is exactly at the limit.
+		if n := utf8.RuneCountInString(line); n > helpWidth {
 			t.Errorf("line %d is %d characters, over the %d limit:\n  %s",
-				i+1, len(line), helpWidth, line)
+				i+1, n, helpWidth, line)
 		}
 	}
 
@@ -130,5 +134,48 @@ func TestHelpNamesNoOtherPlatformsFlagsInSections(t *testing.T) {
 		if inHelp[name] > 0 {
 			t.Errorf("--%s is on the omission list but a help section documents it", name)
 		}
+	}
+}
+
+// TestWrapTextCountsCharactersNotBytes pins the bug that made the Windows help
+// fail CI while looking fine: Go's len() counts bytes, a terminal column holds
+// a character, and an em dash is three bytes. Measuring in bytes wraps
+// non-ASCII text two columns early per dash and misreports line width.
+func TestWrapTextCountsCharactersNotBytes(t *testing.T) {
+	// Twelve two-character words. In runes that is 12*2 + 11 spaces = 35.
+	// In bytes it is 12*4 + 11 = 59, so a byte-based wrapper would split this
+	// across two lines at a width of 40.
+	const word = "—x" // em dash (3 bytes) plus one ASCII character
+	words := make([]string, 12)
+	for i := range words {
+		words[i] = word
+	}
+	line := strings.Join(words, " ")
+
+	got := wrapText(line, 40)
+	if len(got) != 1 {
+		t.Errorf("wrapped into %d lines, want 1: the text is 35 characters wide, only 59 bytes", len(got))
+		for i, l := range got {
+			t.Logf("  line %d: %q", i, l)
+		}
+	}
+}
+
+// TestWrapTextRespectsWidth is the other half: nothing may exceed the width.
+func TestWrapTextRespectsWidth(t *testing.T) {
+	const width = 20
+	text := "the quick brown fox jumps over the lazy dog and keeps on running onwards"
+
+	for _, line := range wrapText(text, width) {
+		if n := utf8.RuneCountInString(line); n > width {
+			t.Errorf("line %q is %d characters, over %d", line, n, width)
+		}
+	}
+
+	// A single word longer than the width is left whole rather than broken:
+	// splitting a path or a flag name mid-token makes it uncopyable.
+	long := strings.Repeat("x", width+10)
+	if got := wrapText(long, width); len(got) != 1 || got[0] != long {
+		t.Errorf("wrapText broke an over-long word: %q", got)
 	}
 }

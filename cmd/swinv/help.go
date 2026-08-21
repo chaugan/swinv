@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 // The help output is written by hand rather than by flag.PrintDefaults.
@@ -66,7 +67,11 @@ func writeHelp(w io.Writer) {
 func writeHelpFlag(w io.Writer, f helpFlag) {
 	name := "  " + f.Name
 
-	pad := descColumn - len(name)
+	// Rune count, not byte count. Descriptions and flag names can contain
+	// non-ASCII -- the header already uses em dashes -- and a terminal column
+	// is a character, not a byte. Measuring in bytes pads too little and wraps
+	// too early, by two columns per em dash.
+	pad := descColumn - utf8.RuneCountInString(name)
 	if pad < 1 {
 		// A name longer than the column gets its description on the next line
 		// rather than pushing every other line out of alignment.
@@ -98,17 +103,23 @@ func wrapText(s string, width int) []string {
 		lines []string
 		line  strings.Builder
 	)
+	width-- // the joining space, accounted for once rather than per branch
+	lineLen := 0
 	for _, word := range words {
+		wordLen := utf8.RuneCountInString(word)
 		switch {
-		case line.Len() == 0:
+		case lineLen == 0:
 			line.WriteString(word)
-		case line.Len()+1+len(word) <= width:
+			lineLen = wordLen
+		case lineLen+1+wordLen <= width+1:
 			line.WriteByte(' ')
 			line.WriteString(word)
+			lineLen += 1 + wordLen
 		default:
 			lines = append(lines, line.String())
 			line.Reset()
 			line.WriteString(word)
+			lineLen = wordLen
 		}
 	}
 	return append(lines, line.String())
