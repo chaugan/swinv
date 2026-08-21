@@ -458,6 +458,46 @@ The resulting shape, which is what the collector should be built to:
 Step 4 is what `--full-scan` should mean. Not "open everything", but "open the
 part nothing else can account for".
 
+### Measured: the first `--full-scan` is slow, and the rest are not
+
+`--full-scan` on a real developer laptop — 2.9M MFT records, 99,920
+executables, 19,549 of them opened after attribution — took **14 minutes 21
+seconds** the first time and **1 second** the next. The same command, the same
+counts, the same 14,769 components extracted.
+
+Three runs isolate the cause:
+
+| run | cache | priority | workers | extraction |
+|---|---|---|---|---|
+| 1 | cold | background | 5 | **861 s** |
+| 2 | warm | normal (`--fast`) | 20 | 3 s |
+| 3 | warm | background | 5 | **1 s** |
+
+Runs 2 and 3 differ only in scheduling priority and worker count: 3 s against
+1 s, which is noise. Runs 1 and 3 are identically configured and differ only in
+cache warmth: 861 s against 1 s.
+
+So neither `--fast` nor parallelism matters here. **Windows Defender's scan
+cache accounts for essentially all of it.** The phase timings say the same
+thing independently: MFT enumeration, which opens no files, stayed between 4.8
+and 9.2 seconds across all three runs, while extraction, which opens 19,549,
+fell by a factor of roughly 860. Whatever changed applies only to opening
+files.
+
+Two things follow.
+
+**The background-priority default is right on Windows.** It was applied there by
+analogy with Linux, where it was measured to cost 36% of runtime, and that
+assumption was never checked. It has now been: the polite run was the fastest
+of the three. `--fast` buys nothing for `--full-scan` and can be left alone.
+
+**Operators should expect the first run to be slow and say so.** A daily
+scheduled task pays the cold cost once and then runs in seconds, because most
+executables do not change between runs. A fresh machine, or one that has just
+taken a large Windows update, pays it again. Fourteen minutes followed by eight
+seconds for the same command looks like a bug if nobody has written down that
+it is not.
+
 ### Measured: the cost of running as SYSTEM
 
 An unattended scan runs from a scheduled task as `NT AUTHORITY\SYSTEM`, which

@@ -173,6 +173,12 @@ for. The others stay registered, so `swinv --usn-probe` on Linux answers "that
 only works on Windows" rather than "flag provided but not defined" — a runbook
 pasted onto the wrong platform gets an explanation instead of a parse error.
 
+On Windows, the first `--full-scan` on a machine is much slower than the ones
+after it — measured at 14m21s and then 1 second, for the same command doing
+identical work. Antivirus scans each executable the first time it is opened and
+caches the result, so a scheduled task pays the cost once. See
+[docs/WINDOWS.md](WINDOWS.md#measured-the-first---full-scan-is-slow-and-the-rest-are-not).
+
 `--quiet` and `--debug-stacks-after` combine, which is the case that matters:
 a scheduled task runs silent, and when one appears to hang you want a dump
 without also turning the logging back on. Under `--quiet` the dump file is still
