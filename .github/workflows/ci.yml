@@ -268,6 +268,13 @@ jobs:
       - name: Test the MFT enumerator against a real volume
         run: go test ./internal/usn/... -v -count=1
 
+      # The Windows help page is a separate document from the Linux one, and
+      # nothing on a Linux runner can check it. It drifted to 91 lines once
+      # already: the test caught it, but only in the informational step below,
+      # so CI stayed green. Gate it here.
+      - name: Check the Windows help page
+        run: go test ./cmd/swinv/ -run "TestHelp" -v -count=1
+
       # End to end: does the Windows collector actually produce an inventory?
       # Everything above tests components in isolation; this is the only step
       # that runs the binary the way an operator would.

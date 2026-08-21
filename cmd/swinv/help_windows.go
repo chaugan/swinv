@@ -12,51 +12,49 @@ const helpHeader = `swinv — local software inventory collector
 Usage:
   swinv [flags]                 (takes no positional arguments)
 
-With no flags, swinv reads the Windows uninstall registry — the same records
-behind Add/Remove Programs — and writes JSON and CSV into the output
-directory. That takes milliseconds and opens no files, but it only sees
-software that registers an uninstall entry. Pass --full-scan to also enumerate
-executables on disk and read their versions, which takes minutes. It runs at
-background priority; --fast trades that for speed. No inventory data leaves
-the machine.
+With no flags, swinv reads the Windows uninstall registry — the records behind
+Add/Remove Programs — and writes JSON and CSV. That takes milliseconds and
+opens no files, but it sees only software that registers an uninstall entry.
+--full-scan also reads executables on disk, which takes minutes and needs an
+elevated prompt. No inventory data leaves this machine.
 `
 
 func helpSections() []helpSection {
 	return []helpSection{
 		{"Output", []helpFlag{
-			{"--out DIR", "where reports are written"},
-			{"--format LIST", "json, csv, ndjson, cyclonedx-json (default json,csv)"},
-			{"--stdout", "write the report to stdout; needs exactly one --format"},
-			{"--output-mode MODE", "how files accumulate: dated, overwrite, timestamped (default dated)"},
-			{"--name TEMPLATE", "report file name; {hostname} {machine_id} {date} {datetime}"},
-			{"--latest-symlink", "maintain <host>-latest.<ext> (default true; off with --latest-symlink=false)"},
-			{"--perm OCTAL", "permission bits for the reports (default 0644)"},
+			{"--out DIR", "output directory"},
+			{"--format LIST", "json,csv,ndjson,cyclonedx-json (default json,csv)"},
+			{"--stdout", "write to stdout (needs exactly one --format)"},
+			{"--output-mode MODE", "dated | overwrite | timestamped (default dated)"},
+			{"--name TEMPLATE", "name template: {hostname} {date} {datetime}"},
+			{"--latest-symlink", "keep <host>-latest.<ext> (=false to disable)"},
+			{"--perm OCTAL", "report file mode (default 0644)"},
 		}},
 		{"What gets scanned", []helpFlag{
-			{"--full-scan", "also enumerate executables on disk and extract their versions; finds software the registry does not record, and takes minutes rather than milliseconds"},
-			{"--volumes LIST", "volumes to enumerate with --full-scan, e.g. D: or D:,E:; replaces the default of C: rather than adding to it"},
-			{"--exclude GLOB", "skip a path; repeatable; must start with ./ or */ or **/"},
-			{"--catalogers EXPR", "select catalogers, e.g. os or +binary,-python"},
-			{"--offline", "no network activity at all, including the FQDN lookup"},
+			{"--full-scan", "also read executables on disk; finds unregistered software, takes minutes"},
+			{"--volumes LIST", "volumes for --full-scan, e.g. D: or D:,E: (replaces C:)"},
+			{"--exclude GLOB", "skip a path; repeatable; ./ */ or **/ prefix"},
+			{"--catalogers EXPR", "e.g. os or +binary,-python"},
+			{"--offline", "no network activity at all"},
 		}},
 		{"Comparing against a previous run", []helpFlag{
 			{"--since PATH", "diff against an earlier swinv JSON report"},
 			{"--delta-only", "with --since, emit only what changed"},
-			{"--hash", "record a SHA-256 of each component's primary file"},
+			{"--hash", "record a SHA-256 per component"},
 		}},
 		{"Resources", []helpFlag{
-			{"--fast", "run at normal priority using every CPU; faster, but competes with everything else on the machine"},
-			{"--timeout DURATION", "whole-run deadline (default 30m; exceeding it exits 4)"},
+			{"--fast", "normal priority, every CPU; fast but intrusive"},
+			{"--timeout DURATION", "whole-run deadline (default 30m, then exit 4)"},
 			{"--max-memory SIZE", "soft memory limit, e.g. 1536MiB"},
-			{"--parallelism N", "workers used to read executables (0 = a quarter of the CPUs, or all with --fast)"},
+			{"--parallelism N", "workers reading executables (0 = auto)"},
 		}},
 		{"Diagnostics", []helpFlag{
 			{"--verbose", "per-stage timing on stderr"},
-			{"--quiet", "no status output at all; errors are still reported"},
-			{"--debug-stacks-after DUR", "dump every goroutine stack to a file if the scan is still running, for investigating one that appears hung"},
-			{"--usn-probe", "report what the Master File Table contains and exit, without collecting an inventory; a measuring instrument, not a scan"},
-			{"--no-file-ownership", "skip package-file ownership; faster, but reintroduces duplicates"},
-			{"--version", "print version, commit and Syft version, then exit"},
+			{"--quiet", "no status output; errors still reported"},
+			{"--debug-stacks-after DUR", "dump goroutine stacks if still running"},
+			{"--usn-probe", "report what the MFT holds and exit; measures only"},
+			{"--no-file-ownership", "skip file ownership; faster, more duplicates"},
+			{"--version", "print version and exit"},
 		}},
 	}
 }
@@ -72,9 +70,6 @@ Examples:
 
   swinv --out C:\inventory --full-scan --volumes D:,E:
         Enumerate D: and E: instead of C:.
-
-  swinv --out C:\inventory --since C:\inventory\myhost-latest.json
-        Report what changed since the previous run.
 
 Exit codes:
   0 complete    1 incomplete    2 usage error    3 failed    4 timed out
