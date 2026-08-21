@@ -255,10 +255,7 @@ func componentFromRegistry(e arp.Entry) model.Component {
 func componentFromPE(path string, info peversion.Info) model.Component {
 	name := firstNonEmpty(info.ProductName, info.OriginalFilename, baseName(path))
 
-	// FileVersion first: it describes this file, which is what was found.
-	// FixedFileVersion is the numeric fallback and, being four integers rather
-	// than free text, cannot be malformed.
-	version := firstNonEmpty(info.FileVersion, info.FixedFileVersion)
+	version := preferredVersion(info.FileVersion, info.FixedFileVersion)
 
 	return model.Component{
 		Name:      name,

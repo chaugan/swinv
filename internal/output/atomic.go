@@ -131,8 +131,8 @@ func UpdateSymlink(linkPath, target string) error {
 	if err := os.Remove(tmp); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("output: removing stale temp symlink %s: %w", tmp, err)
 	}
-	if err := os.Symlink(target, tmp); err != nil {
-		return fmt.Errorf("output: creating temp symlink %s: %w", tmp, err)
+	if err := createLink(target, tmp, dir); err != nil {
+		return fmt.Errorf("output: creating temp link %s: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, linkPath); err != nil {
 		_ = os.Remove(tmp)
