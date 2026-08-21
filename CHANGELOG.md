@@ -9,6 +9,12 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-21
+
+Windows now sees Store apps and installed updates, both from the registry and
+neither costing a file open, so they are in the default scan rather than behind
+`--full-scan`.
+
 ### Added
 
 - **Store and MSIX packages** are now inventoried, from the AppModel package
@@ -344,7 +350,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/chaugan/swinv/releases/tag/v0.2.1
 [0.2.0]: https://github.com/chaugan/swinv/releases/tag/v0.2.0
 [0.1.2]: https://github.com/chaugan/swinv/releases/tag/v0.1.2
 [0.1.1]: https://github.com/chaugan/swinv/releases/tag/v0.1.1
