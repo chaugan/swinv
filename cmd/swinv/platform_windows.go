@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/chaugan/swinv/internal/model"
 	"github.com/chaugan/swinv/internal/scan"
@@ -57,15 +56,17 @@ func platformScan(ctx context.Context, cfg *config, logf func(string, ...any)) (
 				"entry -- unpacked tools, per-user installs under another account, anything "+
 				"copied onto the machine -- is not in this inventory. Pass --full-scan to "+
 				"enumerate the filesystem as well")
-	} else {
-		logf("windows: %d registry products, %d executables enumerated, %d attributed, "+
-			"%d opened, %d without version info",
+	} else if res.Stats.Enumerated > 0 {
+		// A statistic, not a caveat, so it is logged rather than recorded as a
+		// warning. scan.warnings means "this inventory may be wrong"; filling
+		// it with counts teaches an operator to skim past the entries that
+		// actually qualify the result. When enumeration failed outright, the
+		// numbers are all zero and saying so adds nothing to the warning that
+		// already explains why.
+		logf("windows: %d registry products, %d executables enumerated, %d attributed "+
+			"to a product and not opened, %d opened, %d with no version resource",
 			res.Stats.RegistryProducts, res.Stats.Enumerated, res.Stats.Attributed,
 			res.Stats.Opened, res.Stats.NoVersionInfo)
-		out.Warnings = append(out.Warnings, fmt.Sprintf(
-			"%d of %d enumerated executables were attributed to a registry product and not "+
-				"opened; %d were opened to extract a version",
-			res.Stats.Attributed, res.Stats.Enumerated, res.Stats.Opened))
 	}
 	return out, true, nil
 }
