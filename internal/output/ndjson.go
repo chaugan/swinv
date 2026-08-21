@@ -25,7 +25,7 @@ type ndjsonLine struct {
 	ScannedAt    string `json:"scanned_at"`
 
 	Name      string   `json:"name"`
-	Version   string   `json:"version"`
+	Version   string   `json:"version,omitempty"`
 	Type      string   `json:"type"`
 	Language  string   `json:"language,omitempty"`
 	PURL      string   `json:"purl,omitempty"`

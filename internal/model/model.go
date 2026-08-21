@@ -17,7 +17,7 @@ import (
 // 1.1 added Component.SHA256 (--hash) and Report.Delta (--since). Both are
 // additive and omitted when unused, so a 1.0 consumer still parses a 1.1
 // document.
-const SchemaVersion = "1.3"
+const SchemaVersion = "1.4"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -119,8 +119,19 @@ type ScanMeta struct {
 
 // Component is one piece of installed software.
 type Component struct {
-	Name     string `json:"name"`
-	Version  string `json:"version"`
+	Name string `json:"name"`
+
+	// Version is omitted when a cataloger could not determine one, rather than
+	// emitted as "" or as a placeholder.
+	//
+	// Syft writes "UNKNOWN" in that case, and unlike an absent field that is
+	// dangerous rather than untidy: it is valid syntax in several version
+	// grammars, and under Debian ordering it has no epoch, so it sorts below
+	// every real release. A consumer asking "is the installed version below
+	// the fixed version" gets yes, for every advisory ever filed against that
+	// package. A downstream matcher reported exactly that against git in a
+	// snap base. An absent field cannot be compared by accident.
+	Version  string `json:"version,omitempty"`
 	Type     string `json:"type"`
 	Language string `json:"language,omitempty"`
 

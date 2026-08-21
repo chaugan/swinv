@@ -11,11 +11,29 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.3`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.4`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.3"
+"schema_version": "1.4"
 ```
+
+**1.3 → 1.4** changed one thing:
+
+| Change | Effect |
+|---|---|
+| `Component.version` is now omitted when unknown | It was emitted as the literal `"UNKNOWN"` |
+
+Syft writes `"UNKNOWN"` when a cataloger cannot determine a version. That is
+worse than an absent field rather than merely untidy: it is valid syntax in
+several version grammars, and under Debian ordering it has no epoch, so it
+sorts below every real release. A consumer asking *"is the installed version
+below the fixed version"* gets **yes** — for every advisory ever filed against
+that package. A downstream matcher reported exactly that against `git` in a
+snap base.
+
+**Consumers must treat `version` as optional and must not compare it when
+absent.** On one Ubuntu host 6,480 of 10,850 components have no determinable
+version, almost all of them kernel modules.
 
 **1.2 → 1.3** added exactly one thing:
 

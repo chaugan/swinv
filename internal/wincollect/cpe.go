@@ -1,6 +1,9 @@
 package wincollect
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // CPE is the only identifier a Windows component can carry.
 //
@@ -92,11 +95,18 @@ func productCandidates(name string, vendors []string) []string {
 			out = append(out, s)
 		}
 	}
+	// The stripped form first: it is the one the NVD is most likely to hold.
+	if stripped := stripVersionAndArch(name); stripped != "" && stripped != name {
+		add(stripped)
+	}
 	add(name)
 
 	// "Google Chrome" is recorded as google:chrome, not google:google_chrome.
 	// Dropping a leading vendor word is the single most productive variant.
-	lower := strings.ToLower(strings.TrimSpace(name))
+	lower := strings.ToLower(stripVersionAndArch(name))
+	if lower == "" {
+		lower = strings.ToLower(strings.TrimSpace(name))
+	}
 	for _, v := range vendors {
 		prefix := strings.ReplaceAll(v, "_", " ") + " "
 		if strings.HasPrefix(lower, prefix) {
@@ -110,6 +120,38 @@ func productCandidates(name string, vendors []string) []string {
 		add(name[i+1:])
 	}
 	return out
+}
+
+// archSuffix matches the architecture markers installers append to a display
+// name: "(x64)", "(64-bit)", "- x86". They are not part of the product.
+var archSuffix = regexp.MustCompile(`(?i)[\s\-_]*[\(\[]?\s*(x64|x86|amd64|arm64|ia64|32[\s\-]?bit|64[\s\-]?bit)\s*[\)\]]?\s*$`)
+
+// trailingVersion matches a version number at the end of a display name:
+// "7-Zip 24.08", "LibreOffice 24.8.4.2", "Node.js - 20.11.0".
+var trailingVersion = regexp.MustCompile(`(?i)[\s\-]+v?\d+(\.\d+)*([\s\-]?(beta|rc|alpha)\d*)?\s*$`)
+
+// stripVersionAndArch recovers the product from a display name.
+//
+// Uninstall entries mash product, version and architecture into one string --
+// "7-Zip 24.08 (x64)" -- and a CPE built from that whole string matches
+// nothing, because the NVD records the product alone. This was the specific
+// weakness a downstream consumer pointed out: matching the display name
+// against a CPE dictionary means stripping the version and architecture back
+// out, which is guesswork the producer is better placed to do.
+//
+// Applied repeatedly, because both suffixes can be present in either order,
+// and stopping when nothing more comes off so a name that is entirely version
+// -like is not reduced to nothing.
+func stripVersionAndArch(name string) string {
+	for i := 0; i < 4; i++ {
+		before := name
+		name = strings.TrimSpace(archSuffix.ReplaceAllString(name, ""))
+		name = strings.TrimSpace(trailingVersion.ReplaceAllString(name, ""))
+		if name == before || name == "" {
+			break
+		}
+	}
+	return strings.Trim(strings.TrimSpace(name), "-_ ")
 }
 
 // candidateCPEs builds CPE 2.3 strings for a component.

@@ -113,3 +113,61 @@ func TestCPEToken(t *testing.T) {
 		}
 	}
 }
+
+// TestStripVersionAndArch handles the display names a downstream consumer
+// pointed at: an uninstall entry mashes product, version and architecture into
+// one string, and a CPE built from the whole thing matches nothing.
+func TestStripVersionAndArch(t *testing.T) {
+	cases := map[string]string{
+		"7-Zip 24.08 (x64)":      "7-Zip",
+		"7-Zip 24.09":            "7-Zip",
+		"LibreOffice 24.8.4.2":   "LibreOffice",
+		"Siemens NX (64-bit)":    "Siemens NX",
+		"Notepad++ (32-bit)":     "Notepad++",
+		"Node.js - 20.11.0":      "Node.js",
+		"Google Chrome":          "Google Chrome",
+		"Microsoft Edge":         "Microsoft Edge",
+		"Python 3.11.9 (64-bit)": "Python",
+		"Microsoft Visual C++ 2015-2022 Redistributable (x64)": "Microsoft Visual C++ 2015-2022 Redistributable",
+
+		// Nothing to strip, and nothing that should be stripped.
+		"":      "",
+		"7":     "7",
+		"1.2.3": "1.2.3",
+	}
+	for in, want := range cases {
+		if got := stripVersionAndArch(in); got != want {
+			t.Errorf("stripVersionAndArch(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The example from the issue, end to end. The NVD records 7-Zip under product
+// "7-zip"; the publisher "Igor Pavlov" will not match, but the product must, or
+// no candidate can ever hit.
+func TestCandidateCPEsForTheReportedExample(t *testing.T) {
+	got := candidateCPEs("Igor Pavlov", "7-Zip 24.08 (x64)", "24.08")
+	if len(got) == 0 {
+		t.Fatal("no candidates")
+	}
+
+	// The stripped product must come first: candidates are capped, so ordering
+	// decides which survive.
+	if !strings.Contains(got[0], ":7-zip:24.08:") {
+		t.Errorf("first candidate is %q, want the product stripped of version and architecture", got[0])
+	}
+
+	// The unstripped form is kept as a later candidate on purpose. A trailing
+	// number is sometimes part of the product: the NVD records Windows 10 as
+	// "windows_10", so stripping it would be wrong there. Both forms are
+	// cheap; guessing which case applies is not.
+	var hasUntrimmed bool
+	for _, cpe := range got {
+		if strings.Contains(cpe, "7-zip_24.08_x64") {
+			hasUntrimmed = true
+		}
+	}
+	if !hasUntrimmed {
+		t.Error("the untrimmed form should remain as a fallback candidate")
+	}
+}

@@ -403,7 +403,7 @@ func unquote(v string) string {
 func componentFromPackage(p pkg.Package, absRoot string) model.Component {
 	c := model.Component{
 		Name:     p.Name,
-		Version:  p.Version,
+		Version:  cleanVersion(p.Version),
 		Type:     string(p.Type),
 		Language: string(p.Language),
 		PURL:     p.PURL,
@@ -575,4 +575,24 @@ func vendorFromPackage(p pkg.Package) string {
 		return m.Author
 	}
 	return ""
+}
+
+// cleanVersion drops placeholder versions that Syft emits when a cataloger
+// could not determine one.
+//
+// "UNKNOWN" is not a version, and unlike an absent field it is dangerous
+// rather than merely untidy: it is valid syntax in several version grammars
+// and sorts below every real release. A consumer asking "is the installed
+// version below the fixed version" gets yes, for every advisory ever filed
+// against that package. Reported by a downstream matcher that produced a run
+// of confident findings against git in a snap base before special-casing it.
+//
+// An absent version forces a consumer to handle the "not determined" case.
+// A placeholder that parses invites it to be silently wrong.
+func cleanVersion(v string) string {
+	v = strings.TrimSpace(v)
+	if strings.EqualFold(v, "UNKNOWN") {
+		return ""
+	}
+	return v
 }

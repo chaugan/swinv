@@ -1062,3 +1062,27 @@ func TestMountedRootfsGetsLayoutExclusions(t *testing.T) {
 		t.Errorf("an arbitrary directory should get no layout exclusions, got %v", plain)
 	}
 }
+
+// TestCleanVersionDropsPlaceholders pins a defect reported by a downstream
+// vulnerability matcher. Syft emits "UNKNOWN" when a cataloger cannot
+// determine a version, and that string is valid syntax in several version
+// grammars: under Debian ordering it has no epoch, compares as epoch 0, and
+// sorts below every real release. The matcher concluded "vulnerable" for every
+// advisory ever filed against the package.
+func TestCleanVersionDropsPlaceholders(t *testing.T) {
+	for _, in := range []string{"UNKNOWN", "unknown", "Unknown", "  UNKNOWN  "} {
+		if got := cleanVersion(in); got != "" {
+			t.Errorf("cleanVersion(%q) = %q, want empty", in, got)
+		}
+	}
+
+	// Real versions, including ones that merely contain the letters.
+	for _, in := range []string{
+		"1.2.3", "1:2.17.1-1ubuntu0.3", "3.0.11-1~deb12u2",
+		"24.08", "unknown-1.0", "1.0-unknown",
+	} {
+		if got := cleanVersion(in); got != in {
+			t.Errorf("cleanVersion(%q) = %q, want it unchanged", in, got)
+		}
+	}
+}
