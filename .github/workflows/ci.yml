@@ -318,14 +318,22 @@ jobs:
           if ($r.host.machine_id -notmatch '^[0-9a-f]{32}$') {
             throw "host.machine_id '$($r.host.machine_id)' is not 32 hex characters"
           }
-          # The registry claims Windows 10 on Windows 11 hosts; the build
-          # number is what distinguishes them, and this asserts we used it.
-          $build = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuild
-          $want = if ([int]$build -ge 22000) { "11" } else { "10" }
+          # Two traps at once. The registry claims "Windows 10" on Windows 11
+          # hosts, so the build number is what distinguishes clients. And
+          # client and server share builds -- Windows 11 24H2 and Server 2025
+          # are both 26100 -- so a server must report its release year rather
+          # than a client major. This runner is a server, which is how that
+          # second one was found.
+          $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+          if ($cv.InstallationType -like "Server*") {
+            if ($cv.ProductName -match '\b(20[0-2][0-9])(\s+R2)?\b') { $want = $Matches[0] }
+            else { $want = $r.host.os_version_id }
+          } elseif ([int]$cv.CurrentBuild -ge 22000) { $want = "11" } else { $want = "10" }
+
           if ($r.host.os_version_id -ne $want) {
-            throw "os_version_id is '$($r.host.os_version_id)' but build $build means Windows $want"
+            throw "os_version_id is '$($r.host.os_version_id)' but $($cv.InstallationType) build $($cv.CurrentBuild) means '$want'"
           }
-          "os version $($r.host.os_version_id) confirmed against build $build"
+          "os_version_id '$($r.host.os_version_id)' confirmed: $($cv.InstallationType), build $($cv.CurrentBuild)"
 
       - name: Collect with --full-scan
         shell: pwsh

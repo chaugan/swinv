@@ -4,6 +4,7 @@
 #
 # Produces, for linux/amd64 and linux/arm64:
 #   swinv-<version>-linux-<arch>       static binaries
+#   swinv-<version>-windows-amd64.exe  static binary, experimental
 #   swinv_<version>-1_<arch>.deb       Debian/Ubuntu packages
 #   swinv-<version>-1.<rpmarch>.rpm    RHEL/Fedora/SUSE packages
 #   SHA256SUMS                         checksums over all of the above

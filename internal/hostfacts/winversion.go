@@ -2,6 +2,7 @@ package hostfacts
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -30,6 +31,30 @@ func windowsMajorVersion(currentBuild string) string {
 		return "11"
 	}
 	return "10"
+}
+
+// serverRelease matches the year in a Windows Server product name, with an
+// optional R2. Anchored to a word boundary so it cannot pick a year out of a
+// build number.
+var serverRelease = regexp.MustCompile(`\b(20[0-2][0-9])(\s+R2)?\b`)
+
+// windowsVersionID is the value an operator groups a fleet by.
+//
+// Client and Server share build numbers -- Windows 11 24H2 and Windows Server
+// 2025 are both build 26100 -- so the build alone answers the wrong question
+// for a server. A CI runner reporting os_version_id "11" while calling itself
+// "Windows Server 2025 Datacenter" is how this was noticed.
+//
+// InstallationType is the discriminator the registry provides: "Client",
+// "Server", or "Server Core". For a server the release year is the version
+// anyone means; for a client it is the marketing major.
+func windowsVersionID(productName, currentBuild, installationType string) string {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(installationType)), "server") {
+		if m := serverRelease.FindString(productName); m != "" {
+			return strings.Join(strings.Fields(m), " ")
+		}
+	}
+	return windowsMajorVersion(currentBuild)
 }
 
 // windowsKernelRelease assembles the full build identity, the closest Windows
@@ -62,7 +87,9 @@ func windowsPrettyName(productName, displayVersion, currentBuild string) string 
 	major := windowsMajorVersion(currentBuild)
 	name := strings.TrimSpace(productName)
 
-	if major == "11" && strings.Contains(name, "Windows 10") {
+	// Only client editions carry the wrong name. A server product name says
+	// "Windows Server 2025" and is already correct.
+	if major == "11" && strings.Contains(name, "Windows 10") && !strings.Contains(name, "Server") {
 		name = strings.Replace(name, "Windows 10", "Windows 11", 1)
 	}
 	if name == "" {

@@ -276,6 +276,14 @@ release: $(DIST_DIR)/man/swinv.8.gz $(LICENSE_DOC)
 	    PKG_VERSION=$(PKG_VERSION) PKG_ARCH=$$arch \
 	        $(NFPM) package -f $(NFPM_CONFIG) -p rpm -t $(DIST_DIR) || exit 1; \
 	done
+	@# Windows: a binary only, no package. There is no .deb or .rpm to build,
+	@# and shipping an MSI would claim a maturity the Windows collector has
+	@# not earned -- see docs/WINDOWS.md for what it does not yet cover.
+	@out=$(DIST_DIR)/swinv-$(VERSION)-windows-amd64.exe; \
+	echo ">> building $$out"; \
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+	    $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $$out $(PKG) || exit 1; \
+	cp $$out $(DIST_DIR)/swinv-windows-amd64.exe || exit 1
 	@echo ">> restoring the native build in $(BIN_DIR)"
 	@$(MAKE) --no-print-directory build
 	@echo ">> writing $(DIST_DIR)/SHA256SUMS"

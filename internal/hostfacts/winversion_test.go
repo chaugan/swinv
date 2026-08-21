@@ -126,3 +126,46 @@ func TestDefaultRootIsTheSystemRoot(t *testing.T) {
 		}
 	}
 }
+
+// TestWindowsVersionIDDistinguishesServerFromClient pins a mis-bucketing that
+// CI surfaced: its runner is Windows Server 2025, which shares build 26100
+// with Windows 11 24H2, and the build alone reported it as Windows "11".
+func TestWindowsVersionIDDistinguishesServerFromClient(t *testing.T) {
+	cases := []struct {
+		name                              string
+		product, build, installType, want string
+	}{
+		{"server 2025 shares a build with windows 11",
+			"Windows Server 2025 Datacenter", "26100", "Server", "2025"},
+		{"server core is still a server",
+			"Windows Server 2022 Standard", "20348", "Server Core", "2022"},
+		{"server 2012 R2 keeps its R2",
+			"Windows Server 2012 R2 Standard", "9600", "Server", "2012 R2"},
+		{"client on the same build is 11",
+			"Windows 10 Pro", "26100", "Client", "11"},
+		{"older client",
+			"Windows 10 Pro", "19045", "Client", "10"},
+		{"no installation type falls back to the build",
+			"Windows 10 Pro", "26100", "", "11"},
+		{"a server with no year in its name falls back",
+			"Windows Server", "26100", "Server", "11"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := windowsVersionID(tc.product, tc.build, tc.installType)
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWindowsPrettyNameLeavesServerNamesAlone: the "Windows 10 -> 11" rewrite
+// exists for client editions whose registry name is wrong. A server name is
+// already right and must not be touched.
+func TestWindowsPrettyNameLeavesServerNamesAlone(t *testing.T) {
+	got := windowsPrettyName("Windows Server 2025 Datacenter", "24H2", "26100")
+	if want := "Windows Server 2025 Datacenter 24H2 (build 26100)"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

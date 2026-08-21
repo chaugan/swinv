@@ -48,7 +48,8 @@ func platformFacts(h *model.Host, isSystemRoot bool) {
 		// ("debian", "fedora") with the detail in os_version_id and
 		// os_pretty_name.
 		h.OSID = "windows"
-		h.OSVersionID = windowsMajorVersion(build)
+		h.OSVersionID = windowsVersionID(
+			regString(cv, "ProductName"), build, regString(cv, "InstallationType"))
 		h.OSPrettyName = windowsPrettyName(regString(cv, "ProductName"), regString(cv, "DisplayVersion"), build)
 		h.KernelRelease = windowsKernelRelease(
 			regUint(cv, "CurrentMajorVersionNumber"),
