@@ -374,21 +374,22 @@ func collectUpdates(res *Result, logf func(string, ...any)) {
 	}
 
 	for _, u := range updates {
-		res.Components = append(res.Components, model.Component{
-			// No version. An update is identified by its KB number and has no
-			// version of its own; putting the host build here would attach a
-			// fact about the machine to a row about an update.
-			Name:    u.KB,
-			Type:    typeHotfix,
-			Vendor:  "Microsoft Corporation",
-			FoundBy: updateCataloger,
-			Attributes: attributes(map[string]string{
-				"component_packages": strconv.Itoa(u.Components),
-			}),
-		})
+		res.Components = append(res.Components, componentFromUpdate(u))
 	}
 	res.Stats.Updates = len(updates)
-	logf("updates: %d installed (from the component store)", len(updates))
+	logf("updates: %d installed servicing packages", len(updates))
+
+	// A machine that has installed an update but not yet rebooted is running
+	// the previous patch level while the store describes the next one. An
+	// unattended scan lands in that window regularly, and a report that does
+	// not say so overstates how patched the host is.
+	for _, u := range updates {
+		if u.Pending {
+			res.Warnings = append(res.Warnings, fmt.Sprintf(
+				"%s is installed but not active until this host reboots; the running "+
+					"system is still on the previous patch level", describeUpdate(u)))
+		}
+	}
 }
 
 func locationsOf(path string) []string {
@@ -396,4 +397,47 @@ func locationsOf(path string) []string {
 		return nil
 	}
 	return []string{path}
+}
+
+// componentFromUpdate turns a servicing package into a component.
+//
+// The name says which stream it belongs to rather than repeating a KB, because
+// for cumulative and servicing-stack updates there is no KB -- Windows
+// identifies them by version, and that version is the thing worth comparing
+// against a patch-level baseline.
+func componentFromUpdate(u appx.Update) model.Component {
+	c := model.Component{
+		Name:    describeUpdate(u),
+		Version: u.Version,
+		Type:    typeHotfix,
+		Vendor:  "Microsoft Corporation",
+		FoundBy: updateCataloger,
+		Attributes: attributes(map[string]string{
+			"servicing_stream":   string(u.Kind),
+			"package_identity":   u.Identity,
+			"component_packages": strconv.Itoa(u.Components),
+			"kb":                 u.KB,
+		}),
+	}
+	if u.Pending {
+		c.Attributes["reboot_pending"] = "true"
+	}
+	return c
+}
+
+// describeUpdate names an update the way an operator would.
+func describeUpdate(u appx.Update) string {
+	switch u.Kind {
+	case appx.KindCumulative:
+		return "Windows cumulative update"
+	case appx.KindServicingStack:
+		return "Windows servicing stack update"
+	case appx.KindDotNetRollup:
+		return ".NET Framework rollup"
+	default:
+		if u.KB != "" {
+			return u.KB
+		}
+		return "Windows update"
+	}
 }

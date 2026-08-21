@@ -5,14 +5,37 @@ import "errors"
 // ErrUnsupportedPlatform is returned on anything other than Windows.
 var ErrUnsupportedPlatform = errors.New("appx: Appx packages and the component store exist only on Windows")
 
-// Update is one Windows update, identified by its knowledge-base number.
+// Update is one installed servicing package.
+//
+// Deliberately not a flat KB number. Windows quality updates are cumulative:
+// each replaces its predecessor and the store records the current one under an
+// identity carrying no KB at all, so "is KB5121003 installed?" false-negatives
+// a fully patched machine a month later. Measured on one laptop, the component
+// store and Win32_QuickFixEngineering each held two KBs the other lacked --
+// not because either was broken, but because they name different things.
 type Update struct {
-	// KB is the number an operator patches by, e.g. "KB5062553".
+	// Kind is which servicing stream this belongs to.
+	Kind Kind
+
+	// KB is set only where a KB number really is the identity: out-of-band
+	// fixes and enablement packages. Empty for cumulative and servicing-stack
+	// updates, which Windows identifies by version.
 	KB string
 
-	// Components is how many component-store packages carry this KB. Recorded
-	// because it is the only evidence of scale available here, and because a
-	// count of one is worth treating differently from a count of nine hundred.
+	// Version is the package version. For a cumulative update it is the
+	// build and UBR, the same value as the host's kernel_release, which is
+	// what makes it comparable against a patch-level baseline.
+	Version string
+
+	// Identity is the full component-store package name, kept because it is
+	// the only unambiguous handle on a specific package.
+	Identity string
+
+	// Pending is true when the package is installed but not yet live, which
+	// means the running system is still on the previous patch level.
+	Pending bool
+
+	// Components is how many component-store packages carry this update.
 	Components int
 }
 
@@ -25,10 +48,12 @@ type Update struct {
 // uninstall registry has, for the same reason.
 func ReadPackages() ([]Package, error) { return readPackages() }
 
-// ReadUpdates returns the Windows updates the component store records.
+// ReadUpdates returns the servicing packages the component store records as
+// installed.
 //
-// Deliberately not Win32_QuickFixEngineering, which is what Get-HotFix uses:
-// on a machine whose component store held 7,844 package entries, that class
-// reported three updates. It has not been a complete record of Windows
-// servicing for years.
+// Not Win32_QuickFixEngineering, and not because that class is wrong -- it
+// answers a different question. WMI reports current hotfixes, mapped to their
+// KB numbers; the component store reports packages, by identity and state.
+// Reading the store means superseded packages must be filtered by CurrentState,
+// which is the fix for reporting .NET rollups a machine replaced months ago.
 func ReadUpdates() ([]Update, error) { return readUpdates() }

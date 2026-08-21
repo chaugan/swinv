@@ -7,6 +7,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -101,6 +102,14 @@ func render(t *testing.T, format string, r *model.Report) []byte {
 // TestGolden is spec §12.2: scan the fixture rootfs and compare against
 // checked-in golden JSON and CSV. Regenerate with `make golden`.
 func TestGolden(t *testing.T) {
+	// The fixture is a Linux root filesystem and the golden files record what
+	// scanning it produces, including host facts read from /etc. On Windows
+	// the host block is filled from the registry instead, so the comparison
+	// tests the platform rather than the output writers.
+	if runtime.GOOS == "windows" {
+		t.Skip("the golden fixture is a Linux rootfs")
+	}
+
 	report := scanFixture(t)
 
 	for _, format := range []string{"json", "csv"} {

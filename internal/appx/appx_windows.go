@@ -78,17 +78,72 @@ func readUpdates() ([]Update, error) {
 		return nil, fmt.Errorf("appx: listing component store packages: %w", err)
 	}
 
-	counts := make(map[string]int)
+	// Keyed by what identifies each stream: a KB where one exists, the kind
+	// and version otherwise. Several thousand child packages collapse onto a
+	// handful of updates this way.
+	collected := make(map[string]*Update)
+
 	for _, name := range names {
-		if kb := kbFromCBSPackage(name); kb != "" {
-			counts[kb]++
+		pkg, ok := parseServicingPackage(name)
+		if !ok {
+			continue
+		}
+
+		state, ok := packageState(root, name)
+		if !ok || !isInstalledState(state) {
+			// Superseded and staged packages stay in the store long after they
+			// stop describing the machine.
+			continue
+		}
+
+		key := pkg.KB
+		if key == "" {
+			key = string(pkg.Kind) + " " + pkg.Version
+		}
+
+		if existing, ok := collected[key]; ok {
+			existing.Components++
+			continue
+		}
+		collected[key] = &Update{
+			Kind:       pkg.Kind,
+			KB:         pkg.KB,
+			Version:    pkg.Version,
+			Identity:   pkg.Identity,
+			Pending:    isPendingState(state),
+			Components: 1,
 		}
 	}
 
-	out := make([]Update, 0, len(counts))
-	for kb, n := range counts {
-		out = append(out, Update{KB: kb, Components: n})
+	out := make([]Update, 0, len(collected))
+	for _, u := range collected {
+		out = append(out, *u)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].KB < out[j].KB })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		if out[i].KB != out[j].KB {
+			return out[i].KB < out[j].KB
+		}
+		return out[i].Version < out[j].Version
+	})
 	return out, nil
+}
+
+// packageState reads a package's CurrentState. A key whose state cannot be
+// read is treated as not installed: claiming an update is present on the
+// strength of a key name is exactly the mistake this exists to correct.
+func packageState(root registry.Key, name string) (uint64, bool) {
+	k, err := registry.OpenKey(root, name, registry.QUERY_VALUE)
+	if err != nil {
+		return 0, false
+	}
+	defer k.Close()
+
+	state, _, err := k.GetIntegerValue("CurrentState")
+	if err != nil {
+		return 0, false
+	}
+	return state, true
 }
