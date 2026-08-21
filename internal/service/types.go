@@ -64,6 +64,6 @@ type Result struct {
 // Collect reports what is listening. Implemented on Linux; elsewhere it
 // returns nothing rather than an error, since a caller asking on a platform
 // without /proc has not done anything wrong.
-func Collect(ctx context.Context, procRoot string) (*Result, error) { //nolint:revive // see build-tagged files
+func Collect(ctx context.Context, procRoot string) (*Result, error) {
 	return collect(ctx, procRoot)
 }

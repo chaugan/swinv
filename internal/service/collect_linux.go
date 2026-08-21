@@ -71,7 +71,8 @@ func readAllTables(procRoot string) ([]Endpoint, []string) {
 			continue
 		}
 		endpoints, err := ParseNetTable(f, t.proto)
-		f.Close()
+		// Read-only; nothing it could report affects what was already parsed.
+		_ = f.Close()
 		if err != nil {
 			warnings = append(warnings, err.Error())
 			continue
