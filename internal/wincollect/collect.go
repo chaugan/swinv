@@ -37,6 +37,10 @@ type Options struct {
 type Stats struct {
 	// RegistryProducts is how many uninstall entries were read.
 	RegistryProducts int
+	// Packages is how many Store and MSIX packages were found.
+	Packages int
+	// Updates is how many distinct Windows updates the component store holds.
+	Updates int
 	// Enumerated is how many executables the MFT enumeration returned.
 	Enumerated int
 	// OSOrStore is how many were skipped as operating-system or Store

@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/chaugan/swinv/internal/appx"
 	"github.com/chaugan/swinv/internal/arp"
 	"github.com/chaugan/swinv/internal/model"
 	"github.com/chaugan/swinv/internal/peversion"
@@ -21,6 +23,8 @@ import (
 // consumer tells where a fact came from.
 const (
 	registryCataloger = "windows-registry-cataloger"
+	appxCataloger     = "windows-appx-cataloger"
+	updateCataloger   = "windows-update-cataloger"
 	peCataloger       = "windows-pe-cataloger"
 )
 
@@ -28,6 +32,8 @@ const (
 // "binary", which already means the same thing on Linux.
 const (
 	typeWindows = "windows"
+	typeMSIX    = "msix"
+	typeHotfix  = "hotfix"
 	typeBinary  = "binary"
 )
 
@@ -70,6 +76,12 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 	known := NewLocationSet(locations)
 	logf("registry: %d installed products, %d distinct install locations",
 		len(installed), known.Len())
+
+	// --- 1b. Store apps and Windows updates ---------------------------------
+	// Both are registry reads that open no files, so they belong with the
+	// uninstall keys rather than behind --full-scan.
+	collectPackages(res, logf)
+	collectUpdates(res, logf)
 
 	if !opts.FullScan {
 		return res, nil
@@ -136,9 +148,10 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 
 		if osOrStore > 0 {
 			res.Warnings = append(res.Warnings, fmt.Sprintf(
-				"%d files under %s\\Windows and WindowsApps were not inventoried: operating "+
-					"system components and Store apps need the component-store and Appx "+
-					"catalogers, which do not exist yet", osOrStore, volume))
+				"%d executables under %s\\Windows and WindowsApps were not opened: operating "+
+					"system components are represented by the installed updates above rather "+
+					"than file by file, and Store apps come from the package registry",
+				osOrStore, volume))
 		}
 	}
 
@@ -306,4 +319,81 @@ func baseName(path string) string {
 		return path[i+1:]
 	}
 	return path
+}
+
+// collectPackages adds Store and MSIX packages.
+//
+// A failure here is a warning, not an error: the uninstall inventory above is
+// still correct and useful, and refusing to report it because one more source
+// was unreadable would be the wrong trade.
+func collectPackages(res *Result, logf func(string, ...any)) {
+	packages, err := appx.ReadPackages()
+	if err != nil {
+		res.Warnings = append(res.Warnings,
+			fmt.Sprintf("Store and MSIX packages could not be read (%v); software installed "+
+				"from the Microsoft Store is missing from this inventory", err))
+		return
+	}
+
+	for _, p := range packages {
+		res.Components = append(res.Components, model.Component{
+			Name:      p.Name,
+			Version:   p.Version,
+			Type:      typeMSIX,
+			FoundBy:   appxCataloger,
+			Locations: locationsOf(p.RootFolder),
+			Attributes: attributes(map[string]string{
+				"package_full_name": p.FullName,
+				"architecture":      p.Architecture,
+				"publisher_id":      p.PublisherID,
+				"scope":             "user",
+			}),
+		})
+	}
+	res.Stats.Packages = len(packages)
+	logf("appx: %d Store and MSIX packages", len(packages))
+
+	// Said once, plainly. Store apps are installed per user and this registry
+	// is HKCU, so a scan running as a service account reports that account's
+	// packages and no one else's.
+	if len(packages) > 0 {
+		res.Warnings = append(res.Warnings,
+			"Store and MSIX packages were read for the account running this scan only; "+
+				"packages installed by other users are not listed")
+	}
+}
+
+// collectUpdates adds the Windows updates the component store records.
+func collectUpdates(res *Result, logf func(string, ...any)) {
+	updates, err := appx.ReadUpdates()
+	if err != nil {
+		res.Warnings = append(res.Warnings,
+			fmt.Sprintf("installed Windows updates could not be read (%v); the patch level "+
+				"of this host is not in this inventory", err))
+		return
+	}
+
+	for _, u := range updates {
+		res.Components = append(res.Components, model.Component{
+			// No version. An update is identified by its KB number and has no
+			// version of its own; putting the host build here would attach a
+			// fact about the machine to a row about an update.
+			Name:    u.KB,
+			Type:    typeHotfix,
+			Vendor:  "Microsoft Corporation",
+			FoundBy: updateCataloger,
+			Attributes: attributes(map[string]string{
+				"component_packages": strconv.Itoa(u.Components),
+			}),
+		})
+	}
+	res.Stats.Updates = len(updates)
+	logf("updates: %d installed (from the component store)", len(updates))
+}
+
+func locationsOf(path string) []string {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	return []string{path}
 }
