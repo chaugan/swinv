@@ -9,6 +9,30 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Added
+
+- **Store and MSIX packages** are now inventoried, from the AppModel package
+  repository. Read without opening a file, so this runs in the default scan
+  rather than behind `--full-scan`. Resource bundles are filtered out — one
+  ships per display scale and per language, and counting them turns a single
+  application into a dozen rows differing only in an asset resolution — as are
+  packages under `Windows\SystemApps`, which are the shell rather than
+  installed software.
+- **Installed Windows updates**, by KB number, from the component store. Not
+  from `Win32_QuickFixEngineering`, which is what `Get-HotFix` reads: on a
+  machine whose component store held 7,844 package entries, that class reported
+  three updates. The store records one key per component per update, so KB
+  numbers are deduplicated, and the component count behind each is kept.
+
+### Changed
+
+- **Operating-system components are out of scope by decision rather than by
+  omission.** `C:\Windows\WinSxS` held 39,536 executables on a real machine —
+  40% of every candidate on the volume — and they are hard-linked servicing
+  copies that say little individually. The installed-updates list expresses the
+  same thing in the form an operator patches by. The warning now says this
+  instead of promising catalogers that were never going to be worth writing.
+
 ## [0.2.0] — 2026-08-21
 
 Windows support, and a schema that carries who made a thing.

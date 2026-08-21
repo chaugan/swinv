@@ -381,10 +381,23 @@ task pays that cost once.
 `--volumes D:` or `--volumes D:,E:` selects which volumes to enumerate, and
 **replaces** the default of `C:` rather than adding to it.
 
-Known gaps, none of them small: the `host` block is nearly empty because host
-facts are read from `/etc` and `/proc`; operating-system components and Store
-apps are not inventoried at all, and the report says so; per-user software is
-visible only for the account running the scan.
+Four sources, all read without opening a file:
+
+| Source | Gives |
+|---|---|
+| uninstall registry | installed applications, with version and publisher |
+| package repository | Store and MSIX apps |
+| component store | installed Windows updates, by KB number |
+| MFT (`--full-scan`) | executables nothing above accounts for |
+
+Operating-system components are deliberately **not** inventoried file by file.
+On a real machine `C:\Windows\WinSxS` held 39,536 executables — 40% of every
+candidate on the volume — which are hard-linked servicing copies and near
+useless individually. The installed updates express the same thing in the form
+an operator patches by.
+
+Remaining gaps: Store apps and per-user applications are registered per user,
+so a scan running as a service account sees that account's and no other's.
 
 **[Design, measurements and open questions →](docs/WINDOWS.md)**
 
