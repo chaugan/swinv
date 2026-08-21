@@ -112,7 +112,7 @@ escaping is disabled, so PURLs and CPEs are written literally rather than with
 
 ```jsonc
 {
-  "schema_version": "1.1",
+  "schema_version": "1.3",
 
   "tool": {                                  // what produced this file
     "name": "swinv",
@@ -581,7 +581,8 @@ CREATE TABLE inventory (
     locations     text,
     found_by      text,
     sha256        text,
-    change        text
+    change        text,
+    vendor        text
 );
 ```
 

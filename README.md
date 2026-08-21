@@ -137,7 +137,7 @@ one folded onto its 17 columns:
 
 ```console
 $ head -1 /tmp/ex/web-01-20260819.csv
-hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,type,language,purl,cpes,licenses,locations,found_by,sha256,change
+hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,type,language,purl,cpes,licenses,locations,found_by,sha256,change,vendor
 ```
 
 | Column | Value |
@@ -349,6 +349,45 @@ QEMU emulation, not on physical ARM hardware. Emulation exercises the code but
 not the machine, so if you run this on a Raspberry Pi or an ARM instance, that
 is still worth reporting.
 
+## Windows
+
+**Experimental, and not yet released as a binary.** The Linux collector is what
+`swinv` is; Windows support is one day old, has run only in CI and on one
+developer laptop, and has no release channel. What follows is what it does
+today, not a promise.
+
+Windows keeps its record of installed software in the registry, not on the
+filesystem, so the Linux strategy is the wrong shape there. Pointing the
+filesystem scanner at `C:\Program Files` did not finish inside ten minutes,
+because it opens every file it sees and every open is inspected by antivirus.
+Reading the uninstall keys answers the same question in **24 milliseconds**.
+
+| Mode | What it reads | Cost on a real laptop |
+|---|---|---|
+| default | the uninstall registry | **~380 products in 24 ms**, no elevation, no file opened |
+| `--full-scan` | plus every executable on disk | first run ~14 min, subsequent runs ~1 s |
+
+`--full-scan` needs an elevated process and an NTFS volume. It enumerates the
+Master File Table rather than walking directories — 2.9 million records in five
+seconds, opening nothing — then discards what the registry already accounts for
+and what belongs to Windows itself, and opens only the remainder. On the test
+machine that was **19,549 files of 99,920**, an 80% reduction in the one
+operation that costs anything.
+
+The first `--full-scan` is slow and the rest are not: antivirus scans each
+executable the first time it is opened and caches the result, so a scheduled
+task pays that cost once.
+
+`--volumes D:` or `--volumes D:,E:` selects which volumes to enumerate, and
+**replaces** the default of `C:` rather than adding to it.
+
+Known gaps, none of them small: the `host` block is nearly empty because host
+facts are read from `/etc` and `/proc`; operating-system components and Store
+apps are not inventoried at all, and the report says so; per-user software is
+visible only for the account running the scan.
+
+**[Design, measurements and open questions →](docs/WINDOWS.md)**
+
 ## Why not just use…?
 
 | | What it gives you | Why `swinv` |
@@ -398,6 +437,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--hash` | false | Record a SHA-256 per component |
 | `--fast` | false | Scan at normal priority and full parallelism (see below) |
 | `--max-memory SIZE` | — | Soft memory limit, e.g. `1536MiB` |
+| `--debug-stacks-after DUR` | — | Dump goroutine stacks if the scan is still running, for a run that appears hung |
 | `--timeout DURATION` | `30m` | Whole-run deadline |
 | `--verbose` / `--quiet` | false | Per-stage timing / silence |
 
@@ -669,7 +709,7 @@ touching the writers.
 | [Security](SECURITY.md) | Reporting, and exactly what data a report contains |
 | [Changelog](CHANGELOG.md) | What changed, and the versioning policy |
 | [Specification](docs/INVENTORYCOLLECTORSPEC.md) | The spec of record, with rationale |
-| [Windows design](docs/WINDOWS.md) | Proposed Windows support — **not implemented** |
+| [Windows](docs/WINDOWS.md) | Design, measurements, and what Windows support does not yet cover |
 | [Server roles](docs/SERVER-ROLES.md) | Proposed detection of what is running and serving — **not implemented** |
 
 ## Non-goals

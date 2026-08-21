@@ -329,7 +329,7 @@ One row per component, header row always present, RFC 4180 quoting, `\n` line
 endings, UTF-8, no BOM. Host identity is repeated on every row so the file is
 useful standalone when concatenated across machines.
 
-Columns, in exactly this order (17 as of schema 1.1):
+Columns, in exactly this order (18 as of schema 1.2):
 
 ```
 hostname,machine_id,os_id,os_version_id,architecture,scanned_at,

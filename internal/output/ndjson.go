@@ -35,6 +35,14 @@ type ndjsonLine struct {
 	FoundBy   string   `json:"found_by,omitempty"`
 	SHA256    string   `json:"sha256,omitempty"`
 	Change    string   `json:"change,omitempty"`
+
+	// Added in schema 1.2 and 1.3. This struct enumerates its fields rather
+	// than embedding model.Component, which is what let both additions ship
+	// present in JSON and CSV and silently absent here -- a consumer reading
+	// NDJSON lost them without any error to notice. TestEveryFormatCarries-
+	// EveryComponentField now compares the two.
+	Vendor     string            `json:"vendor,omitempty"`
+	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
 // WriteNDJSON writes one JSON object per component, one per line, with no
@@ -74,6 +82,8 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 			Locations:    c.Locations,
 			FoundBy:      c.FoundBy,
 			SHA256:       c.SHA256,
+			Vendor:       c.Vendor,
+			Attributes:   c.Attributes,
 			Change:       c.Change,
 		}
 		// Encode terminates every record with a newline, which is exactly the

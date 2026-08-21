@@ -716,3 +716,38 @@ func assertNoTempFiles(t *testing.T, dir string) {
 		}
 	}
 }
+
+// TestEveryFormatCarriesEveryComponentField compares model.Component against
+// the NDJSON row struct, field by field.
+//
+// The NDJSON writer enumerates its fields instead of embedding Component, which
+// is a deliberate choice -- the row is flattened, mixing host identity into
+// each line -- but it means a field added to Component is silently absent from
+// NDJSON until someone notices. Two were: vendor in schema 1.2 and attributes
+// in 1.3, both present in JSON and CSV, both missing here, with no error
+// anywhere. A consumer reading NDJSON just did not get them.
+func TestEveryFormatCarriesEveryComponentField(t *testing.T) {
+	// Fields of Component that deliberately have no NDJSON equivalent.
+	skip := map[string]bool{}
+
+	componentFields := make(map[string]bool)
+	ct := reflect.TypeOf(model.Component{})
+	for i := 0; i < ct.NumField(); i++ {
+		componentFields[ct.Field(i).Name] = true
+	}
+
+	rowFields := make(map[string]bool)
+	rt := reflect.TypeOf(ndjsonLine{})
+	for i := 0; i < rt.NumField(); i++ {
+		rowFields[rt.Field(i).Name] = true
+	}
+
+	for name := range componentFields {
+		if skip[name] {
+			continue
+		}
+		if !rowFields[name] {
+			t.Errorf("model.Component.%s has no field in ndjsonLine, so NDJSON silently omits it", name)
+		}
+	}
+}
