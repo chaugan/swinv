@@ -371,6 +371,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 			cfg.since, len(delta.Added), len(delta.Removed), len(delta.Changed))
 	}
 
+	// Warnings are what turn "378 components" from a fact into a qualified
+	// one: whether something was not installed, or merely not looked for.
+	// They were recorded in the report and never shown, so an operator whose
+	// --full-scan silently did nothing -- because enumerating the MFT needs
+	// elevation -- saw a clean run and a component count.
+	for _, w := range report.Scan.Warnings {
+		logf("warning: %s", w)
+	}
+
 	logf("found %d components in %dms", len(report.Components), meta.DurationMS)
 
 	// --- write ------------------------------------------------------------
@@ -389,7 +398,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if report.Scan.Incomplete {
-		logf("inventory is INCOMPLETE (%d warnings)", len(report.Scan.Warnings))
+		logf("this inventory is INCOMPLETE -- see the warnings above")
 		return exitIncomplete
 	}
 	return exitOK

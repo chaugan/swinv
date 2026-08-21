@@ -45,6 +45,7 @@ func platformScan(ctx context.Context, cfg *config, logf func(string, ...any)) (
 		Components: model.Normalize(res.Components),
 		Catalogers: catalogers,
 		Warnings:   res.Warnings,
+		Incomplete: res.Incomplete,
 	}
 
 	if !cfg.fullScan {

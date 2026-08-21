@@ -94,11 +94,17 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 		})
 		switch {
 		case errors.Is(err, usn.ErrNotNTFS), errors.Is(err, usn.ErrNotElevated):
-			// Neither is fatal to the run: the registry inventory above still
-			// stands, and saying so is more useful than refusing to report it.
+			// Neither is fatal: the registry inventory above still stands, and
+			// reporting it is more useful than refusing to. But the operator
+			// asked for a full scan and did not get one, so this is an
+			// incomplete inventory rather than a successful small one --
+			// otherwise a scheduled task that lost its elevation reports
+			// success forever while quietly seeing a fraction of the machine.
+			res.Incomplete = true
 			res.Warnings = append(res.Warnings, fmt.Sprintf(
-				"%s was not enumerated (%v); software there that the registry does not "+
-					"record is missing from this inventory", volume, err))
+				"--full-scan could not enumerate %s (%v), so only the uninstall "+
+					"registry was read; software that registers no uninstall entry is "+
+					"missing from this inventory", volume, err))
 			continue
 		case err != nil:
 			return nil, err

@@ -62,3 +62,13 @@ func TestUsableVersion(t *testing.T) {
 		}
 	}
 }
+
+// TestResultIncompleteIsDistinctFromEmpty documents the contract the
+// --full-scan-without-elevation case exposed: a collector that could not do
+// what was asked must say so, not return a smaller answer and call it success.
+func TestResultIncompleteDefault(t *testing.T) {
+	var r Result
+	if r.Incomplete {
+		t.Error("a zero Result must not claim to be incomplete")
+	}
+}

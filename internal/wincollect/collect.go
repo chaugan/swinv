@@ -56,6 +56,13 @@ type Result struct {
 	Components []model.Component
 	Warnings   []string
 	Stats      Stats
+
+	// Incomplete is set when the caller asked for work that could not be
+	// done -- --full-scan on a volume that could not be enumerated, for
+	// instance. The registry inventory is still returned and still correct;
+	// it is just not the inventory that was requested, and the caller should
+	// exit 1 rather than 0 so an unattended run notices.
+	Incomplete bool
 }
 
 // Collect assembles an inventory of the software installed on this machine.
