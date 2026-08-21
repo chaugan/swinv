@@ -9,6 +9,17 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-08-21
+
+Four issues reported by someone building an offline vulnerability matcher
+against swinv output, and the Windows update model rebuilt on what the
+component store actually records.
+
+Two of the four were dangerous rather than untidy: a placeholder version that
+parses as a valid low version, and packages in nested roots carrying the
+scanning host's distribution. Both produced output that looks like an answer
+and is not one, which is the worst way for an inventory to fail.
+
 ### Added
 
 - **`Component.root`** records which filesystem root a component was found in —
@@ -384,7 +395,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/chaugan/swinv/releases/tag/v0.2.2
 [0.2.1]: https://github.com/chaugan/swinv/releases/tag/v0.2.1
 [0.2.0]: https://github.com/chaugan/swinv/releases/tag/v0.2.0
 [0.1.2]: https://github.com/chaugan/swinv/releases/tag/v0.1.2
