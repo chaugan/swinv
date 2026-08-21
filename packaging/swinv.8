@@ -102,8 +102,14 @@ Selects the default
 .Fl -name
 template, and with it the file-rotation behaviour.
 Default:
-.Cm dated .
+.Cm timestamped .
 .Bl -tag -width "timestamped" -offset indent
+.It Cm timestamped
+Template
+.Ql {hostname}-{datetime} .
+A new file for every run, kept until something prunes them.
+This is the default because a report is evidence of what was installed at a
+moment, and a second run on the same day should not silently replace the first.
 .It Cm dated
 Template
 .Ql {hostname}-{date} .
@@ -112,10 +118,6 @@ One file per day; re-running on the same day replaces that day's file.
 Template
 .Ql {hostname} .
 One fixed file, replaced on every run.
-.It Cm timestamped
-Template
-.Ql {hostname}-{datetime} .
-A brand-new file for every run, kept forever. Prune it yourself.
 .El
 .Pp
 All three modes write atomically, so

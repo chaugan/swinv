@@ -150,8 +150,8 @@ func registerFlags(fs *flag.FlagSet, cfg *config) {
 	fs.StringVar(&cfg.root, "root", "/", "filesystem root to scan")
 	fs.StringVar(&cfg.out, "out", "/var/lib/swinv", "output directory")
 	fs.StringVar(&cfg.name, "name", "", "output basename template; supports {hostname}, {machine_id}, {date}, {datetime} (default: chosen by --output-mode)")
-	fs.StringVar(&cfg.outputMode, "output-mode", modeDated,
-		"how output files are named across runs: `dated` (one file per day), overwrite (one fixed file, replaced every run), or timestamped (a new file every run)")
+	fs.StringVar(&cfg.outputMode, "output-mode", modeTimestamped,
+		"how output files are named across runs: `timestamped` (a new file every run), dated (one file per day), or overwrite (one fixed file, replaced every run)")
 	fs.StringVar(&cfg.format, "format", "json,csv", "comma-separated output formats: json, csv, ndjson, cyclonedx-json")
 	fs.BoolVar(&cfg.toStdout, "stdout", false, "write to stdout instead of files; requires exactly one --format")
 	fs.BoolVar(&cfg.latestSymlink, "latest-symlink", true, "also maintain {hostname}-latest.{ext} symlinks in --out")

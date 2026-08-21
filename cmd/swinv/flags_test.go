@@ -26,8 +26,10 @@ func TestParseFlagsDefaults(t *testing.T) {
 	if cfg.format != "json,csv" {
 		t.Errorf("format = %q, want json,csv", cfg.format)
 	}
-	if cfg.outputMode != modeDated {
-		t.Errorf("outputMode = %q, want %q", cfg.outputMode, modeDated)
+	// Timestamped rather than dated: a second run on the same day must not
+	// silently replace the first, which is what "one file per day" did.
+	if cfg.outputMode != modeTimestamped {
+		t.Errorf("outputMode = %q, want %q", cfg.outputMode, modeTimestamped)
 	}
 	if !cfg.latestSymlink {
 		t.Error("latestSymlink should default to true")
@@ -75,7 +77,8 @@ func TestOutputModeSelectsNameTemplate(t *testing.T) {
 		args []string
 		want string
 	}{
-		{nil, "{hostname}-{date}"},
+		// No flags: the default mode, which is timestamped.
+		{nil, "{hostname}-{datetime}"},
 		{[]string{"--output-mode", "dated"}, "{hostname}-{date}"},
 		{[]string{"--output-mode", "overwrite"}, "{hostname}"},
 		{[]string{"--output-mode", "timestamped"}, "{hostname}-{datetime}"},

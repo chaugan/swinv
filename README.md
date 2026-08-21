@@ -364,9 +364,9 @@ is still worth reporting.
 
 | Mode | Files produced | Behaviour |
 |---|---|---|
-| `dated` *(default)* | `web-01-20260819.json` | One file per day; re-running the same day replaces it |
+| `dated` | `web-01-20260819.json` | One file per day; re-running the same day replaces it |
 | `overwrite` | `web-01.json` | **One fixed file, replaced every run** |
-| `timestamped` | `web-01-20260819T140506.123Z.json` | **A new file for every run**, kept |
+| `timestamped` *(default)* | `web-01-20260819T140506.123Z.json` | **A new file for every run**, kept |
 
 `--name` overrides the mode entirely and supports `{hostname}`, `{machine_id}`,
 `{date}` and `{datetime}` (millisecond precision, so two runs in the same
@@ -387,7 +387,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 |---|---|---|
 | `--root PATH` | `/` | Filesystem root to scan |
 | `--out DIR` | `/var/lib/swinv` | Output directory |
-| `--output-mode MODE` | `dated` | `dated`, `overwrite`, `timestamped` |
+| `--output-mode MODE` | `timestamped` | `timestamped`, `dated`, `overwrite` |
 | `--format LIST` | `json,csv` | `json`, `csv`, `ndjson`, `cyclonedx-json` |
 | `--stdout` | false | Write to stdout; requires exactly one `--format` |
 | `--include-home` | false | Also scan `/home` and `/root` |

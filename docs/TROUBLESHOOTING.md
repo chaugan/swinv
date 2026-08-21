@@ -589,9 +589,9 @@ inventory, `timestamped` is the wrong mode:
 
 | Mode | Files produced | Growth |
 |---|---|---|
-| `dated` *(default)* | `web-01-20240309.json` | one per day |
+| `dated` | `web-01-20240309.json` | one per day |
 | `overwrite` | `web-01.json` | none — one fixed file, replaced atomically |
-| `timestamped` | `web-01-20240309T140506Z.json` | one per run, forever |
+| `timestamped` *(default)* | `web-01-20240309T140506Z.json` | one per run, forever |
 
 Whatever you choose, **consumers should follow the `-latest` symlink**, not
 guess at filenames:

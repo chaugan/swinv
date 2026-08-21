@@ -57,7 +57,7 @@ usage problem.
 | Flag | Default | Meaning |
 |---|---|---|
 | `--out DIR` | `/var/lib/swinv` | Output directory; created `0755` if missing, files written `0644` |
-| `--output-mode MODE` | `dated` | `dated`, `overwrite`, or `timestamped` — see below |
+| `--output-mode MODE` | `timestamped` | `timestamped`, `dated`, or `overwrite` — see below |
 | `--name TEMPLATE` | *(from `--output-mode`)* | Output basename; `{hostname}`, `{machine_id}`, `{date}`, `{datetime}` |
 | `--format LIST` | `json,csv` | Comma-separated: `json`, `csv`, `ndjson`, `cyclonedx-json` |
 | `--stdout` | `false` | Write to stdout instead of files; requires exactly one `--format` |
@@ -268,9 +268,20 @@ swinv: found 7 components in 1663ms
 
 | Mode | Template | Files across repeated runs |
 |---|---|---|
-| `dated` *(default)* | `{hostname}-{date}` | `web-01-20240309.json` — one file per day; a second run the same day replaces it |
+| `dated` | `{hostname}-{date}` | `web-01-20240309.json` — one file per day; a second run the same day replaces it |
 | `overwrite` | `{hostname}` | `web-01.json` — one fixed file, replaced atomically every run |
 | `timestamped` | `{hostname}-{datetime}` | `web-01-20240309T140506.000Z.json` — a brand-new file every run, kept forever |
+
+The default changed from `dated` to `timestamped`. A report records what was
+installed at a moment, and under `dated` a second run on the same day silently
+replaced the first — so an operator investigating a change had one data point
+where they expected two. Keeping every run costs a file per run; losing one
+costs the answer.
+
+Files accumulate under `timestamped`, and nothing prunes them. The
+`{hostname}-latest.{ext}` pointer always names the newest, so a consumer reading
+that is unaffected. If unbounded growth is a problem, `--output-mode dated` is
+still there.
 
 One file is produced per requested `--format`, sharing the basename and
 differing only in extension. With `--latest-symlink` (on by default) a

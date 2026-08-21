@@ -24,7 +24,7 @@ func helpSections() []helpSection {
 			{"--out DIR", "output directory (default /var/lib/swinv)"},
 			{"--format LIST", "json,csv,ndjson,cyclonedx-json (default json,csv)"},
 			{"--stdout", "write to stdout (needs exactly one --format)"},
-			{"--output-mode MODE", "dated | overwrite | timestamped (default dated)"},
+			{"--output-mode MODE", "new file per run (default); or dated, overwrite"},
 			{"--name TEMPLATE", "name template: {hostname} {date} {datetime}"},
 			{"--latest-symlink", "keep <host>-latest.<ext> (=false to disable)"},
 			{"--perm OCTAL", "report file mode (default 0644)"},
