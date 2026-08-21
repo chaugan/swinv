@@ -102,3 +102,27 @@ func TestNormalizeMachineGUID(t *testing.T) {
 		}
 	}
 }
+
+// TestDefaultRootIsTheSystemRoot runs on every platform and is the test that
+// would have caught host facts being empty on Windows.
+//
+// "/" is the default value of --root everywhere, including on Windows where
+// the collector ignores it. filepath.Clean turns it into "\" there, so
+// comparing the cleaned value against the literal "/" is false -- and the
+// consequence was not an error but a silently emptier report.
+func TestDefaultRootIsTheSystemRoot(t *testing.T) {
+	for _, in := range []string{"/", "", "   "} {
+		if _, isSystemRoot := normalizeRoot(in); !isSystemRoot {
+			t.Errorf("normalizeRoot(%q) did not recognise the system root", in)
+		}
+	}
+
+	// An actual path must not be mistaken for it, or scanning a mounted image
+	// would report the scanning machine's identity against the image's
+	// contents.
+	for _, in := range []string{"/mnt/image", "/host", "relative/path"} {
+		if _, isSystemRoot := normalizeRoot(in); isSystemRoot {
+			t.Errorf("normalizeRoot(%q) was mistaken for the system root", in)
+		}
+	}
+}

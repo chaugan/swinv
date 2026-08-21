@@ -269,8 +269,19 @@ func normalizeRoot(fsRoot string) (root string, isSystemRoot bool) {
 		return "/", true
 	}
 	root = filepath.Clean(fsRoot)
-	return root, root == "/"
+	return root, root == systemRootPath
 }
+
+// systemRootPath is what "the machine I am running on" looks like once
+// filepath.Clean has been applied, on this platform.
+//
+// Not the literal "/". filepath.Clean rewrites separators, so on Windows it
+// turns "/" -- which is still the default value of --root -- into "\", and a
+// comparison against "/" is therefore false there. That made isSystemRoot
+// false on every Windows run, which silently skipped the registry lookups that
+// fill in the host block, and produced reports carrying a hostname, an
+// architecture and nothing else.
+var systemRootPath = filepath.Clean("/")
 
 // hostname resolves the machine's short hostname.
 //
