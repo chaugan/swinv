@@ -355,6 +355,57 @@ jobs:
             Where-Object { $_.found_by -eq "windows-pe-cataloger" -and $_.vendor } |
             Select-Object -First 8 name, version, vendor | Format-Table
 
+      # Temporary: find out what the Store-app and update registries actually
+      # contain on a real machine, and whether they are readable without
+      # elevation, before writing a cataloger against a remembered shape.
+      - name: Probe Appx and update sources
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          "=== elevated: $((New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))"
+
+          "`n=== 1. Appx via HKCU AppModel Repository ==="
+          $p = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages'
+          if (Test-Path $p) {
+            $k = Get-ChildItem $p -ErrorAction SilentlyContinue
+            "count: $($k.Count)"
+            $k | Select-Object -First 3 | ForEach-Object {
+              "key: $($_.PSChildName)"
+              Get-ItemProperty $_.PSPath | Select-Object DisplayName,PackageID,PackageRootFolder,PackageSid |
+                Format-List | Out-String
+            }
+          } else { "NOT PRESENT" }
+
+          "`n=== 2. Appx via HKLM AppxAllUserStore ==="
+          $p2 = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Applications'
+          if (Test-Path $p2) {
+            $k2 = Get-ChildItem $p2 -ErrorAction SilentlyContinue
+            "count: $($k2.Count)"
+            $k2 | Select-Object -First 5 -ExpandProperty PSChildName
+          } else { "NOT PRESENT" }
+
+          "`n=== 3. WindowsApps directory names ==="
+          Get-ChildItem 'C:\Program Files\WindowsApps' -Directory -ErrorAction SilentlyContinue |
+            Select-Object -First 5 -ExpandProperty Name
+          "readable: $($?)"
+
+          "`n=== 4. Updates via CBS Packages ==="
+          $p4 = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\Packages'
+          if (Test-Path $p4) {
+            $k4 = Get-ChildItem $p4 -ErrorAction SilentlyContinue
+            "count: $($k4.Count)"
+            ($k4 | Where-Object { $_.PSChildName -match 'KB\d+' } | Select-Object -First 5 -ExpandProperty PSChildName)
+          } else { "NOT PRESENT or unreadable" }
+
+          "`n=== 5. Get-HotFix (Win32_QuickFixEngineering) ==="
+          $h = Get-HotFix -ErrorAction SilentlyContinue
+          "count: $($h.Count)"
+          $h | Select-Object -First 5 HotFixID, Description, InstalledOn | Format-Table | Out-String
+
+          "`n=== 6. HotFix registry key ==="
+          $p6 = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\HotFix'
+          if (Test-Path $p6) { "count: $((Get-ChildItem $p6 -EA SilentlyContinue).Count)" } else { "NOT PRESENT" }
+
       # Informational. Most of the suite was written for Linux and assumes
       # /proc and /etc; this records what does and does not survive on Windows
       # without holding the build hostage to it.
