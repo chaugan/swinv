@@ -216,7 +216,8 @@ jobs:
           set -eu
           go vet ./...
           go build -trimpath \
-            -ldflags "-s -w -X main.version=$(git describe --tags --always)-windows-experimental" \
+            -ldflags "-s -w -X main.version=$(git describe --tags --always)-windows-experimental \
+                      -X main.commit=$(git rev-parse HEAD)" \
             -o swinv.exe ./cmd/swinv
           ls -l swinv.exe
 
