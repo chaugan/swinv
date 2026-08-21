@@ -171,3 +171,40 @@ func TestCandidateCPEsForTheReportedExample(t *testing.T) {
 		t.Error("the untrimmed form should remain as a fallback candidate")
 	}
 }
+
+// TestCandidateCPEsRejectMeaninglessProducts pins a bug seen in CI output:
+// "Microsoft.UI.Xaml.2.8" produced cpe:2.3:a:microsoft:8, whose product is a
+// version fragment. That is worse than emitting nothing -- it is well-formed,
+// looks like an identifier, and denotes nothing at all.
+func TestCandidateCPEsRejectMeaninglessProducts(t *testing.T) {
+	got := candidateCPEs("Microsoft Corporation", "Microsoft.UI.Xaml.2.8", "8.2511.26001.0")
+	for _, cpe := range got {
+		parts := strings.Split(cpe, ":")
+		if product := parts[4]; meaningless(product) {
+			t.Errorf("%q has product %q, which is only digits and separators", cpe, product)
+		}
+	}
+	// It should still produce something usable from the dotted name.
+	var ok bool
+	for _, cpe := range got {
+		if strings.Contains(cpe, ":ui.xaml.2.8:") {
+			ok = true
+		}
+	}
+	if !ok {
+		t.Errorf("got %v, want the part after the first dot as a product", got)
+	}
+}
+
+func TestMeaningless(t *testing.T) {
+	for _, s := range []string{"8", "2.8", "1.0.0", "-", "2_8", ""} {
+		if !meaningless(s) {
+			t.Errorf("meaningless(%q) = false, want true", s)
+		}
+	}
+	for _, s := range []string{"7-zip", "chrome", "ui.xaml.2.8", "x64"} {
+		if meaningless(s) {
+			t.Errorf("meaningless(%q) = true, want false", s)
+		}
+	}
+}

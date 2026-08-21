@@ -91,7 +91,7 @@ func vendorCandidates(publisher string) []string {
 func productCandidates(name string, vendors []string) []string {
 	var out []string
 	add := func(s string) {
-		if s = cpeToken(s); s != "" && !contains(out, s) {
+		if s = cpeToken(s); s != "" && !meaningless(s) && !contains(out, s) {
 			out = append(out, s)
 		}
 	}
@@ -115,11 +115,29 @@ func productCandidates(name string, vendors []string) []string {
 	}
 
 	// "Microsoft.WindowsTerminal" -- an MSIX package name is dotted rather
-	// than spaced, and its last component is the product.
-	if i := strings.LastIndex(name, "."); i > 0 && !strings.Contains(name, " ") {
+	// than spaced, and everything after the *first* dot is the product.
+	//
+	// Not the last component. "Microsoft.UI.Xaml.2.8" ends in "8", and a CPE
+	// with product "8" is worse than none: it is well-formed, looks like an
+	// identifier, and denotes nothing.
+	if i := strings.Index(name, "."); i > 0 && !strings.Contains(name, " ") {
 		add(name[i+1:])
 	}
 	return out
+}
+
+// meaningless rejects product tokens that are only digits and separators.
+//
+// A version fragment is not a product name, and a CPE built from one is
+// well-formed and denotes nothing -- which is worse than emitting nothing,
+// because it looks like an identifier to anything downstream.
+func meaningless(token string) bool {
+	for _, r := range token {
+		if r >= 'a' && r <= 'z' {
+			return false
+		}
+	}
+	return true
 }
 
 // archSuffix matches the architecture markers installers append to a display
