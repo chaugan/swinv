@@ -367,6 +367,43 @@ jobs:
             Where-Object { $_.found_by -eq "windows-pe-cataloger" -and $_.vendor } |
             Select-Object -First 8 name, version, vendor | Format-Table
 
+      # Temporary: swinv derives updates from the component store and found 1
+      # here where Get-HotFix found 3. One of the two is incomplete and the
+      # earlier claim that it was Get-HotFix rested on a bad comparison. Find
+      # out which KBs each source has, and whether another registry location
+      # holds the ones the component store does not.
+      - name: Probe update sources against each other
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          "=== Get-HotFix (Win32_QuickFixEngineering) ==="
+          Get-HotFix | Select-Object HotFixID, Description, InstalledOn | Sort-Object HotFixID | Format-Table | Out-String
+
+          "=== CBS package keys carrying a KB, deduplicated (what swinv reads) ==="
+          $cbs = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\Packages' -EA SilentlyContinue
+          "total keys: $($cbs.Count)"
+          $kbs = $cbs.PSChildName | ForEach-Object { if ($_ -match 'KB(\d{6,})') { "KB$($Matches[1])" } } | Sort-Object -Unique
+          "distinct KBs: $($kbs.Count)"
+          $kbs
+
+          "=== DISM view of the same store ==="
+          $dism = Get-WindowsPackage -Online -EA SilentlyContinue | Where-Object PackageName -match 'KB'
+          "packages: $($dism.Count)"
+          $dism | ForEach-Object { ($_.PackageName -split '~')[0] } | Sort-Object -Unique
+
+          "=== Windows Update client history keys ==="
+          foreach ($p in @(
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate',
+            'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\HotFix',
+            'HKLM:\SOFTWARE\Microsoft\Updates')) {
+            if (Test-Path $p) {
+              "$p : $((Get-ChildItem $p -Recurse -EA SilentlyContinue).Count) subkeys"
+              Get-ChildItem $p -Recurse -EA SilentlyContinue |
+                Where-Object PSChildName -match '^KB\d{6,}' |
+                Select-Object -First 10 -ExpandProperty PSChildName
+            } else { "$p : NOT PRESENT" }
+          }
+
       # Informational. Most of the suite was written for Linux and assumes
       # /proc and /etc; this records what does and does not survive on Windows
       # without holding the build hostage to it.
