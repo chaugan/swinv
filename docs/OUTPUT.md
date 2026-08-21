@@ -645,6 +645,10 @@ joined with `;` inside their single field. `pid` is empty rather than `0` on the
 aggregate row: `0` is a real pid and would read as a claim. The header is always
 present.
 
+`--stdout` has no sidecar — there is only one stream — so `--stdout --format
+csv` gives the components alone. Use `--stdout --format json` if you want the
+services block on a pipe.
+
 The file is written whenever services were collected at all, even when nothing
 was listening — a header with no rows says "we looked and found nothing", which
 a missing file does not. It is **not** written when services were never

@@ -32,7 +32,7 @@ jobs:
   build:
     name: build and test
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -112,11 +112,21 @@ jobs:
           setsid nc -l 127.0.0.1 39999 >/dev/null 2>&1 </dev/null &
           sleep 2
 
+          # The scan has to run against / -- services describe the machine
+          # that is running, not a tree on it -- so the runner's own bulk is
+          # excluded by name instead. Without this the walk spends over
+          # fourteen minutes in /usr/share/dotnet, /usr/local/lib/android and
+          # friends, none of which this step is about. /usr/lib is kept: that
+          # is where os-release lives, and losing it costs every PURL.
           run() {
             out="$1"; shift
-            sudo ./bin/swinv --out "$out" --catalogers os --fast --format json,csv \
-              --exclude './snap/**' --exclude './opt/**' \
-              --exclude './var/lib/docker/**' "$@"
+            sudo ./bin/swinv --out "$out" --catalogers os --fast --timeout 6m \
+              --format json,csv \
+              --exclude './usr/local/**' --exclude './usr/share/**' \
+              --exclude './usr/src/**' --exclude './usr/lib/jvm/**' \
+              --exclude './opt/**' --exclude './snap/**' --exclude './mnt/**' \
+              --exclude './imagegeneration/**' --exclude './var/cache/**' \
+              --exclude './var/lib/docker/**' --exclude './var/lib/containers/**' "$@"
           }
 
           run /tmp/svc

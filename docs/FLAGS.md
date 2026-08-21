@@ -493,6 +493,10 @@ in every mode, so stdout carries nothing but the report and stays safe to pipe.
 `--out`, `--latest-symlink`, and the `--output-mode` naming are all irrelevant
 under `--stdout`; `--name` is rejected outright.
 
+`--stdout` writes one stream, so it has no services sidecar: `--stdout --format
+csv` gives the components alone. `--stdout --format json` carries the whole
+report, `services[]` included.
+
 ## Exit codes
 
 | Code | Meaning |
