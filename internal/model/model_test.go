@@ -509,3 +509,75 @@ func TestTagIsVersionAware(t *testing.T) {
 		t.Errorf("the new kernel was tagged %q, want %q", got["6.8.0-50"], ChangeAdded)
 	}
 }
+
+// TestNormalizeMergesAttributes pins a silent inaccuracy found on a real
+// Windows machine: 135 Appx packages became 119 components because some share
+// a name and version and differ only in architecture -- x64 and x86 of the
+// same runtime, which is ordinary. Keeping the first component's attributes
+// made the merged row claim one architecture while listing both install paths.
+func TestNormalizeMergesAttributes(t *testing.T) {
+	in := []Component{
+		{
+			Name: "Microsoft.VCLibs.140.00", Version: "14.0.33519.0", Type: "msix",
+			Locations:  []string{`C:\Program Files\WindowsApps\x64`},
+			Attributes: map[string]string{"architecture": "x64", "publisher_id": "8wekyb3d8bbwe"},
+		},
+		{
+			Name: "Microsoft.VCLibs.140.00", Version: "14.0.33519.0", Type: "msix",
+			Locations:  []string{`C:\Program Files\WindowsApps\x86`},
+			Attributes: map[string]string{"architecture": "x86", "publisher_id": "8wekyb3d8bbwe"},
+		},
+	}
+
+	out := Normalize(in)
+	if len(out) != 1 {
+		t.Fatalf("got %d components, want 1", len(out))
+	}
+	if got := out[0].Attributes["architecture"]; got != "x64;x86" {
+		t.Errorf("architecture = %q, want %q: both are installed and the row must say so", got, "x64;x86")
+	}
+	// An attribute both agree on must not be duplicated into a list.
+	if got := out[0].Attributes["publisher_id"]; got != "8wekyb3d8bbwe" {
+		t.Errorf("publisher_id = %q, want the single shared value", got)
+	}
+	if len(out[0].Locations) != 2 {
+		t.Errorf("locations = %v, want both", out[0].Locations)
+	}
+}
+
+// TestNormalizeAttributeMergeIsDeterministic: map iteration is not ordered, and
+// a report that differs between identical runs cannot be diffed.
+func TestNormalizeAttributeMergeIsDeterministic(t *testing.T) {
+	build := func() []Component {
+		return []Component{
+			{Name: "x", Version: "1", Type: "t", Attributes: map[string]string{"a": "3"}},
+			{Name: "x", Version: "1", Type: "t", Attributes: map[string]string{"a": "1"}},
+			{Name: "x", Version: "1", Type: "t", Attributes: map[string]string{"a": "2"}},
+		}
+	}
+	first := Normalize(build())[0].Attributes["a"]
+	if first != "1;2;3" {
+		t.Errorf("a = %q, want sorted %q", first, "1;2;3")
+	}
+	for i := 0; i < 20; i++ {
+		if got := Normalize(build())[0].Attributes["a"]; got != first {
+			t.Fatalf("run %d gave %q, first run gave %q", i, got, first)
+		}
+	}
+}
+
+// TestNormalizeDoesNotMutateItsInput: the merge writes into a map, and writing
+// into the caller's would corrupt a component list the caller still holds.
+func TestNormalizeDoesNotMutateItsInput(t *testing.T) {
+	original := map[string]string{"architecture": "x64"}
+	in := []Component{
+		{Name: "x", Version: "1", Type: "t", Attributes: original},
+		{Name: "x", Version: "1", Type: "t", Attributes: map[string]string{"architecture": "x86"}},
+	}
+
+	Normalize(in)
+
+	if got := original["architecture"]; got != "x64" {
+		t.Errorf("input attribute was mutated to %q", got)
+	}
+}

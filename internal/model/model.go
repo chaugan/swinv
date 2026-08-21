@@ -378,6 +378,7 @@ func Normalize(components []Component) []Component {
 			dup.CPEs = append([]string(nil), c.CPEs...)
 			dup.Licenses = append([]string(nil), c.Licenses...)
 			dup.Locations = append([]string(nil), c.Locations...)
+			dup.Attributes = copyAttributes(c.Attributes)
 			merged[k] = &dup
 			order = append(order, k)
 			continue
@@ -396,6 +397,10 @@ func Normalize(components []Component) []Component {
 		if existing.SHA256 == "" {
 			existing.SHA256 = c.SHA256
 		}
+		if existing.Vendor == "" {
+			existing.Vendor = c.Vendor
+		}
+		existing.Attributes = mergeAttributes(existing.Attributes, c.Attributes)
 	}
 
 	out := make([]Component, 0, len(order))
@@ -472,4 +477,51 @@ func (s *ScanMeta) AddWarning(format string) {
 		}
 	}
 	s.Warnings = append(s.Warnings, format)
+}
+
+// copyAttributes returns an independent copy, so merging into one component
+// cannot mutate the map another still holds.
+func copyAttributes(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+// mergeAttributes combines the attributes of two components being deduplicated.
+//
+// Keeping only the first component's map is the obvious implementation and is
+// quietly wrong. Two Appx packages can share a name and version and differ in
+// architecture -- x64 and x86 of the same runtime, which is ordinary on
+// Windows -- and the merged row then claims one architecture while listing
+// both install paths. That reads as a fact and is half of one.
+//
+// Conflicting values are joined with ";", the same convention the CSV uses for
+// multi-valued fields, so "x64;x86" says what is actually installed. Values
+// are sorted, because map iteration is not, and a report that changes between
+// identical runs is not comparable.
+func mergeAttributes(a, b map[string]string) map[string]string {
+	if len(b) == 0 {
+		return a
+	}
+	if a == nil {
+		a = make(map[string]string, len(b))
+	}
+
+	for k, v := range b {
+		switch existing := a[k]; {
+		case existing == "":
+			a[k] = v
+		case existing == v:
+			// Same fact twice.
+		default:
+			values := append(strings.Split(existing, ";"), v)
+			a[k] = strings.Join(SortedSet(values), ";")
+		}
+	}
+	return a
 }
