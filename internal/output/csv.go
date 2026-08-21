@@ -42,6 +42,12 @@ var csvColumns = []string{
 	// that a consumer reading columns by position keeps working unchanged;
 	// every column added since 1.0 has gone on the end for the same reason.
 	"vendor",
+	// Appended in schema 1.4. Which filesystem root the component was found
+	// in: "/" for the host, or a nested root such as a snap base. A CSV
+	// concatenated across machines is exactly where this matters, since
+	// without it two same-named packages from different roots are
+	// indistinguishable rows.
+	"root",
 }
 
 // CSVColumns returns a copy of the CSV header row, in order. It exists so
@@ -95,6 +101,7 @@ func WriteCSV(w io.Writer, r *model.Report) error {
 		record[15] = c.SHA256
 		record[16] = c.Change
 		record[17] = c.Vendor
+		record[18] = c.Root
 		if err := cw.Write(record); err != nil {
 			return fmt.Errorf("output: writing csv row for %q: %w", c.Name, err)
 		}

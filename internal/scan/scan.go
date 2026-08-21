@@ -253,6 +253,11 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 				components = append(components, componentFromPackage(p, absRoot))
 			}
 		}
+		// Root provenance is assigned before normalisation, because it is part
+		// of a component's identity: without it, a package in a snap base and
+		// the host's own copy deduplicate into one row whose locations span
+		// both, and neither the patch state nor the origin survives.
+		components = assignRoots(components, NestedRoots(opts.Root, components))
 		res.Components = model.Normalize(components)
 	}
 	if nested := NestedRoots(opts.Root, res.Components); len(nested) > 0 {

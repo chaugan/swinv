@@ -22,6 +22,8 @@ Every JSON document carries a `schema_version` at the top. The current value is
 | Change | Effect |
 |---|---|
 | `Component.version` is now omitted when unknown | It was emitted as the literal `"UNKNOWN"` |
+| `Component.root` added | Which filesystem root a component was found in |
+| `root` participates in deduplication | Same-named packages in different roots stay separate |
 
 Syft writes `"UNKNOWN"` when a cataloger cannot determine a version. That is
 worse than an absent field rather than merely untidy: it is valid syntax in
@@ -30,6 +32,20 @@ sorts below every real release. A consumer asking *"is the installed version
 below the fixed version"* gets **yes** — for every advisory ever filed against
 that package. A downstream matcher reported exactly that against `git` in a
 snap base.
+
+**`root`** is `/` for software installed on the scanned machine, or the path of
+a nested root — a snap base, a container layer, an unpacked image. It is part
+of a component's identity, so two packages of the same name and version in
+different roots are two rows rather than one merged row whose `locations` span
+both.
+
+Packages found under a nested root have the distribution stripped from their
+PURL: `pkg:deb/ubuntu/openssl@3.0.11-1~deb12u2?distro=ubuntu-26.04` becomes
+`pkg:deb/openssl@3.0.11-1~deb12u2`. Syft stamps every package with the *scanned
+host's* distribution, and for a Debian package inside a snap base that is not
+merely unhelpful — a consumer matching `distro=` compares a Debian version
+against Ubuntu's fixed versions and gets a meaningless answer in both
+directions. A missing qualifier is honest where a wrong one is not.
 
 **Consumers must treat `version` as optional and must not compare it when
 absent.** On one Ubuntu host 6,480 of 10,850 components have no determinable
@@ -446,6 +462,7 @@ hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,typ
 | 16 | `sha256` | `component.sha256` (schema 1.1) |
 | 17 | `change` | `component.change` (schema 1.1) |
 | 18 | `vendor` | `component.vendor` (schema 1.2) |
+| 19 | `root` | `component.root` (schema 1.4) |
 
 A real row, from the test fixture:
 

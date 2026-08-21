@@ -137,7 +137,7 @@ one folded onto its 17 columns:
 
 ```console
 $ head -1 /tmp/ex/web-01-20260819.csv
-hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,type,language,purl,cpes,licenses,locations,found_by,sha256,change,vendor
+hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,type,language,purl,cpes,licenses,locations,found_by,sha256,change,vendor,root
 ```
 
 | Column | Value |

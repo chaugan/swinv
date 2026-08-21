@@ -144,6 +144,17 @@ type Component struct {
 	// Frequently empty. Many ecosystems record no such field at all.
 	Vendor string `json:"vendor,omitempty"`
 
+	// Root is the filesystem root this component was found in: "/" for the
+	// scanned machine, or the path of a nested root such as a snap base or a
+	// container layer.
+	//
+	// It is part of a component's identity, not decoration. Two packages with
+	// the same name and version in two different roots are two installs with
+	// two patch states, and merging them loses that -- along with the evidence
+	// of which root each belongs to, which is what decides whose advisories
+	// apply.
+	Root string `json:"root,omitempty"`
+
 	// Attributes carries ecosystem-specific identity that does not deserve a
 	// column of its own: a Windows product code or registry key, an MSIX
 	// package family name, an install scope.
@@ -358,10 +369,16 @@ type key struct {
 	version string
 	typ     string
 	purl    string
+	// root keeps components from different filesystem roots apart. Two
+	// packages of the same name and version in a snap base and on the host are
+	// two installs with two patch states; merging them also merged their
+	// locations, so a consumer could no longer tell which root either came
+	// from -- and that is what decides whose advisories apply.
+	root string
 }
 
 func (c Component) key() key {
-	return key{c.Name, c.Version, c.Type, c.PURL}
+	return key{c.Name, c.Version, c.Type, c.PURL, c.Root}
 }
 
 // Normalize deduplicates components on (Name, Version, Type, PURL), unions the

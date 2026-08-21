@@ -9,6 +9,40 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Added
+
+- **`Component.root`** records which filesystem root a component was found in —
+  `/` for the scanned machine, or a nested root such as a snap base or a
+  container layer — and participates in deduplication. Two packages of the same
+  name and version in different roots are two installs with two patch states;
+  they were previously merged into one row whose `locations` spanned both, so a
+  consumer could not tell which root either belonged to. CSV column 19.
+- **Store and MSIX packages** and **installed Windows updates**, both from the
+  registry, in the default scan.
+- **Candidate CPEs on Windows components.** Without a PURL *and* without a CPE
+  a component carries no identifier at all, so a CycloneDX document from a
+  Windows host matched nothing in any scanner and returned a clean-looking
+  empty result.
+
+### Changed
+
+- **Packages found under a nested root no longer claim the host's
+  distribution.** Syft stamps every package with the scanned host's distro, so
+  a Debian 12 `openssl` inside a snap base arrived as
+  `pkg:deb/ubuntu/openssl@3.0.11-1~deb12u2?distro=ubuntu-26.04`. A consumer
+  trusting `distro=` compares a Debian version against Ubuntu's fixed versions,
+  and both the "is it affected" and "is it fixed" answers are meaningless. The
+  distribution claim is now removed rather than corrected: a missing qualifier
+  is honest where a wrong one is not.
+- **Windows updates are modelled by servicing stream, not as a flat KB list.**
+
+### Fixed
+
+- **`version` is omitted when unknown, instead of the literal `"UNKNOWN"`.**
+  That string is valid syntax in several version grammars and sorts below every
+  real release, so a consumer asking whether the installed version is below the
+  fixed version got **yes**, for every advisory ever filed against the package.
+
 ## [0.2.1] — 2026-08-21
 
 Windows now sees Store apps and installed updates, both from the registry and

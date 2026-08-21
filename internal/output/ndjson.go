@@ -42,6 +42,7 @@ type ndjsonLine struct {
 	// NDJSON lost them without any error to notice. TestEveryFormatCarries-
 	// EveryComponentField now compares the two.
 	Vendor     string            `json:"vendor,omitempty"`
+	Root       string            `json:"root,omitempty"`
 	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
@@ -83,6 +84,7 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 			FoundBy:      c.FoundBy,
 			SHA256:       c.SHA256,
 			Vendor:       c.Vendor,
+			Root:         c.Root,
 			Attributes:   c.Attributes,
 			Change:       c.Change,
 		}
