@@ -1,16 +1,20 @@
 # `swinv`
 
 [![CI](https://github.com/chaugan/swinv/actions/workflows/ci.yml/badge.svg)](https://github.com/chaugan/swinv/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/chaugan/swinv)](https://github.com/chaugan/swinv/releases/latest)
 [![Go](https://img.shields.io/github/go-mod/go-version/chaugan/swinv)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Local software inventory for Windows and Linux: one static binary, files on disk, nothing
-leaves the host.**
+[![Linux](https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-informational?logo=linux&logoColor=white)](#platform-testing-status)
+[![Windows](https://img.shields.io/badge/Windows-amd64-informational?logo=windows&logoColor=white)](#windows)
+
+**Local software inventory for Windows and Linux: one static binary, files on
+disk, nothing leaves the host.**
 
 `swinv` scans the machine it runs on and records every piece of installed
-software it can find — OS packages, language packages, and loose binaries that no
-package manager ever installed — then writes the result to local JSON and CSV
-files.
+software it can find — OS packages on Linux, the registry on Windows, language
+packages on both, and loose binaries that no package manager ever installed —
+then writes the result to local JSON and CSV files.
 
 There is no server, no daemon and no database, and **no inventory data ever
 leaves the machine**. Collecting the files afterwards is deliberately your job:
@@ -115,6 +119,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
       "version": "3.0.0",
       "type": "python",
       "language": "python",
+      "vendor": "Armin Ronacher",
       "purl": "pkg:pypi/flask@3.0.0",
       "cpes": ["cpe:2.3:a:flask:flask:3.0.0:*:*:*:*:*:*:*"],
       "licenses": ["BSD-3-Clause"],
@@ -122,7 +127,9 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
         "/usr/lib/python3/dist-packages/flask-3.0.0.dist-info/METADATA",
         "/usr/lib/python3/dist-packages/flask-3.0.0.dist-info/RECORD"
       ],
-      "found_by": "python-installed-package-cataloger"
+      "found_by": "python-installed-package-cataloger",
+      "root": "/",
+      "owned_by": "pkg:deb/ubuntu/python3-flask@3.0.0-1"
     }
   ]
 }
@@ -130,6 +137,21 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 `scan.warnings` and `scan.excluded` always record what was skipped and why, so a
 consumer can tell a thin inventory from a complete one.
+
+Three fields on that second component are worth calling out, because they exist
+to stop a consumer drawing the wrong conclusion:
+
+- **`vendor`** — who made it, taken from whatever the ecosystem records: an rpm
+  `Vendor`, a dpkg `Maintainer`, a Python or npm `Author`, a Windows PE
+  `CompanyName`.
+- **`root`** — which filesystem root it was found in. `/` is the machine
+  itself; anything else is a snap base, a container layer or a mounted image,
+  which are separate operating systems with their own release and patch state.
+- **`owned_by`** — the OS package that installed it, where one did. Ubuntu's
+  `python3-flask` backports fixes without changing the upstream version, so
+  assessing the PyPI row against upstream releases reports a patched host as
+  badly out of date. An **empty** `owned_by` is equally meaningful: the package
+  came from `pip` or `npm` and genuinely should be checked upstream.
 
 The CSV is the same data, one row per component, with host identity repeated on
 every row so files concatenate cleanly across a fleet. Rows are wide, so here is
@@ -349,67 +371,109 @@ QEMU emulation, not on physical ARM hardware. Emulation exercises the code but
 not the machine, so if you run this on a Raspberry Pi or an ARM instance, that
 is still worth reporting.
 
+### Windows
+
+| Surface | Status |
+|---|---|
+| uninstall registry | **Tested** on Windows 11 25H2 and Server 2025 — 380 and 423 products |
+| Store and MSIX packages | **Tested** — 135 packages on a real laptop |
+| Windows servicing state | **Tested** — cumulative update version asserted equal to the host's build and UBR |
+| MFT enumeration | **Tested** — 2,889,563 records in 12 s, every path resolved |
+| PE version extraction | **Tested** — 14,769 components from 19,550 files |
+| Python and npm manifests | **Tested** — 2,266 packages from 2,598 manifests |
+| Host identity | **Tested** — `os_id`, `machine_id`, build and UBR, on client and server |
+
+Every one of those runs on a `windows-latest` runner on each push, including an
+end-to-end collection with and without `--full-scan`. The runner is a server
+edition, which is how the client/server build-number collision was found; the
+client numbers above come from a real laptop.
+
 ## Windows
 
-**Experimental, and not yet released as a binary.** The Linux collector is what
-`swinv` is; Windows support is one day old, has run only in CI and on one
-developer laptop, and has no release channel. What follows is what it does
-today, not a promise.
-
 Windows keeps its record of installed software in the registry, not on the
-filesystem, so the Linux strategy is the wrong shape there. Pointing the
-filesystem scanner at `C:\Program Files` did not finish inside ten minutes,
-because it opens every file it sees and every open is inspected by antivirus.
-Reading the uninstall keys answers the same question in **24 milliseconds**.
+filesystem, so `swinv` reads it there. A default run touches no files at all and
+finishes in milliseconds:
 
-| Mode | What it reads | Cost on a real laptop |
-|---|---|---|
-| default | the uninstall registry | **~380 products in 24 ms**, no elevation, no file opened |
-| `--full-scan` | plus every executable on disk | first run ~14 min, subsequent runs ~1 s |
+```console
+> swinv --out C:\inventory --format json
+swinv: scanning the uninstall registry ...
+swinv: registry: 380 installed products, 187 distinct install locations
+swinv: appx: 135 Store and MSIX packages
+swinv: updates: 4 installed servicing packages
+swinv: found 519 components in 27ms
+```
 
-`--full-scan` needs an elevated process and an NTFS volume. It enumerates the
-Master File Table rather than walking directories — 2.9 million records in five
-seconds, opening nothing — then discards what the registry already accounts for
-and what belongs to Windows itself, and opens only the remainder. On the test
-machine that was **19,549 files of 99,920**, an 80% reduction in the one
-operation that costs anything.
-
-The first `--full-scan` is slow and the rest are not: antivirus scans each
-executable the first time it is opened and caches the result, so a scheduled
-task pays that cost once.
-
-`--volumes D:` or `--volumes D:,E:` selects which volumes to enumerate, and
-**replaces** the default of `C:` rather than adding to it.
-
-Four sources, all read without opening a file:
+That is the whole default scan: no elevation, no file opened, three registry
+sources.
 
 | Source | Gives |
 |---|---|
 | uninstall registry | installed applications, with version and publisher |
 | package repository | Store and MSIX apps |
-| component store | installed Windows updates, by KB number |
-| MFT (`--full-scan`) | executables nothing above accounts for |
-| manifests (`--full-scan`) | `pip` and `npm` packages, by their metadata files |
+| component store | Windows servicing state — cumulative update, servicing stack, .NET rollup |
 
-Operating-system components are deliberately **not** inventoried file by file.
-On a real machine `C:\Windows\WinSxS` held 39,536 executables — 40% of every
-candidate on the volume — which are hard-linked servicing copies and near
-useless individually. The installed updates express the same thing in the form
-an operator patches by.
+### `--full-scan`
 
-**Language ecosystems: Python and npm only.** Under `--full-scan`, packages
-installed by `pip` and `npm` are found by locating their manifests during MFT
-enumeration — `*.dist-info/METADATA`, `*.egg-info/PKG-INFO`, `package.json` —
-and opening only those. They carry real PURLs, since those ecosystems have
-canonical PURL types.
+Adds everything the registry does not record — software unpacked into a
+directory, vendor tools, anything copied onto the machine — plus Python and npm
+packages. It needs an elevated process and an NTFS volume.
 
-The Linux collector reads roughly 40 ecosystems through Syft; the Windows
-collector reads two. Cargo, Maven, RubyGems, Composer and the rest are not
-covered. Syft is not used on Windows at all, because its resolver opens every
-file it indexes and that was measured as unworkable there.
+It does **not** walk directories. It enumerates the Master File Table: 2.9
+million records in five seconds on a real laptop, opening nothing. Then it
+discards what the registry already accounts for and what belongs to Windows
+itself, and opens only the remainder — **19,549 files of 99,920** on that
+machine, an 80% reduction in the one operation that costs anything.
 
-Also: Store apps and per-user applications are registered per user, so a scan
-running as a service account sees that account's and no other's.
+| | |
+|---|---|
+| MFT enumeration | 2,889,563 records in 12 s, no file opened |
+| attributed to a registry product | 26,827 — version already known, not opened |
+| operating-system and Store territory | 53,553 — accounted for elsewhere |
+| **opened to extract a version** | **19,550** |
+
+The first `--full-scan` on a machine is slow and the rest are not. Antivirus
+scans each executable the first time it is opened and caches the result, so the
+same command took **14 minutes** cold and **1 second** warm — a scheduled task
+pays that once.
+
+`--volumes D:` or `--volumes D:,E:` selects which volumes to enumerate, and
+**replaces** the default of `C:` rather than adding to it.
+
+### Language ecosystems
+
+Python and npm packages are found during the same MFT pass, by their manifests —
+`*.dist-info/METADATA`, `*.egg-info/PKG-INFO`, `package.json` — and only those
+files are opened. They carry real PURLs, since `pypi` and `npm` are canonical
+PURL types.
+
+The Linux collector reads roughly 40 ecosystems through Syft. Windows reads
+these two: Syft's resolver opens every file it indexes, which is the strategy
+this design exists to avoid. Cargo, Maven, RubyGems, NuGet and the rest are not
+covered.
+
+### Host identity
+
+`os_id`, `os_version_id`, `os_pretty_name`, `machine_id` and `kernel_release`
+come from the registry, so a Windows report groups and joins alongside a Linux
+one. `machine_id` is derived from `MachineGuid` and normalised to the same
+32-hex-character shape as a Linux `machine-id`.
+
+Two Windows quirks are handled: the registry still reads `Windows 10 Pro` on
+Windows 11 hosts, and client and server share build numbers — Windows 11 24H2
+and Server 2025 are both `26100` — so a server reports its release year rather
+than a client major.
+
+### What is out of scope
+
+Operating-system components are **not** inventoried file by file. `C:\Windows\
+WinSxS` held 39,536 executables on a real machine — 40% of every candidate on
+the volume — and they are hard-linked servicing copies that say little
+individually. The installed servicing packages express the same thing in the
+form an operator patches by, with the cumulative update's version equal to the
+host's build and UBR.
+
+Store apps and per-user applications are registered per user, so a scan running
+as a service account sees that account's and no other's.
 
 **[Design, measurements and open questions →](docs/WINDOWS.md)**
 
@@ -465,6 +529,8 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--debug-stacks-after DUR` | — | Dump goroutine stacks if the scan is still running, for a run that appears hung |
 | `--timeout DURATION` | `30m` | Whole-run deadline |
 | `--verbose` / `--quiet` | false | Per-stage timing / silence |
+| `--full-scan` | false | Windows: also enumerate the filesystem and read manifests |
+| `--volumes LIST` | `C:` | Windows: volumes to enumerate, e.g. `D:` or `D:,E:` — replaces the default |
 
 **[Full flag reference and exit codes →](docs/FLAGS.md)**
 
@@ -597,10 +663,17 @@ Scanning `/` walks into **any second root filesystem stored on the disk** — an
 extracted tarball, a container rootfs backup, a chroot, a VM image, or a test
 fixture — reads its package database, and reports those packages as installed.
 
-Worse, they wear *this* host's distribution label, because distro detection
-happens once per scan. On the machine `swinv` was developed on, the repository's
-own 7-package test fixture appeared in the inventory as a Debian 12 `openssl`
-on an Ubuntu 26.04 host, with nothing marking it as foreign.
+Each such component records the root it came from in `root`, and has the
+distribution claim stripped from its PURL — a Debian 12 `openssl` inside a snap
+base is reported as `pkg:deb/openssl@3.0.11-1~deb12u2` rather than as an Ubuntu
+package, because asserting the scanning host's distribution over it would make
+both "is it affected" and "is it fixed" meaningless. Where the nested root
+states its own release, `attributes.root_os_id` and `root_os_version_id` carry
+it.
+
+What remains is that those packages are still *reported*, which is usually
+right — a base snap is real software on the machine — but means a count of
+"installed packages" includes them.
 
 `swinv` **warns** when it detects this, naming the directories it found:
 
@@ -735,7 +808,7 @@ touching the writers.
 | [Changelog](CHANGELOG.md) | What changed, and the versioning policy |
 | [Specification](docs/INVENTORYCOLLECTORSPEC.md) | The spec of record, with rationale |
 | [Windows](docs/WINDOWS.md) | Design, measurements, and what Windows support does not yet cover |
-| [Server roles](docs/SERVER-ROLES.md) | Proposed detection of what is running and serving — **not implemented** |
+| [Server roles](docs/SERVER-ROLES.md) | Detecting what is running and serving, and the product behind it |
 
 ## Non-goals
 
