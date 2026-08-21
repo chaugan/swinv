@@ -3,6 +3,7 @@ package langpkg
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -132,7 +133,7 @@ func npmAuthor(raw json.RawMessage) string {
 // errNotAPackage marks a manifest that parsed but does not describe an
 // installed package. Not an error worth surfacing: on a real volume most
 // package.json files under a project tree are exactly this.
-var errNotAPackage = fmt.Errorf("langpkg: not an installed package")
+var errNotAPackage = errors.New("langpkg: not an installed package")
 
 // NotAPackage reports whether an error means the file simply was not one.
-func NotAPackage(err error) bool { return err == errNotAPackage }
+func NotAPackage(err error) bool { return errors.Is(err, errNotAPackage) }

@@ -103,9 +103,14 @@ func PURL(p Package) string {
 	case TypePython:
 		return "pkg:pypi/" + strings.ToLower(p.Name) + "@" + p.Version
 	case TypeNPM:
-		// A scoped name is "@scope/name"; PURL keeps the scope as the
-		// namespace, and the leading "@" is not part of it.
-		name := strings.TrimPrefix(p.Name, "@")
+		// A scoped name is "@scope/name". The PURL specification keeps the "@"
+		// as part of the namespace, percent-encoded, so @babel/core is
+		// pkg:npm/%40babel/core -- not pkg:npm/babel/core, which names a
+		// different, unscoped package that may well exist.
+		name := p.Name
+		if strings.HasPrefix(name, "@") {
+			name = "%40" + name[1:]
+		}
 		return "pkg:npm/" + name + "@" + p.Version
 	}
 	return ""

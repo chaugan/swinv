@@ -1,6 +1,9 @@
 package scan
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/chaugan/swinv/internal/model"
@@ -97,5 +100,111 @@ func TestAssignRootsKeepsSameNamedPackagesApart(t *testing.T) {
 		default:
 			t.Errorf("unexpected root %q", c.Root)
 		}
+	}
+}
+
+// TestNestedRootPrefixRecognisesBaseSnaps pins a reported gap: 862 components
+// under /snap/ all reported root "/", so a consumer assessed an Ubuntu 18.04
+// package set against the host's 26.04 advisories.
+func TestNestedRootPrefixRecognisesBaseSnaps(t *testing.T) {
+	cases := map[string]string{
+		"/snap/core18/2999/usr/share/snappy/dpkg.yaml":         "/snap/core18/2999",
+		"/snap/core20/2866/usr/share/snappy/dpkg.yaml":         "/snap/core20/2866",
+		"/snap/gnome-3-28-1804/198/usr/share/snappy/dpkg.yaml": "/snap/gnome-3-28-1804/198",
+
+		// Still detected by the databases already known.
+		"/mnt/image/var/lib/dpkg/status": "/mnt/image",
+	}
+	for loc, want := range cases {
+		got, ok := nestedRootPrefix(loc)
+		if !ok || got != want {
+			t.Errorf("nestedRootPrefix(%q) = %q, %v; want %q, true", loc, got, ok, want)
+		}
+	}
+
+	// The scanned host's own databases are not nested roots.
+	for _, loc := range []string{"/var/lib/dpkg/status", "/usr/share/snappy/dpkg.yaml"} {
+		if _, ok := nestedRootPrefix(loc); ok {
+			t.Errorf("nestedRootPrefix(%q) reported the host as nested", loc)
+		}
+	}
+}
+
+// Once a base snap is a root, everything in it is attributed there -- not only
+// the package database that revealed it.
+func TestAssignRootsCoversTheWholeSnap(t *testing.T) {
+	nested := []string{"/snap/core18/2999"}
+	in := []model.Component{
+		{Name: "python3-cryptography", Type: "deb",
+			PURL:      "pkg:deb/ubuntu/python3-cryptography@2.1.4-1ubuntu1.4%2Besm1?distro=ubuntu-26.04",
+			Locations: []string{"/snap/core18/2999/usr/share/snappy/dpkg.yaml"}},
+		{Name: "cryptography", Type: "python",
+			PURL:      "pkg:pypi/cryptography@2.1.4",
+			Locations: []string{"/snap/core18/2999/usr/lib/python3/dist-packages/cryptography-2.1.4.egg-info/PKG-INFO"}},
+	}
+
+	out := assignRoots(in, nested)
+	for _, c := range out {
+		if c.Root != "/snap/core18/2999" {
+			t.Errorf("%s has root %q, want the snap", c.Name, c.Root)
+		}
+	}
+	// And the snap's deb no longer claims the host's distribution.
+	if strings.Contains(out[0].PURL, "distro=") || strings.Contains(out[0].PURL, "/ubuntu/") {
+		t.Errorf("a package inside an 18.04 base still claims the 26.04 host: %q", out[0].PURL)
+	}
+}
+
+// TestAssignRootsRecordsTheRootsOwnRelease: a consumer was inferring the
+// release from the directory name -- core18 meaning Ubuntu 18.04 -- which is a
+// naming convention rather than a fact. The root states it.
+func TestAssignRootsRecordsTheRootsOwnRelease(t *testing.T) {
+	dir := t.TempDir()
+	snap := filepath.Join(dir, "snap", "core18", "2999")
+	if err := os.MkdirAll(filepath.Join(snap, "etc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	osRelease := "ID=ubuntu\nVERSION_ID=\"18.04\"\nPRETTY_NAME=\"Ubuntu 18.04.6 LTS\"\n"
+	if err := os.WriteFile(filepath.Join(snap, "etc", "os-release"), []byte(osRelease), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	in := []model.Component{
+		{Name: "cryptography", Type: "python",
+			Locations: []string{filepath.Join(snap, "usr/lib/python3/dist-packages/cryptography-2.1.4.egg-info/PKG-INFO")}},
+		{Name: "openssl", Type: "deb", Locations: []string{"/usr/lib/x86_64-linux-gnu/libssl.so.3"}},
+	}
+
+	out := assignRoots(in, []string{snap})
+
+	if got := out[0].Attributes["root_os_id"]; got != "ubuntu" {
+		t.Errorf("root_os_id = %q, want ubuntu", got)
+	}
+	if got := out[0].Attributes["root_os_version_id"]; got != "18.04" {
+		t.Errorf("root_os_version_id = %q, want 18.04 -- the snap's release, not the host's", got)
+	}
+	// The host's own components must not be labelled with a nested release.
+	if _, ok := out[1].Attributes["root_os_id"]; ok {
+		t.Errorf("a host component was given a nested root's release: %v", out[1].Attributes)
+	}
+}
+
+// A root that states no release reports none, rather than a guess.
+func TestAssignRootsWithoutAnOSRelease(t *testing.T) {
+	dir := t.TempDir()
+	layer := filepath.Join(dir, "layer")
+	if err := os.MkdirAll(layer, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	out := assignRoots([]model.Component{
+		{Name: "x", Locations: []string{filepath.Join(layer, "usr/bin/x")}},
+	}, []string{layer})
+
+	if _, ok := out[0].Attributes["root_os_id"]; ok {
+		t.Errorf("a root with no os-release produced one: %v", out[0].Attributes)
+	}
+	if out[0].Root != layer {
+		t.Errorf("Root = %q, want %q", out[0].Root, layer)
 	}
 }

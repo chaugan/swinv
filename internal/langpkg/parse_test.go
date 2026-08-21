@@ -169,8 +169,10 @@ func TestPURL(t *testing.T) {
 		// PyPI names are case-insensitive and PURL records them lowercase.
 		{Package{Name: "Flask", Version: "3.0.0", Type: TypePython}, "pkg:pypi/flask@3.0.0"},
 		{Package{Name: "lodash", Version: "4.17.21", Type: TypeNPM}, "pkg:npm/lodash@4.17.21"},
-		// A scoped npm name keeps its scope as the namespace, without the "@".
-		{Package{Name: "@babel/core", Version: "7.24.0", Type: TypeNPM}, "pkg:npm/babel/core@7.24.0"},
+		// A scoped npm name keeps the "@" percent-encoded, per the PURL
+		// specification. pkg:npm/babel/core would name a different, unscoped
+		// package.
+		{Package{Name: "@babel/core", Version: "7.24.0", Type: TypeNPM}, "pkg:npm/%40babel/core@7.24.0"},
 		{Package{Name: "x", Version: "1", Type: "unknown"}, ""},
 	}
 	for _, tc := range cases {

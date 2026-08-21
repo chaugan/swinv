@@ -11,6 +11,13 @@ schema and cataloger coverage may still change between releases. See
 
 ### Added
 
+- **Base snaps are recognised as their own filesystem root**, so the components
+  inside them stop being attributed to the host. A base snap is a different
+  operating system — `core18` is Ubuntu 18.04 while the host may be 26.04, with
+  its own package set and its own update cadence — and 862 components on one
+  reported host all claimed `root: "/"`. Where a nested root states its own
+  release, `attributes.root_os_id` and `attributes.root_os_version_id` now carry
+  it, rather than leaving consumers to infer 18.04 from the name `core18`.
 - **Python and npm packages are now inventoried on Windows** under
   `--full-scan`. The Linux collector gets roughly forty ecosystems from Syft and
   the Windows collector could get none, because Syft's resolver opens every file

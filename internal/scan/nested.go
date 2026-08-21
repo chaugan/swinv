@@ -27,6 +27,13 @@ var packageDBDirs = []string{
 	"/lib/apk/db/",
 	"/var/lib/pacman/local/",
 	"/var/db/pkg/",
+	// A base snap keeps its package list here rather than in a dpkg database.
+	// Without this entry a base snap is not recognised as a nested root at
+	// all, so every file in it is attributed to the host -- and a base snap is
+	// a different operating system: core18 is Ubuntu 18.04, core20 is 20.04,
+	// each with its own release, its own package set, and its own update
+	// cadence through snap refresh rather than apt.
+	"/usr/share/snappy/",
 }
 
 // maxListedNestedRoots caps how many nested roots a single warning names.

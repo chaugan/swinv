@@ -71,6 +71,12 @@ of a component's identity, so two packages of the same name and version in
 different roots are two rows rather than one merged row whose `locations` span
 both.
 
+A nested root that states its own release carries it in
+`attributes.root_os_id` and `attributes.root_os_version_id`. A base snap is a
+different operating system — `core18` is Ubuntu 18.04 while the host may be
+26.04 — and consumers were otherwise inferring that from the directory name,
+which is a naming convention rather than a fact.
+
 Packages found under a nested root have the distribution stripped from their
 PURL: `pkg:deb/ubuntu/openssl@3.0.11-1~deb12u2?distro=ubuntu-26.04` becomes
 `pkg:deb/openssl@3.0.11-1~deb12u2`. Syft stamps every package with the *scanned

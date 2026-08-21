@@ -1,8 +1,11 @@
 package scan
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/chaugan/swinv/internal/hostfacts"
 	"github.com/chaugan/swinv/internal/model"
 )
 
@@ -31,14 +34,68 @@ const hostRoot = "/"
 // own os-release could be read, but a missing qualifier is honest where a wrong
 // one is not, and a consumer can tell the difference.
 func assignRoots(components []model.Component, nested []string) []model.Component {
+	releases := readRootReleases(nested)
+
 	for i := range components {
 		root := rootOf(components[i].Locations, nested)
 		components[i].Root = root
-		if root != hostRoot {
-			components[i].PURL = stripDistroClaim(components[i].PURL)
+		if root == hostRoot {
+			continue
+		}
+
+		components[i].PURL = stripDistroClaim(components[i].PURL)
+
+		// The nested root's own release, where it states one. This is the
+		// answer to a question consumers were inferring from the directory
+		// name -- core18 meaning Ubuntu 18.04 -- which is a Canonical naming
+		// convention rather than a fact, and is guesswork the scanner does not
+		// have to leave to them.
+		if r, ok := releases[root]; ok {
+			components[i].Attributes = withRootRelease(components[i].Attributes, r)
 		}
 	}
 	return components
+}
+
+// rootRelease is what a nested root says about itself.
+type rootRelease struct{ id, versionID string }
+
+// readRootReleases reads each nested root's own os-release.
+//
+// Two small files per root, and a root without one simply reports nothing:
+// an app snap or an unpacked layer need not be a distribution at all.
+func readRootReleases(nested []string) map[string]rootRelease {
+	out := make(map[string]rootRelease, len(nested))
+
+	for _, root := range nested {
+		for _, name := range []string{"etc/os-release", "usr/lib/os-release"} {
+			f, err := os.Open(filepath.Join(root, name))
+			if err != nil {
+				continue
+			}
+			values := hostfacts.ParseOSRelease(f)
+			f.Close()
+
+			if id := values["ID"]; id != "" {
+				out[root] = rootRelease{id: id, versionID: values["VERSION_ID"]}
+				break
+			}
+		}
+	}
+	return out
+}
+
+func withRootRelease(attrs map[string]string, r rootRelease) map[string]string {
+	if attrs == nil {
+		attrs = make(map[string]string, 2)
+	}
+	if r.id != "" {
+		attrs["root_os_id"] = r.id
+	}
+	if r.versionID != "" {
+		attrs["root_os_version_id"] = r.versionID
+	}
+	return attrs
 }
 
 // rootOf finds the nested root a component's locations lie under.
