@@ -74,7 +74,9 @@ func readRootReleases(nested []string) map[string]rootRelease {
 				continue
 			}
 			values := hostfacts.ParseOSRelease(f)
-			f.Close()
+			// Closing a file opened read-only cannot fail in any way that
+			// affects the values already parsed from it.
+			_ = f.Close()
 
 			if id := values["ID"]; id != "" {
 				out[root] = rootRelease{id: id, versionID: values["VERSION_ID"]}
