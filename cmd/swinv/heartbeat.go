@@ -26,7 +26,11 @@ const heartbeatInterval = 30 * time.Second
 // operator the run is bounded, which is the specific reassurance missing when
 // the decision is whether to wait or to hit Ctrl-C.
 func startHeartbeat(quiet bool, deadline, stacksAfter time.Duration, dir string, logf func(string, ...any)) func() {
-	if quiet {
+	// --quiet silences the heartbeat, but it must not switch off an unrelated
+	// diagnostic: --debug-stacks-after is how an operator investigates a scan
+	// that appears hung, and a scheduled task is exactly where both flags get
+	// used together. Start the goroutine if either job needs doing.
+	if quiet && stacksAfter <= 0 {
 		return func() {}
 	}
 
@@ -57,12 +61,21 @@ func startHeartbeat(quiet bool, deadline, stacksAfter time.Duration, dir string,
 			case <-dumpAt:
 				dumpAt = nil
 				path, err := dumpStacks(dir)
+				if quiet {
+					// The file is still written; --quiet is a promise about
+					// output, not about work. It lands in the output
+					// directory, named swinv-stacks-<timestamp>.txt.
+					continue
+				}
 				if err != nil {
 					logf("could not write goroutine dump: %v", err)
 					continue
 				}
 				logf("wrote goroutine dump to %s after %s", path, stacksAfter)
 			case <-t.C:
+				if quiet {
+					continue
+				}
 				elapsed := time.Since(start).Round(time.Second)
 				if deadline > 0 {
 					logf("still scanning (%s elapsed, %s, deadline %s)", elapsed, memoryInUse(), deadline)

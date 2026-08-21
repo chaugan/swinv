@@ -163,6 +163,12 @@ collector it will eventually configure does not exist. It refuses rather than
 being ignored, so that nobody believes they have restricted a scan when they
 have not.
 
+`--quiet` and `--debug-stacks-after` combine, which is the case that matters:
+a scheduled task runs silent, and when one appears to hang you want a dump
+without also turning the logging back on. Under `--quiet` the dump file is still
+written to the output directory as `swinv-stacks-<timestamp>.txt`; only the line
+announcing it is suppressed. `--quiet` is a promise about output, not about work.
+
 `--debug-stacks-after` is for a scan that appears to have hung. Go dumps every
 goroutine stack on `SIGQUIT`, and on Windows on Ctrl+Break, but neither is
 reachable from a systemd timer or a scheduled task, and many laptop keyboards
