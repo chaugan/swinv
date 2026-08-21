@@ -11,75 +11,34 @@ import (
 	"time"
 )
 
-const usageText = `swinv — local software inventory collector
-
-Usage:
-  swinv [flags]
-
-Scans this machine, enumerates installed software (OS packages, language
-packages, and loose binaries), and writes the result to local files.
-No inventory data ever leaves the machine. The only network activity is a
-reverse-DNS lookup for the host's FQDN; --offline disables it.
-
-Flags:
-`
-
 // parseFlags builds a config from argv.
 //
 // It returns (nil, code, nil) when the caller should exit immediately without
 // scanning — that is, for -h. A non-nil error means a usage problem.
-func parseFlags(args []string, stderr io.Writer) (*config, int, error) {
+func parseFlags(args []string, stdout, stderr io.Writer) (*config, int, error) {
 	cfg := &config{}
 	fs := flag.NewFlagSet("swinv", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
-	fs.StringVar(&cfg.root, "root", "/", "filesystem root to scan")
-	fs.StringVar(&cfg.out, "out", "/var/lib/swinv", "output directory")
-	fs.StringVar(&cfg.name, "name", "", "output basename template; supports {hostname}, {machine_id}, {date}, {datetime} (default: chosen by --output-mode)")
-	fs.StringVar(&cfg.outputMode, "output-mode", modeDated,
-		"how output files are named across runs: `dated` (one file per day), overwrite (one fixed file, replaced every run), or timestamped (a new file every run)")
-	fs.StringVar(&cfg.format, "format", "json,csv", "comma-separated output formats: json, csv, ndjson, cyclonedx-json")
-	fs.BoolVar(&cfg.toStdout, "stdout", false, "write to stdout instead of files; requires exactly one --format")
-	fs.BoolVar(&cfg.latestSymlink, "latest-symlink", true, "also maintain {hostname}-latest.{ext} symlinks in --out")
-	fs.Var(&cfg.excludes, "exclude", "additional exclusion pattern (repeatable); must start with ./, */ or **/")
-	fs.BoolVar(&cfg.noAutoExclude, "no-auto-exclude-mounts", false, "do not auto-exclude non-local filesystems")
-	fs.BoolVar(&cfg.noSnap, "no-snap", false, "exclude /snap")
-	fs.BoolVar(&cfg.noFlatpak, "no-flatpak", false, "exclude /var/lib/flatpak")
-	fs.BoolVar(&cfg.includeHome, "include-home", false, "also scan user home directories (/home and /root); off by default because they dominate scan time and are privacy-sensitive")
-	fs.StringVar(&cfg.maxMemory, "max-memory", "", "soft memory limit, e.g. 512MiB or 2GiB; makes the GC work harder near the limit (empty = unlimited)")
-	fs.BoolVar(&cfg.offline, "offline", false, "perform no network activity at all; skips the reverse-DNS lookup that fills host.fqdn, which is the only thing swinv uses the network for")
-	fs.BoolVar(&cfg.skipNestedRootfs, "skip-nested-rootfs", false, "drop components that exist only because the scan walked into a second root filesystem (an extracted image, a container rootfs, a chroot); off by default because scanning those is sometimes the point")
-	fs.StringVar(&cfg.perm, "perm", "0644", "octal permission bits for the report files; the output directory gets the same bits plus execute wherever read is granted (0644 -> 0755, 0640 -> 0750, 0600 -> 0700)")
-	fs.BoolVar(&cfg.hash, "hash", false, "record a SHA-256 of each component's primary file; useful for change detection and integrity, at the cost of reading every such file")
-	fs.StringVar(&cfg.since, "since", "", "path to a previous swinv JSON report; adds a delta of added/removed/changed components")
-	fs.BoolVar(&cfg.deltaOnly, "delta-only", false, "with --since, emit only the changed components instead of the full inventory")
-	fs.StringVar(&cfg.catalogers, "catalogers", "", "cataloger selection expression, e.g. 'os' or '+binary,-python'")
-	fs.BoolVar(&cfg.noFileOwnership, "no-file-ownership", false, "skip package-file ownership (faster, but reintroduces binary/package duplicates)")
-	fs.IntVar(&cfg.parallelism, "parallelism", 0, "cataloger parallelism (0 = automatic: a quarter of the CPUs, or all of them with --fast)")
-	fs.BoolVar(&cfg.fullScan, "full-scan", false, "Windows only: also enumerate the filesystem and extract versions from executables the registry does not account for")
-	fs.BoolVar(&cfg.usnProbe, "usn-probe", false, "Windows only, experimental: enumerate the NTFS Master File Table and report what it finds, without scanning; see docs/WINDOWS.md")
-	fs.StringVar(&cfg.volumes, "volumes", "", "Windows only: comma-separated volumes to enumerate, e.g. \"D:\" or \"D:,E:\". Replaces the default of C: rather than adding to it")
-	fs.DurationVar(&cfg.stacksAfter, "debug-stacks-after", 0, "if a scan is still running after this long, write every goroutine stack to a file in the output directory and carry on (0 = never); for diagnosing a scan that appears hung")
-	fs.BoolVar(&cfg.fast, "fast", false, "scan at normal scheduling priority and full parallelism; faster, but the scan competes with everything else on the machine")
-	fs.DurationVar(&cfg.timeout, "timeout", 30*time.Minute, "whole-run deadline")
-	fs.BoolVar(&cfg.requireHostID, "require-host-id", false, "fail if /etc/machine-id is unreadable")
-	fs.BoolVar(&cfg.quiet, "quiet", false, "suppress stderr status output")
-	fs.BoolVar(&cfg.verbose, "verbose", false, "per-stage timing to stderr")
-	fs.BoolVar(&cfg.showVersion, "version", false, "print version, commit, and Syft version, then exit")
+	registerFlags(fs, cfg)
 
-	fs.Usage = func() {
-		fmt.Fprint(stderr, usageText)
-		fs.PrintDefaults()
-	}
+	// flag calls Usage on -h and on any parse failure. Only the first of those
+	// wants the help page: an operator who mistyped a flag needs one line
+	// naming it, not sixty lines of everything else. So Usage prints nothing,
+	// and the two cases are handled separately below.
+	fs.Usage = func() {}
 
 	if err := fs.Parse(args); err != nil {
 		// -h/--help is a successful request for help, not a usage error, so it
-		// must exit 0 or every `swinv -h` in a script looks like a failure.
+		// exits 0 -- otherwise every `swinv -h` in a script looks like a
+		// failure -- and it prints to stdout, so `swinv --help | less` is not
+		// an empty pager.
 		if errors.Is(err, flag.ErrHelp) {
+			writeHelp(stdout)
 			return nil, exitOK, nil
 		}
-		// flag has already printed the problem and the usage block.
-		return nil, exitUsage, fmt.Errorf("invalid flags")
+		// flag has already printed its own one-line complaint to stderr.
+		return nil, exitUsage, errors.New("try 'swinv --help' for the available flags")
 	}
 	if fs.NArg() > 0 {
 		return nil, exitUsage, fmt.Errorf("unexpected argument %q (swinv takes no positional arguments)", fs.Arg(0))
@@ -178,4 +137,47 @@ func dirPermFor(file os.FileMode) os.FileMode {
 		}
 	}
 	return dir | 0o300
+}
+
+// registerFlags declares every flag on fs.
+//
+// Split out of parseFlags so that the help test can enumerate what actually
+// exists and compare it against what the help page claims. Help is a user
+// interface, and until this existed nothing checked it: a 203-character
+// description and three Windows-only flags shown on Linux both survived
+// review because no test looked.
+func registerFlags(fs *flag.FlagSet, cfg *config) {
+	fs.StringVar(&cfg.root, "root", "/", "filesystem root to scan")
+	fs.StringVar(&cfg.out, "out", "/var/lib/swinv", "output directory")
+	fs.StringVar(&cfg.name, "name", "", "output basename template; supports {hostname}, {machine_id}, {date}, {datetime} (default: chosen by --output-mode)")
+	fs.StringVar(&cfg.outputMode, "output-mode", modeDated,
+		"how output files are named across runs: `dated` (one file per day), overwrite (one fixed file, replaced every run), or timestamped (a new file every run)")
+	fs.StringVar(&cfg.format, "format", "json,csv", "comma-separated output formats: json, csv, ndjson, cyclonedx-json")
+	fs.BoolVar(&cfg.toStdout, "stdout", false, "write to stdout instead of files; requires exactly one --format")
+	fs.BoolVar(&cfg.latestSymlink, "latest-symlink", true, "also maintain {hostname}-latest.{ext} symlinks in --out")
+	fs.Var(&cfg.excludes, "exclude", "additional exclusion pattern (repeatable); must start with ./, */ or **/")
+	fs.BoolVar(&cfg.noAutoExclude, "no-auto-exclude-mounts", false, "do not auto-exclude non-local filesystems")
+	fs.BoolVar(&cfg.noSnap, "no-snap", false, "exclude /snap")
+	fs.BoolVar(&cfg.noFlatpak, "no-flatpak", false, "exclude /var/lib/flatpak")
+	fs.BoolVar(&cfg.includeHome, "include-home", false, "also scan user home directories (/home and /root); off by default because they dominate scan time and are privacy-sensitive")
+	fs.StringVar(&cfg.maxMemory, "max-memory", "", "soft memory limit, e.g. 512MiB or 2GiB; makes the GC work harder near the limit (empty = unlimited)")
+	fs.BoolVar(&cfg.offline, "offline", false, "perform no network activity at all; skips the reverse-DNS lookup that fills host.fqdn, which is the only thing swinv uses the network for")
+	fs.BoolVar(&cfg.skipNestedRootfs, "skip-nested-rootfs", false, "drop components that exist only because the scan walked into a second root filesystem (an extracted image, a container rootfs, a chroot); off by default because scanning those is sometimes the point")
+	fs.StringVar(&cfg.perm, "perm", "0644", "octal permission bits for the report files; the output directory gets the same bits plus execute wherever read is granted (0644 -> 0755, 0640 -> 0750, 0600 -> 0700)")
+	fs.BoolVar(&cfg.hash, "hash", false, "record a SHA-256 of each component's primary file; useful for change detection and integrity, at the cost of reading every such file")
+	fs.StringVar(&cfg.since, "since", "", "path to a previous swinv JSON report; adds a delta of added/removed/changed components")
+	fs.BoolVar(&cfg.deltaOnly, "delta-only", false, "with --since, emit only the changed components instead of the full inventory")
+	fs.StringVar(&cfg.catalogers, "catalogers", "", "cataloger selection expression, e.g. 'os' or '+binary,-python'")
+	fs.BoolVar(&cfg.noFileOwnership, "no-file-ownership", false, "skip package-file ownership (faster, but reintroduces binary/package duplicates)")
+	fs.IntVar(&cfg.parallelism, "parallelism", 0, "cataloger parallelism (0 = automatic: a quarter of the CPUs, or all of them with --fast)")
+	fs.BoolVar(&cfg.fullScan, "full-scan", false, "Windows only: also enumerate the filesystem and extract versions from executables the registry does not account for")
+	fs.BoolVar(&cfg.usnProbe, "usn-probe", false, "Windows only, experimental: enumerate the NTFS Master File Table and report what it finds, without scanning; see docs/WINDOWS.md")
+	fs.StringVar(&cfg.volumes, "volumes", "", "Windows only: comma-separated volumes to enumerate, e.g. \"D:\" or \"D:,E:\". Replaces the default of C: rather than adding to it")
+	fs.DurationVar(&cfg.stacksAfter, "debug-stacks-after", 0, "if a scan is still running after this long, write every goroutine stack to a file in the output directory and carry on (0 = never); for diagnosing a scan that appears hung")
+	fs.BoolVar(&cfg.fast, "fast", false, "scan at normal scheduling priority and full parallelism; faster, but the scan competes with everything else on the machine")
+	fs.DurationVar(&cfg.timeout, "timeout", 30*time.Minute, "whole-run deadline")
+	fs.BoolVar(&cfg.requireHostID, "require-host-id", false, "fail if /etc/machine-id is unreadable")
+	fs.BoolVar(&cfg.quiet, "quiet", false, "suppress stderr status output")
+	fs.BoolVar(&cfg.verbose, "verbose", false, "per-stage timing to stderr")
+	fs.BoolVar(&cfg.showVersion, "version", false, "print version, commit, and Syft version, then exit")
 }

@@ -163,6 +163,16 @@ collector it will eventually configure does not exist. It refuses rather than
 being ignored, so that nobody believes they have restricted a scan when they
 have not.
 
+`--help` and `-h` print to **stdout** and exit 0, so `swinv --help | less` and
+`swinv --help > notes.txt` both work. Usage errors print to stderr and exit 2,
+and deliberately do *not* print the help page: an operator who mistyped a flag
+needs the one line naming it, not sixty lines of everything else.
+
+The help page lists only flags that do something on the platform it was built
+for. The others stay registered, so `swinv --usn-probe` on Linux answers "that
+only works on Windows" rather than "flag provided but not defined" — a runbook
+pasted onto the wrong platform gets an explanation instead of a parse error.
+
 `--quiet` and `--debug-stacks-after` combine, which is the case that matters:
 a scheduled task runs silent, and when one appears to hang you want a dump
 without also turning the logging back on. Under `--quiet` the dump file is still

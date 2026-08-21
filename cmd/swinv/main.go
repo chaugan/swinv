@@ -133,7 +133,7 @@ func (s *stringList) Set(v string) error {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	cfg, code, err := parseFlags(args, stderr)
+	cfg, code, err := parseFlags(args, stdout, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "swinv: %v\n", err)
 		return code

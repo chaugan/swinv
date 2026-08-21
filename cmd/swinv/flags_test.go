@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +13,7 @@ import (
 )
 
 func TestParseFlagsDefaults(t *testing.T) {
-	cfg, code, err := parseFlags(nil, new(bytes.Buffer))
+	cfg, code, err := parseFlags(nil, io.Discard, new(bytes.Buffer))
 	if err != nil {
 		t.Fatalf("unexpected error: %v (code %d)", err, code)
 	}
@@ -53,7 +54,7 @@ func TestParseFlagsErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, code, err := parseFlags(tt.args, new(bytes.Buffer))
+			_, code, err := parseFlags(tt.args, io.Discard, new(bytes.Buffer))
 			if err == nil {
 				t.Fatalf("expected an error containing %q", tt.want)
 			}
@@ -84,7 +85,7 @@ func TestOutputModeSelectsNameTemplate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {
-			cfg, _, err := parseFlags(tt.args, new(bytes.Buffer))
+			cfg, _, err := parseFlags(tt.args, io.Discard, new(bytes.Buffer))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -97,7 +98,7 @@ func TestOutputModeSelectsNameTemplate(t *testing.T) {
 
 // TestDeltaFlags covers the --since / --delta-only pairing.
 func TestDeltaFlags(t *testing.T) {
-	cfg, _, err := parseFlags([]string{"--since", "old.json", "--delta-only"}, new(bytes.Buffer))
+	cfg, _, err := parseFlags([]string{"--since", "old.json", "--delta-only"}, io.Discard, new(bytes.Buffer))
 	if err != nil {
 		t.Fatalf("--since with --delta-only should be accepted: %v", err)
 	}
@@ -106,13 +107,13 @@ func TestDeltaFlags(t *testing.T) {
 	}
 
 	// --since alone is fine and keeps the full inventory.
-	cfg, _, err = parseFlags([]string{"--since", "old.json"}, new(bytes.Buffer))
+	cfg, _, err = parseFlags([]string{"--since", "old.json"}, io.Discard, new(bytes.Buffer))
 	if err != nil || cfg.deltaOnly {
 		t.Errorf("--since alone should be accepted with deltaOnly=false (err=%v)", err)
 	}
 
 	// --hash defaults off; it costs real I/O so it must be opt-in.
-	cfg, _, err = parseFlags(nil, new(bytes.Buffer))
+	cfg, _, err = parseFlags(nil, io.Discard, new(bytes.Buffer))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,11 +247,19 @@ func TestParseFormats(t *testing.T) {
 // TestHelpExitsZero: -h is a successful request for help, not a usage error.
 // Exiting 2 makes every `swinv -h` in a script or a Dockerfile look like a
 // failure.
+// TestHelpExitsZero checks the contract for a help request: it succeeds, it
+// stops the run, and it prints to stdout.
+//
+// stdout matters more than it looks. Help went to stderr until this changed,
+// which meant `swinv --help | less` showed an empty pager and `swinv --help >
+// notes.txt` wrote an empty file -- both silent, both baffling. A help request
+// is a successful outcome, so its output belongs on stdout. Usage errors keep
+// going to stderr.
 func TestHelpExitsZero(t *testing.T) {
 	for _, arg := range []string{"-h", "--help"} {
 		t.Run(arg, func(t *testing.T) {
-			var out bytes.Buffer
-			cfg, code, err := parseFlags([]string{arg}, &out)
+			var stdout, stderr bytes.Buffer
+			cfg, code, err := parseFlags([]string{arg}, &stdout, &stderr)
 			if err != nil {
 				t.Errorf("err = %v, want nil", err)
 			}
@@ -260,10 +269,37 @@ func TestHelpExitsZero(t *testing.T) {
 			if cfg != nil {
 				t.Error("cfg should be nil so the caller exits without scanning")
 			}
-			if !strings.Contains(out.String(), "swinv") {
-				t.Error("usage text should have been written")
+			if !strings.Contains(stdout.String(), "swinv") {
+				t.Error("help should have been written to stdout")
+			}
+			if stderr.Len() != 0 {
+				t.Errorf("stderr got %q; a help request is not an error", stderr.String())
 			}
 		})
+	}
+}
+
+// TestUnknownFlagDoesNotPrintTheWholeHelp pins a real annoyance: an unknown
+// flag used to print flag's one-line complaint followed by the entire 75-line
+// usage page, burying the one line that said what was wrong.
+func TestUnknownFlagDoesNotPrintTheWholeHelp(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	_, code, err := parseFlags([]string{"--nosuchflag"}, &stdout, &stderr)
+
+	if code != exitUsage {
+		t.Errorf("exit code = %d, want %d", code, exitUsage)
+	}
+	if err == nil {
+		t.Fatal("err = nil, want a usage error")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout got %q; usage errors belong on stderr", stdout.String())
+	}
+	if n := strings.Count(stderr.String(), "\n"); n > 2 {
+		t.Errorf("stderr printed %d lines for one bad flag:\n%s", n, stderr.String())
+	}
+	if !strings.Contains(err.Error(), "--help") {
+		t.Errorf("error %q should point at --help", err.Error())
 	}
 }
 

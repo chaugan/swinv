@@ -1,0 +1,84 @@
+//go:build !windows
+
+package main
+
+// The opening paragraph answers the question a new operator actually has,
+// which is not "what is this" but "what will it do to this machine if I run
+// it and walk away". Everything else in the page is an index; this is the part
+// worth reading.
+const helpHeader = `swinv — local software inventory collector
+
+Usage:
+  swinv [flags]                 (takes no positional arguments)
+
+With no flags, swinv scans / — but not /home, and not network or virtual
+filesystems — and writes JSON and CSV into /var/lib/swinv. It runs at
+background priority, deliberately slower than it could be; --fast trades that
+for speed. The only network activity is a reverse-DNS lookup, which --offline
+disables. No inventory data leaves this machine.
+`
+
+func helpSections() []helpSection {
+	return []helpSection{
+		{"Output", []helpFlag{
+			{"--out DIR", "output directory (default /var/lib/swinv)"},
+			{"--format LIST", "json,csv,ndjson,cyclonedx-json (default json,csv)"},
+			{"--stdout", "write to stdout (needs exactly one --format)"},
+			{"--output-mode MODE", "dated | overwrite | timestamped (default dated)"},
+			{"--name TEMPLATE", "name template: {hostname} {date} {datetime}"},
+			{"--latest-symlink", "keep <host>-latest.<ext> (=false to disable)"},
+			{"--perm OCTAL", "report file mode (default 0644)"},
+		}},
+		{"What gets scanned", []helpFlag{
+			{"--root PATH", "scan this tree instead of / (an image, a chroot)"},
+			{"--include-home", "also scan /home and /root (skipped by default)"},
+			{"--exclude GLOB", "skip a path; repeatable; ./ */ or **/ prefix"},
+			{"--no-snap, --no-flatpak", "skip snaps or flatpaks (both included by default)"},
+			{"--no-auto-exclude-mounts", "do not skip network and virtual filesystems"},
+			{"--skip-nested-rootfs", "drop packages from images or chroots on disk"},
+			{"--catalogers EXPR", "e.g. os or +binary,-python; narrows output only"},
+			{"--offline", "no network activity at all"},
+		}},
+		{"Comparing against a previous run", []helpFlag{
+			{"--since PATH", "diff against an earlier swinv JSON report"},
+			{"--delta-only", "with --since, emit only what changed"},
+			{"--hash", "record a SHA-256 per component"},
+		}},
+		{"Resources", []helpFlag{
+			{"--fast", "normal priority, every CPU; fast but intrusive"},
+			{"--timeout DURATION", "whole-run deadline (default 30m, then exit 4)"},
+			{"--max-memory SIZE", "soft memory limit, e.g. 1536MiB"},
+			{"--parallelism N", "cataloger workers (0 = auto)"},
+		}},
+		{"Diagnostics", []helpFlag{
+			{"--verbose", "per-stage timing on stderr"},
+			{"--quiet", "no status output; errors still reported"},
+			{"--debug-stacks-after DUR", "dump goroutine stacks if still running"},
+			{"--require-host-id", "fail if /etc/machine-id cannot be read"},
+			{"--no-file-ownership", "skip file ownership; faster, more duplicates"},
+			{"--version", "print version and exit"},
+		}},
+	}
+}
+
+const helpFooter = `
+Examples:
+  swinv --out /var/lib/swinv
+        Inventory this host into JSON and CSV.
+
+  swinv --out /var/lib/swinv --since /var/lib/swinv/myhost-latest.json
+        Report what changed since the previous run.
+
+  swinv --format cyclonedx-json --stdout | grype
+        Pipe an SBOM straight into a vulnerability scanner.
+
+Exit codes:
+  0 complete    1 incomplete    2 usage error    3 failed    4 timed out
+
+See also:
+  man 8 swinv                   full reference, on this machine
+  docs/FLAGS.md                 canonical semantics and worked recipes
+
+--full-scan, --usn-probe and --volumes are Windows-only. This binary accepts
+them and refuses with an explanation.
+`
