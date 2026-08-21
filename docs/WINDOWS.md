@@ -783,6 +783,46 @@ worse than no Windows support.
 | Raw MFT parsing | `FSCTL_ENUM_USN_DATA` does it through a documented API with no dependency and no on-disk format risk |
 | winget as a source | Re-reads ARP and Appx, and expects network access |
 
+## The largest remaining gap: language ecosystems
+
+The Windows collector does not use Syft at all, and therefore covers none of the
+roughly forty language ecosystems the Linux collector does. A package installed
+with `pip install`, `npm install`, `cargo install` or `go install` appears
+nowhere in a Windows report. `--full-scan` does not find it either: that
+enumerates `.exe`, `.dll`, `.sys`, `.ocx`, `.cpl` and `.drv`, so a pure-Python
+distribution has nothing for it to look at.
+
+This matters more than the component count suggests. Language packages are where
+most third-party vulnerabilities are, they are installed outside any package
+manager Windows knows about, and they are exactly the class the uninstall
+registry cannot see — which is the gap `--full-scan` exists to close for native
+code and does not close here.
+
+### The shape a fix should take
+
+Not "run Syft over C:\". That is the strategy already measured as unworkable,
+for the same reason as before: Syft's indexer opens every file it sees.
+
+MFT enumeration already produces every filename on the volume without opening
+anything. Ecosystem manifests are identifiable **by name** — `METADATA` inside a
+`*.dist-info` directory, `PKG-INFO` inside `*.egg-info`, `package.json`,
+`go.mod`, `Cargo.lock`, `*.gemspec` — so the same enumeration that finds
+executables can find manifests, and only those files need opening. The
+extraction filter that cut 99,920 candidates to 19,549 applies unchanged.
+
+Syft could then be given those directories as narrow roots, or the manifests
+parsed directly. The first reuses forty catalogers and pays the indexer cost
+over a few thousand files rather than three million; the second avoids the
+indexer entirely and reimplements a great deal. The first looks right and has
+not been measured.
+
+Note one thing this would gain that Linux has and Windows would not: on Linux,
+`owned_by` links a distribution-installed language package to the OS package
+that patches it. Nothing on Windows installs Python packages through a system
+package manager, so every ecosystem package found there is genuinely upstream
+and should be assessed as such — which makes the absent link correct rather
+than missing.
+
 ## Open questions
 
 1. **Does MSI component attribution actually hold?** The whole value of

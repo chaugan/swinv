@@ -396,8 +396,15 @@ candidate on the volume — which are hard-linked servicing copies and near
 useless individually. The installed updates express the same thing in the form
 an operator patches by.
 
-Remaining gaps: Store apps and per-user applications are registered per user,
-so a scan running as a service account sees that account's and no other's.
+**Language ecosystems are not covered on Windows.** This is the largest gap.
+The Linux collector reads roughly 40 ecosystems through Syft — pip, npm, Go
+modules, Cargo, Maven, RubyGems and the rest. The Windows collector uses none of
+them: a package installed by `pip install requests` or `npm install` appears
+nowhere in the output, and `--full-scan` will not find it either, since that
+looks only at `.exe`, `.dll` and their kin. Absent, not partially covered.
+
+Also: Store apps and per-user applications are registered per user, so a scan
+running as a service account sees that account's and no other's.
 
 **[Design, measurements and open questions →](docs/WINDOWS.md)**
 
