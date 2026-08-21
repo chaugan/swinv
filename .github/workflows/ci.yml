@@ -384,6 +384,18 @@ jobs:
 
           $pe = ($r.components | Where-Object { $_.found_by -eq "windows-pe-cataloger" }).Count
           if ($pe -eq 0) { throw "--full-scan extracted nothing from any executable" }
+
+          # Language ecosystems. A hosted runner ships Python and Node, so
+          # finding none means discovery or parsing is broken rather than that
+          # the machine is bare.
+          $lang = $r.components | Where-Object { $_.found_by -eq "language-manifest-cataloger" }
+          "language packages: $($lang.Count)"
+          $lang | Group-Object type | ForEach-Object { "  $($_.Count)  $($_.Name)" }
+          $lang | Select-Object -First 6 name, version, type, purl | Format-Table
+          if ($lang.Count -eq 0) { throw "no language-ecosystem packages found" }
+          if (($lang | Where-Object { -not $_.purl }).Count -gt 0) {
+            throw "a language package has no purl; these ecosystems have canonical PURL types"
+          }
           $r.components |
             Where-Object { $_.found_by -eq "windows-pe-cataloger" -and $_.vendor } |
             Select-Object -First 8 name, version, vendor | Format-Table

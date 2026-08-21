@@ -389,6 +389,7 @@ Four sources, all read without opening a file:
 | package repository | Store and MSIX apps |
 | component store | installed Windows updates, by KB number |
 | MFT (`--full-scan`) | executables nothing above accounts for |
+| manifests (`--full-scan`) | `pip` and `npm` packages, by their metadata files |
 
 Operating-system components are deliberately **not** inventoried file by file.
 On a real machine `C:\Windows\WinSxS` held 39,536 executables — 40% of every
@@ -396,12 +397,16 @@ candidate on the volume — which are hard-linked servicing copies and near
 useless individually. The installed updates express the same thing in the form
 an operator patches by.
 
-**Language ecosystems are not covered on Windows.** This is the largest gap.
-The Linux collector reads roughly 40 ecosystems through Syft — pip, npm, Go
-modules, Cargo, Maven, RubyGems and the rest. The Windows collector uses none of
-them: a package installed by `pip install requests` or `npm install` appears
-nowhere in the output, and `--full-scan` will not find it either, since that
-looks only at `.exe`, `.dll` and their kin. Absent, not partially covered.
+**Language ecosystems: Python and npm only.** Under `--full-scan`, packages
+installed by `pip` and `npm` are found by locating their manifests during MFT
+enumeration — `*.dist-info/METADATA`, `*.egg-info/PKG-INFO`, `package.json` —
+and opening only those. They carry real PURLs, since those ecosystems have
+canonical PURL types.
+
+The Linux collector reads roughly 40 ecosystems through Syft; the Windows
+collector reads two. Cargo, Maven, RubyGems, Composer and the rest are not
+covered. Syft is not used on Windows at all, because its resolver opens every
+file it indexes and that was measured as unworkable there.
 
 Also: Store apps and per-user applications are registered per user, so a scan
 running as a service account sees that account's and no other's.

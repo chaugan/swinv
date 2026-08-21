@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/chaugan/swinv/internal/appx"
 	"github.com/chaugan/swinv/internal/arp"
+	"github.com/chaugan/swinv/internal/langpkg"
 	"github.com/chaugan/swinv/internal/model"
 	"github.com/chaugan/swinv/internal/peversion"
 	"github.com/chaugan/swinv/internal/usn"
@@ -25,6 +27,7 @@ const (
 	registryCataloger = "windows-registry-cataloger"
 	appxCataloger     = "windows-appx-cataloger"
 	updateCataloger   = "windows-update-cataloger"
+	languageCataloger = "language-manifest-cataloger"
 	peCataloger       = "windows-pe-cataloger"
 )
 
@@ -93,7 +96,7 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 		volumes = []string{"C:"}
 	}
 
-	var toOpen []string
+	var toOpen, manifests []string
 	for _, volume := range volumes {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -102,7 +105,12 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 		start := time.Now()
 		enumerated, err := usn.Enumerate(ctx, usn.Options{
 			Volume: volume,
-			Keep:   func(name string, isDir bool, _ uint32) bool { return !isDir && isExecutable(name) },
+			Keep: func(name string, isDir bool, _ uint32) bool {
+				// Manifests cost nothing extra to discover: the MFT record is
+				// already in hand, and only the ones that survive filtering
+				// are ever opened.
+				return !isDir && (isExecutable(name) || langpkg.IsManifest(name))
+			},
 		})
 		switch {
 		case errors.Is(err, usn.ErrNotNTFS), errors.Is(err, usn.ErrNotElevated):
@@ -138,6 +146,18 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 				osOrStore++
 				continue
 			}
+			// Language-ecosystem manifests are a separate stream. They are not
+			// attributed to a registry product, because nothing on Windows
+			// installs Python or npm packages through a system package
+			// manager -- which is also why every one found here is genuinely
+			// upstream and should be assessed as such.
+			if kind := langpkg.Classify(e.Path); kind != "" {
+				manifests = append(manifests, e.Path)
+				continue
+			}
+			if !isExecutable(e.Name) {
+				continue
+			}
 			if known.Covers(e.Path) {
 				res.Stats.Attributed++
 				continue
@@ -155,7 +175,10 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 		}
 	}
 
-	// --- 4. extract -------------------------------------------------------
+	// --- 4a. language ecosystems ------------------------------------------
+	collectLanguagePackages(res, manifests, logf)
+
+	// --- 4b. extract ------------------------------------------------------
 	if len(toOpen) == 0 {
 		return res, nil
 	}
@@ -459,4 +482,80 @@ func appxPublisher(name string) string {
 		return name[:i]
 	}
 	return ""
+}
+
+// collectLanguagePackages reads the ecosystem manifests enumeration found.
+//
+// This is the Windows answer to the forty catalogers Syft gives the Linux
+// collector. Only two ecosystems are covered -- Python and npm -- because those
+// are what gets installed machine-wide on Windows, and because each one here is
+// a parser written and tested rather than a cataloger reused.
+//
+// Every file opened is one MFT enumeration already identified by name, so the
+// same arrangement that keeps executable extraction to a fraction of the volume
+// applies unchanged: nothing is opened to find out whether it is interesting.
+func collectLanguagePackages(res *Result, manifests []string, logf func(string, ...any)) {
+	if len(manifests) == 0 {
+		return
+	}
+
+	var read, skipped int
+	for _, path := range manifests {
+		p, err := readManifest(path)
+		switch {
+		case err != nil && langpkg.NotAPackage(err):
+			// Most package.json files under a project tree describe a project
+			// rather than an installed package. Ordinary, and not worth a
+			// warning apiece.
+			skipped++
+			continue
+		case err != nil:
+			skipped++
+			continue
+		}
+
+		res.Components = append(res.Components, model.Component{
+			Name:      p.Name,
+			Version:   p.Version,
+			Type:      p.Type,
+			Language:  p.Language,
+			Vendor:    p.Author,
+			PURL:      langpkg.PURL(p),
+			CPEs:      candidateCPEs(p.Author, p.Name, p.Version),
+			Locations: []string{path},
+			FoundBy:   languageCataloger,
+		})
+		read++
+	}
+
+	res.Stats.LanguagePackages = read
+	logf("language packages: %d read from %d manifests (%d were not installed packages)",
+		read, len(manifests), skipped)
+}
+
+// readManifest opens one manifest and parses it according to its kind.
+func readManifest(path string) (langpkg.Package, error) {
+	kind := langpkg.Classify(path)
+	if kind == "" {
+		return langpkg.Package{}, fmt.Errorf("wincollect: %s is not a manifest", path)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return langpkg.Package{}, err
+	}
+	defer f.Close()
+
+	var p langpkg.Package
+	switch kind {
+	case langpkg.TypePython:
+		p, err = langpkg.ParsePythonMetadata(f)
+	case langpkg.TypeNPM:
+		p, err = langpkg.ParsePackageJSON(f)
+	}
+	if err != nil {
+		return langpkg.Package{}, err
+	}
+	p.Path = path
+	return p, nil
 }

@@ -41,6 +41,8 @@ type Stats struct {
 	Packages int
 	// Updates is how many distinct Windows updates the component store holds.
 	Updates int
+	// LanguagePackages is how many ecosystem packages were read from manifests.
+	LanguagePackages int
 	// Enumerated is how many executables the MFT enumeration returned.
 	Enumerated int
 	// OSOrStore is how many were skipped as operating-system or Store

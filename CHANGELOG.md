@@ -9,6 +9,18 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Added
+
+- **Python and npm packages are now inventoried on Windows** under
+  `--full-scan`. The Linux collector gets roughly forty ecosystems from Syft and
+  the Windows collector could get none, because Syft's resolver opens every file
+  it indexes — measured as unworkable on Windows, where every open is inspected
+  by antivirus. Instead, MFT enumeration already produces every filename without
+  opening anything, and installed packages announce themselves by name:
+  `*.dist-info/METADATA`, `*.egg-info/PKG-INFO`, `package.json`. Only those files
+  are opened. They carry real PURLs, since unlike registry entries these
+  ecosystems have canonical PURL types.
+
 ## [0.2.3] — 2026-08-21
 
 One reported issue: distribution-installed language packages now name the OS

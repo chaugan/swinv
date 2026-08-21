@@ -783,14 +783,14 @@ worse than no Windows support.
 | Raw MFT parsing | `FSCTL_ENUM_USN_DATA` does it through a documented API with no dependency and no on-disk format risk |
 | winget as a source | Re-reads ARP and Appx, and expects network access |
 
-## The largest remaining gap: language ecosystems
+## Language ecosystems: two of forty
 
-The Windows collector does not use Syft at all, and therefore covers none of the
-roughly forty language ecosystems the Linux collector does. A package installed
-with `pip install`, `npm install`, `cargo install` or `go install` appears
-nowhere in a Windows report. `--full-scan` does not find it either: that
-enumerates `.exe`, `.dll`, `.sys`, `.ocx`, `.cpl` and `.drv`, so a pure-Python
-distribution has nothing for it to look at.
+**Implemented for Python and npm.** Under `--full-scan`, packages installed by
+`pip` and `npm` are read from their manifests.
+
+The Windows collector does not use Syft, so the roughly forty ecosystems the
+Linux collector covers are not available to it. Cargo, Maven, RubyGems,
+Composer, NuGet and the rest remain uncovered.
 
 This matters more than the component count suggests. Language packages are where
 most third-party vulnerabilities are, they are installed outside any package
@@ -810,11 +810,15 @@ anything. Ecosystem manifests are identifiable **by name** — `METADATA` inside
 executables can find manifests, and only those files need opening. The
 extraction filter that cut 99,920 candidates to 19,549 applies unchanged.
 
-Syft could then be given those directories as narrow roots, or the manifests
-parsed directly. The first reuses forty catalogers and pays the indexer cost
-over a few thousand files rather than three million; the second avoids the
-indexer entirely and reimplements a great deal. The first looks right and has
-not been measured.
+The manifests are parsed directly rather than handed to Syft as narrow roots.
+Handing Syft a `node_modules` tree reintroduces its indexer over every file in
+it; parsing the manifests opens exactly the files enumeration already named and
+nothing else. The cost is reimplementing two catalogers, which for two
+ecosystems is a smaller price than the indexer.
+
+A manifest that parses but describes no installed package is skipped quietly.
+Most `package.json` files under a project tree are configuration rather than an
+installed dependency, and a warning apiece would drown the ones that matter.
 
 Note one thing this would gain that Linux has and Windows would not: on Linux,
 `owned_by` links a distribution-installed language package to the OS package
