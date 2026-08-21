@@ -115,6 +115,69 @@ duplicates come back.
 
 Use it to buy speed when duplicates are acceptable. Never to buy RAM.
 
+## What the Windows port taught us about the Linux scan
+
+Building a Windows collector meant measuring things on Linux that had never been
+questioned, because Windows made the same behaviour visible where Linux hides
+it. Two findings apply here.
+
+### The scan reads more than the tree it is scanning
+
+Syft's directory resolver opens **every regular file** and reads about 3 KB of
+it to determine a MIME type, before any cataloger runs. Measured on a scan of
+`/usr`:
+
+| | |
+|---|---|
+| tree on disk | 4.8 GB, 120,214 files |
+| **read via syscalls** | **5.9 GB** |
+| fetched from disk | 0 MB |
+
+More than the whole tree, because most files are opened twice — once to sniff,
+once by a cataloger. The `0 MB` is why nobody notices: the page cache serves it
+all, so the cost is invisible on a warm system with local storage.
+
+It stops being invisible on a cold cache, a network filesystem, or a spinning
+disk, and it is most of why a full `/` scan takes minutes rather than seconds.
+On Windows, where every open traverses an antivirus filter driver and no cache
+helps, the same behaviour meant `C:\Program Files` did not finish inside ten
+minutes.
+
+### Almost none of that reading is necessary
+
+The Windows collector's central insight is that a file a package manager already
+accounts for does not need a version extracted from it — the package database
+just said what it is. On Windows the uninstall registry accounted for 58% of
+third-party executables. On Linux the equivalent figure is far higher:
+
+| | |
+|---|---|
+| files under `/usr` | 120,214 |
+| **claimed by a dpkg package** | **117,491 (97.7%)** |
+| claimed by nothing | 2,723 (2.3%) |
+
+So roughly 98% of the files Syft opens, sniffs and runs binary classifiers over
+are files whose name, version and provenance `dpkg` states exactly. Syft does
+discard the resulting duplicates — that is what
+`ExcludeBinaryPackagesWithFileOwnershipOverlap` is for — but it discards them
+*after* doing the work.
+
+The 2.3% that no package claims is the interesting part, and it is the same
+class of software the Windows `--full-scan` exists to find: unpacked tools,
+vendor binaries, anything copied onto the machine.
+
+**This is not currently actionable on Linux**, and the reason is worth stating.
+On Windows swinv owns the pipeline, so it can read metadata first and open only
+the remainder. On Linux it uses Syft as a library, and Syft's indexer opens
+everything before any cataloger runs or any exclusion is consulted. Acting on
+this would mean either an upstream change to Syft or writing a Linux collector
+that does not use it — a much larger decision than a performance tweak, and one
+that would trade away the cataloger coverage Syft provides for roughly 40
+ecosystems.
+
+Recorded here because the measurement is real and the reasoning transfers, not
+because a change is proposed.
+
 ## `--max-memory`
 
 `--max-memory SIZE` sets **Go's soft memory limit** (`debug.SetMemoryLimit`).

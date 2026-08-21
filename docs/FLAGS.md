@@ -116,7 +116,13 @@ and any symlinks quarantined by the preflight — is always recorded in
 `--parallelism` must not be negative and `--timeout` must be positive;
 either is a usage error.
 
-`--timeout` is enforced two ways. Normally the deadline cancels the scan
+`--timeout` is enforced two ways, and this matters on Linux as much as on
+Windows. Syft's directory indexer takes no context parameter at all — neither
+`NewFromDirectory` nor `buildIndex` accepts one — so the filesystem walk cannot
+be cancelled on any platform. Measured on Linux: a `--timeout 3s` scan of a
+300,000-file tree took **10.8 seconds** to exit, because the walk had to finish
+first. The overrun grows with the tree, and on a network filesystem or a cold
+disk it can be far worse. Normally the deadline cancels the scan
 cooperatively and swinv exits 4. But Syft indexes the filesystem with
 `filepath.Walk`, which takes no context, so a scan wedged in indexing never
 reaches a cancellation check — a `--timeout 5m` run on a Windows host was
