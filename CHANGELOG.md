@@ -9,7 +9,30 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-21
+
+Windows support, and a schema that carries who made a thing.
+
+`swinv.exe` now collects an inventory rather than failing slowly at one. It is
+**experimental**: one week old, exercised on CI and a single developer laptop,
+with real gaps named in [docs/WINDOWS.md](docs/WINDOWS.md) — operating-system
+components and Store apps are not inventoried, and per-user software is visible
+only for the account running the scan. The Linux collector is unchanged in what
+it finds; every cross-distro count still matches its own package manager
+exactly.
+
 ### Added
+
+- **Windows host identity.** `os_id`, `os_version_id`, `os_pretty_name`,
+  `machine_id` and `kernel_release` are read from the registry, so a Windows
+  report can be grouped and joined alongside Linux ones. `machine_id` comes
+  from `MachineGuid` and is normalised to the same 32-hex-character shape as a
+  Linux `machine-id`. Two traps are handled: the registry says "Windows 10 Pro"
+  on Windows 11 hosts, and client and server share build numbers, so a server
+  reports its release year rather than a client major.
+- **A Windows binary in releases**, `swinv-<version>-windows-amd64.exe`,
+  covered by the same `SHA256SUMS`. A binary only — no MSI, which would claim a
+  maturity this does not have.
 
 - **MFT enumeration for Windows** (`internal/usn`), the first piece of the
   Windows collector that is not the Linux one cross-compiled. It reads a record
@@ -98,6 +121,49 @@ schema and cataloger coverage may still change between releases. See
   one were indistinguishable — which is exactly how the first Windows run was
   read, and reasonably so.
 
+- `docs/SERVER-ROLES.md`, the proposed design for detecting what is running and
+  serving — as distinct from what is installed — on both platforms, including
+  IIS. Also unimplemented. Its measurements corrected three assumptions it was
+  written to confirm: binary version banners cover far less than expected,
+  deleted-mapping drift detection had a 100% false-positive rate unfiltered, and
+  a container's service is misattributed to the host unless every path
+  resolution goes through `/proc/PID/root`.
+- `docs/WINDOWS.md`, the proposed design for Windows support, marked clearly as
+  unimplemented, with a protocol for measuring the current binary on a real
+  Windows machine.
+- CI cross-compiles and vets `windows/amd64` on every push and publishes the
+  binary as an artifact, so the portability the design assumes keeps being true.
+
+- CI now runs the cross-distro comparison on every push, checking swinv's count
+  against Alpine, Debian, Fedora, Arch and openSUSE's own package tooling, plus
+  an arm64 smoke test under emulation. A Syft upgrade that stops reading one
+  package database now fails the build instead of silently thinning
+  inventories.
+
+### Changed
+
+- **`--output-mode` now defaults to `timestamped` rather than `dated`**, so
+  reports are named `{hostname}-{datetime}` and every run is kept. Under
+  `dated` a second run on the same day silently replaced the first, which meant
+  an operator investigating what changed had one data point where they expected
+  two. Files now accumulate and nothing prunes them; `--output-mode dated`
+  restores the old behaviour, and the `{hostname}-latest.{ext}` pointer is
+  unaffected either way.
+- **`--help` was rewritten.** It was Go's stock `flag` output: 32 flags,
+  alphabetical, ungrouped, 75 lines, one description 203 characters long that
+  wrapped into mush on any normal terminal. It is now grouped by what an
+  operator is trying to do, hard-wrapped at 78 columns, and opens by saying
+  what a bare `swinv` will do to the machine. Examples, exit codes and pointers
+  to the man page close it out. Each platform gets its own page: the Linux
+  binary no longer lists `--usn-probe`, and the Windows one no longer describes
+  `/home` and snaps.
+- **`--help` prints to stdout and exits 0**, so `swinv --help | less` is no
+  longer an empty pager. Usage errors still go to stderr, and no longer print
+  the entire help page after the one line saying what was wrong.
+- **Scan warnings are printed, not only recorded in the report.** Every
+  warning — not running as root, unidentified files, filesystems skipped —
+  went into the JSON where only someone who opened it would find them.
+
 ### Fixed
 
 - **`ran_as_root` was always `false` on Windows, including for an elevated
@@ -129,34 +195,11 @@ schema and cataloger coverage may still change between releases. See
   entry itself, and unchanged everywhere else. Found by reading the code before
   running it, which is not how the other bugs in this file were found.
 
-### Added
-
-- `docs/SERVER-ROLES.md`, the proposed design for detecting what is running and
-  serving — as distinct from what is installed — on both platforms, including
-  IIS. Also unimplemented. Its measurements corrected three assumptions it was
-  written to confirm: binary version banners cover far less than expected,
-  deleted-mapping drift detection had a 100% false-positive rate unfiltered, and
-  a container's service is misattributed to the host unless every path
-  resolution goes through `/proc/PID/root`.
-- `docs/WINDOWS.md`, the proposed design for Windows support, marked clearly as
-  unimplemented, with a protocol for measuring the current binary on a real
-  Windows machine.
-- CI cross-compiles and vets `windows/amd64` on every push and publishes the
-  binary as an artifact, so the portability the design assumes keeps being true.
-
 ### Verified
 
 - **arm64 executed for the first time**, under QEMU emulation: apk 16/16,
   dpkg 78/78, rpm 147/147, with `host.architecture` correctly reporting
   `arm64`. Previously the binary was only ever cross-compiled and checksummed.
-
-### Added
-
-- CI now runs the cross-distro comparison on every push, checking swinv's count
-  against Alpine, Debian, Fedora, Arch and openSUSE's own package tooling, plus
-  an arm64 smoke test under emulation. A Syft upgrade that stops reading one
-  package database now fails the build instead of silently thinning
-  inventories.
 
 ## [0.1.2] — 2026-08-19
 
@@ -277,7 +320,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/chaugan/swinv/releases/tag/v0.2.0
 [0.1.2]: https://github.com/chaugan/swinv/releases/tag/v0.1.2
 [0.1.1]: https://github.com/chaugan/swinv/releases/tag/v0.1.1
 [0.1.0]: https://github.com/chaugan/swinv/releases/tag/v0.1.0
