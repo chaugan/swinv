@@ -513,10 +513,10 @@ func mergeAttributes(a, b map[string]string) map[string]string {
 	}
 
 	for k, v := range b {
-		switch existing := a[k]; {
-		case existing == "":
+		switch existing := a[k]; existing {
+		case "":
 			a[k] = v
-		case existing == v:
+		case v:
 			// Same fact twice.
 		default:
 			values := append(strings.Split(existing, ";"), v)
