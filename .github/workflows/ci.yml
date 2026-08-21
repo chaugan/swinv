@@ -367,59 +367,37 @@ jobs:
             Where-Object { $_.found_by -eq "windows-pe-cataloger" -and $_.vendor } |
             Select-Object -First 8 name, version, vendor | Format-Table
 
-      # Temporary: swinv derives updates from the component store and found 1
-      # here where Get-HotFix found 3. One of the two is incomplete and the
-      # earlier claim that it was Get-HotFix rested on a bad comparison. Find
-      # out which KBs each source has, and whether another registry location
-      # holds the ones the component store does not.
-      - name: Probe update sources against each other
+      # Verify three specific claims before rewriting the update reader:
+      # that the LCU lives under Package_for_RollupFix with the UBR as its
+      # version and no KB in its name, that CurrentState distinguishes
+      # installed from superseded, and that the .NET CU children carry the KB.
+      - name: Probe CBS package identities and CurrentState
         shell: pwsh
         continue-on-error: true
         run: |
-          "=== Get-HotFix (Win32_QuickFixEngineering) ==="
-          Get-HotFix | Select-Object HotFixID, Description, InstalledOn | Sort-Object HotFixID | Format-Table | Out-String
+          $cbs = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\Packages'
+          $cv  = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+          "host build: $($cv.CurrentBuild).$($cv.UBR)"
 
-          "=== CBS package keys carrying a KB, deduplicated (what swinv reads) ==="
-          $cbs = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\Packages' -EA SilentlyContinue
-          "total keys: $($cbs.Count)"
-          $kbs = $cbs.PSChildName | ForEach-Object { if ($_ -match 'KB(\d{6,})') { "KB$($Matches[1])" } } | Sort-Object -Unique
-          "distinct KBs: $($kbs.Count)"
-          $kbs
-
-          "=== DISM view of the same store ==="
-          $dism = Get-WindowsPackage -Online -EA SilentlyContinue | Where-Object PackageName -match 'KB'
-          "packages: $($dism.Count)"
-          $dism | ForEach-Object { ($_.PackageName -split '~')[0] } | Sort-Object -Unique
-
-          "=== are the KBs Get-HotFix has hiding in CBS *values*? ==="
-          $missing = (Get-HotFix).HotFixID | Where-Object { $_ -notmatch 'KB5120708' }
-          "looking for: $($missing -join ', ')"
-          $cbsRoot = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing'
-          foreach ($kb in $missing) {
-            $inNames = (Get-ChildItem "$cbsRoot\Packages" -EA SilentlyContinue).PSChildName |
-                       Where-Object { $_ -match [regex]::Escape($kb) }
-            "$kb in key names: $($inNames.Count)"
-            if ($inNames) { $inNames | Select-Object -First 2 }
+          foreach ($prefix in "Package_for_RollupFix","Package_for_ServicingStack","Package_for_DotNetRollup") {
+            "`n=== $prefix ==="
+            Get-ChildItem $cbs -EA SilentlyContinue |
+              Where-Object PSChildName -like "$prefix*" |
+              ForEach-Object {
+                $st = (Get-ItemProperty $_.PSPath -EA SilentlyContinue).CurrentState
+                "{0}  CurrentState=0x{1:X}" -f $_.PSChildName, $st
+              } | Select-Object -First 8
           }
-          "--- sample of the values a CBS package key carries ---"
-          $one = Get-ChildItem "$cbsRoot\Packages" -EA SilentlyContinue | Select-Object -First 1
-          (Get-ItemProperty $one.PSPath | Format-List | Out-String)
 
-          "--- other CBS subkeys ---"
-          Get-ChildItem $cbsRoot -EA SilentlyContinue | Select-Object -ExpandProperty PSChildName
-
-          "=== Windows Update client history keys ==="
-          foreach ($p in @(
-            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate',
-            'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\HotFix',
-            'HKLM:\SOFTWARE\Microsoft\Updates')) {
-            if (Test-Path $p) {
-              "$p : $((Get-ChildItem $p -Recurse -EA SilentlyContinue).Count) subkeys"
-              Get-ChildItem $p -Recurse -EA SilentlyContinue |
-                Where-Object PSChildName -match '^KB\d{6,}' |
-                Select-Object -First 10 -ExpandProperty PSChildName
-            } else { "$p : NOT PRESENT" }
-          }
+          "`n=== CurrentState distribution over all KB-bearing keys ==="
+          Get-ChildItem $cbs -EA SilentlyContinue |
+            Where-Object PSChildName -match 'KB\d{6,}' |
+            ForEach-Object {
+              [PSCustomObject]@{
+                KB    = ($_.PSChildName -replace '.*?(KB\d{6,}).*','$1')
+                State = "0x{0:X}" -f (Get-ItemProperty $_.PSPath -EA SilentlyContinue).CurrentState
+              }
+            } | Group-Object KB, State | Select-Object Count, Name | Format-Table | Out-String
 
       # Informational. Most of the suite was written for Linux and assumes
       # /proc and /etc; this records what does and does not survive on Windows
