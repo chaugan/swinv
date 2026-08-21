@@ -4,7 +4,7 @@
 [![Go](https://img.shields.io/github/go-mod/go-version/chaugan/swinv)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Local software inventory for Linux: one static binary, files on disk, nothing
+**Local software inventory for Windows and Linux: one static binary, files on disk, nothing
 leaves the host.**
 
 `swinv` scans the machine it runs on and records every piece of installed
