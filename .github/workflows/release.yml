@@ -175,6 +175,35 @@ jobs:
             dist/SHA256SUMS
           retention-days: 14
 
+      # Every artifact that should ship must exist before anything is
+      # uploaded. The Windows binary was built by `make release` and left out
+      # of the upload list, and the release went out as a draft with it
+      # missing -- caught by looking, which is not a control.
+      - name: Check the release artifacts are all present
+        run: |
+          set -eu
+          missing=0
+          for pattern in \
+              "dist/swinv-*-linux-amd64" \
+              "dist/swinv-*-linux-arm64" \
+              "dist/swinv-*-windows-amd64.exe" \
+              "dist/swinv-linux-amd64" \
+              "dist/swinv-linux-arm64" \
+              "dist/swinv-windows-amd64.exe" \
+              "dist/*_amd64.deb" "dist/*_arm64.deb" \
+              "dist/*.x86_64.rpm" "dist/*.aarch64.rpm" \
+              "dist/SHA256SUMS"; do
+            # shellcheck disable=SC2086
+            if ! compgen -G $pattern > /dev/null; then
+              echo "::error::missing release artifact: $pattern"; missing=1
+            fi
+          done
+          [ "$missing" = 0 ] || exit 1
+          echo "all expected artifacts present:"
+          ls -1 dist/
+          echo "--- SHA256SUMS ---"
+          grep -c . dist/SHA256SUMS
+
       - name: Publish GitHub release
         if: github.event_name == 'push'
         # Pinned to a SHA, not the mutable v2 tag: this step runs with
@@ -187,6 +216,8 @@ jobs:
           files: |
             dist/swinv-*-linux-*
             dist/swinv-linux-*
+            dist/swinv-*-windows-*.exe
+            dist/swinv-windows-amd64.exe
             dist/*.deb
             dist/*.rpm
             dist/SHA256SUMS
@@ -210,5 +241,24 @@ jobs:
 
             The daily timer is shipped but **not** enabled on install. Turn it on with
             `systemctl enable --now swinv.timer`.
+
+            ## Windows (experimental)
+
+            `swinv-${{ steps.version.outputs.version }}-windows-amd64.exe` is a
+            standalone binary — no installer, nothing to register.
+
+            ```powershell
+            .\swinv.exe --out C:\inventory
+            ```
+
+            That reads the uninstall registry: fast, no elevation, no file opened.
+            Add `--full-scan` from an Administrator prompt to also enumerate
+            executables on disk and read their versions; the first such run is slow
+            and later ones are not.
+
+            **Treat this as experimental.** Operating-system components and Store
+            apps are not inventoried, and per-user software is visible only for the
+            account running the scan. The report says so in its warnings. See
+            [docs/WINDOWS.md](https://github.com/chaugan/swinv/blob/v${{ steps.version.outputs.pkgversion }}/docs/WINDOWS.md).
 
             Verify downloads against `SHA256SUMS`.
