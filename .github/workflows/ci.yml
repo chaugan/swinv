@@ -319,6 +319,14 @@ jobs:
             throw "cumulative update version '$($lcu.version)' does not match the host build '$want'"
           }
           "cumulative update $($lcu.version) matches the host build"
+
+          # Without a PURL, a CPE is the only identifier a Windows component
+          # carries. With neither, a CycloneDX document from this host matches
+          # nothing in any scanner and looks like a clean result.
+          $withCpe = ($r.components | Where-Object { $_.cpes }).Count
+          "components with a CPE: $withCpe of $($r.components.Count)"
+          $r.components | Where-Object { $_.cpes } | Select-Object -First 3 name, @{n='cpe';e={$_.cpes[0]}} | Format-Table
+          if ($withCpe -eq 0) { throw "no component carries a CPE; nothing can be matched against a vulnerability feed" }
           $r.components | Where-Object { $_.type -eq "msix" } | Select-Object -First 5 name, version | Format-Table
           $r.components | Where-Object { $_.type -eq "hotfix" } | Select-Object -First 5 name | Format-Table
 

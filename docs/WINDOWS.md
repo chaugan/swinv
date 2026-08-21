@@ -681,6 +681,20 @@ join is worth more than perfect Windows fidelity, and new types cost nothing:
 `windows` for ARP entries, `msix`, `hotfix`. `dotnet` and `binary` already exist
 and keep their meaning.
 
+**Components carry candidate CPEs.** This was missing from the original design,
+which discussed PURL and never mentioned CPE. The consequence was worse than the
+omission looks: with no PURL *and* no CPE a component has no identifier at all,
+so a CycloneDX document from a Windows host matches nothing in any vulnerability
+scanner — and returns a clean-looking empty result rather than an error.
+
+CPE is the right identifier here. It exists for exactly this case: commercial
+and proprietary software with no package manager behind it, identified by vendor
+and product. Several candidate forms are emitted per component rather than one,
+because publisher and product strings in the registry are written by thousands of
+unrelated installers and rarely match the NVD's spelling — "Google LLC" against
+`google`, "Google Chrome" against `chrome`. The failure mode is a miss rather
+than a false match, since a CPE only matches when vendor and product both hit.
+
 **`purl` stays empty for registry entries.** There is no canonical PURL type for
 an ARP row, and inventing `pkg:generic/windows/...` would create false
 confidence — a scanner would silently match nothing against it rather than

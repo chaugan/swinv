@@ -248,6 +248,7 @@ func componentFromRegistry(e arp.Entry) model.Component {
 		Version: e.DisplayVersion,
 		Type:    typeWindows,
 		Vendor:  e.Publisher,
+		CPEs:    candidateCPEs(e.Publisher, e.DisplayName, e.DisplayVersion),
 		FoundBy: registryCataloger,
 		Attributes: attributes(map[string]string{
 			"registry_key": e.Key,
@@ -281,6 +282,7 @@ func componentFromPE(path string, info peversion.Info) model.Component {
 		Version:   version,
 		Type:      typeBinary,
 		Vendor:    info.CompanyName,
+		CPEs:      candidateCPEs(info.CompanyName, name, version),
 		Locations: []string{path},
 		FoundBy:   peCataloger,
 		Attributes: attributes(map[string]string{
@@ -337,9 +339,14 @@ func collectPackages(res *Result, logf func(string, ...any)) {
 
 	for _, p := range packages {
 		res.Components = append(res.Components, model.Component{
-			Name:      p.Name,
-			Version:   p.Version,
-			Type:      typeMSIX,
+			Name:    p.Name,
+			Version: p.Version,
+			Type:    typeMSIX,
+			// An Appx package name is dotted, and its first component is
+			// conventionally the publisher: "Microsoft.WindowsTerminal". The
+			// registry records only a publisher *hash*, so this is the only
+			// vendor string available.
+			CPEs:      candidateCPEs(appxPublisher(p.Name), p.Name, p.Version),
 			FoundBy:   appxCataloger,
 			Locations: locationsOf(p.RootFolder),
 			Attributes: attributes(map[string]string{
@@ -440,4 +447,16 @@ func describeUpdate(u appx.Update) string {
 		}
 		return "Windows update"
 	}
+}
+
+// appxPublisher takes the vendor from a dotted Appx package name.
+//
+// The package repository records a publisher hash rather than a name, so there
+// is nothing else to use. Returns "" for a single-component name, which yields
+// no CPE at all rather than one with a guessed vendor.
+func appxPublisher(name string) string {
+	if i := strings.Index(name, "."); i > 0 {
+		return name[:i]
+	}
+	return ""
 }
