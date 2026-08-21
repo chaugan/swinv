@@ -1,6 +1,9 @@
 # Server-role detection — design
 
-> **Status: proposed. None of this is implemented.**
+> **Status: phase 1 implemented.** The socket → process → unit spine is built
+> and runs against real `/proc`; the `services[]` schema, IIS, and everything
+> below it are not. Measurements marked **Measured** are real; the rest is
+> still reasoning.
 >
 > Every other document in `docs/` describes behaviour that ships and has been
 > run against real hosts. This one describes something that does not exist yet.
@@ -406,7 +409,7 @@ loses context and loses nothing else.
 
 | Phase | Work | Why this order |
 |---|---|---|
-| 1 | Linux socket → PID → exe → component, with cgroup unit labelling and container resolution through `/proc/PID/root` | The spine. Cheap, no dependencies, and immediately surfaces unmanaged serving software |
+| 1 | ~~Linux socket → PID → exe → component, with cgroup unit labelling and container resolution~~ **Done** | The spine. Cheap, no dependencies, and immediately surfaces unmanaged serving software |
 | 2 | `services[]` schema, CycloneDX services, `services.csv`, confidence and evidence model | Proves the shape before more collectors depend on it |
 | 3 | IIS vertical slice: `applicationHost.config`, `InetStp`, app pool → `w3wp` | The motivating case. Early, because the generic pipeline is weakest here and waiting would demo badly |
 | 4 | Interpreted and JVM: launcher classification, deployment-root scanning | The largest coverage gain and the most work |
@@ -415,6 +418,56 @@ loses context and loses nothing else.
 
 Phase 1 alone is worth shipping. It answers "what is listening, and does
 anything own it" — which no package inventory can answer at all.
+
+## Measured: the spine, running
+
+Built as `internal/service` and run against a live host. Everything comes from
+`/proc`: no `ss`, no `netstat`, no `lsof`, no D-Bus, so it works in a minimal
+container and on a hardened host.
+
+| | unprivileged | as root |
+|---|---|---|
+| listening sockets found | 44 | 44 |
+| attributed to a process | 6 | **31** |
+| unattributed | 38 | **0** |
+
+The privilege boundary is exactly as predicted: `/proc/net` is world-readable so
+the endpoints are always found, but `/proc/<pid>/fd` belongs to the process
+owner, so an unprivileged scan attributes only its own. Those sockets are still
+reported, with a warning naming the count — "something is listening on 443 and I
+could not see what" is more useful than silence.
+
+What it produces on a real machine:
+
+```
+pid=1        unit=init.scope                 0.0.0.0:22/tcp [::]:22/tcp6
+pid=101813   unit=postgresql@18-main.service 127.0.0.1:5432/tcp [::1]:5432/tcp6
+             exe=/usr/lib/postgresql/18/bin/postgres
+pid=140868   unit=cloudflared.service        127.0.0.1:20241/tcp [::]:33209/udp6 …
+pid=3629839  container=71547eb85e25          0.0.0.0:4632/tcp
+             exe=/usr/local/bin/node
+```
+
+Four things that confirm the design and one that corrects it.
+
+Grouping by process is right: `postgres` binds v4 and v6 and is one service, not
+two. `cloudflared` mixes TCP and UDP on one process. Reporting each socket
+separately would misstate how much is running.
+
+The cgroup gives the unit for one file read, with no D-Bus client, and gives the
+container id for containerised processes.
+
+The interpreter problem is not an edge case — it is the *first* thing you hit.
+Two of the six attributed services unprivileged were `/usr/local/bin/node` and
+`/usr/bin/python3.14`, where the executable names the runtime and says nothing
+about the product.
+
+**And the correction: port 22 is owned by pid 1.** Socket activation means
+systemd holds the socket and the service starts on first connection, so
+following socket → process lands on `systemd` for one of the most obviously
+interesting ports on the machine. That is now marked rather than reported as a
+systemd service, because it is a genuinely different state — the daemon may not
+be running at all — and not a failure to resolve one.
 
 ## Rejected alternatives
 
