@@ -264,7 +264,8 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		// Package identity to component index, so Syft's relationships can be
 		// resolved back onto the components they describe.
 		byID := make(map[artifact.ID]int)
-		probe := probeSet(opts.OwnerProbe)
+		canonPath := usrMerge(absRoot)
+		probe := probeSet(opts.OwnerProbe, canonPath)
 		ownerHits := make(map[string][]int)
 		if s.Artifacts.Packages != nil {
 			// Enumerate feeds from a goroutine; drain it completely so that
@@ -272,7 +273,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 			// package.
 			for p := range s.Artifacts.Packages.Enumerate() {
 				byID[p.ID()] = len(components)
-				resolveOwners(probe, p, ownerHits, len(components))
+				resolveOwners(probe, canonPath, p, ownerHits, len(components))
 				components = append(components, componentFromPackage(p, absRoot))
 			}
 		}

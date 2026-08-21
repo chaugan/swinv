@@ -142,7 +142,10 @@ jobs:
           case "$owner" in
             pkg:deb/*netcat-openbsd*) echo "OK: 127.0.0.1:39999 -> $owner" ;;
             *) echo "FAIL: the nc listener attributed to '$owner'," >&2
-               echo "      want the netcat-openbsd package that owns /usr/bin/nc.openbsd." >&2
+               echo "      want the netcat-openbsd package that owns nc.openbsd." >&2
+               jq '.services[] | select((.endpoints // [])|join(",")|test("39999"))' "$report" >&2
+               readlink /proc/"$(pgrep -n nc)"/exe >&2 || true
+               grep -i 'nc\.openbsd' /var/lib/dpkg/info/netcat-openbsd.list >&2 || true
                exit 1 ;;
           esac
 

@@ -124,6 +124,20 @@ Components in a nested root are excluded from the join, for the reason
 `applyFileOwnership` already excludes them: the path a hit matched is a path
 inside that tree, not on the host.
 
+**And the two sides disagree about the same file.** On Ubuntu 24.04, dpkg
+records `netcat-openbsd` as owning `/bin/nc.openbsd`, while `/proc/<pid>/exe`
+reports the running process as `/usr/bin/nc.openbsd`: the kernel resolves the
+`/usr` merge symlink, the package database preserves the path from before the
+merge. A string comparison misses, and a running `nc` is reported as software
+no package manager installed. Caught by CI on a runner rather than by any unit
+test, because both sides of it were written from the same wrong assumption.
+
+Both sides are now canonicalised through the merge — but only for the
+directories that are *actually* symlinks under the scan root, checked with one
+`lstat` each. On Alpine `/bin` is a real directory, `/bin/busybox` and
+`/usr/bin/busybox` are different files, and folding them together would invent
+a match rather than find one. Verified on both.
+
 ## Where the spine breaks
 
 Three cases, all of which the naive pipeline gets wrong. Each was checked rather

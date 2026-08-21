@@ -37,6 +37,12 @@ schema and cataloger coverage may still change between releases. See
   the component CSV. NDJSON carries components only. See
   [docs/SERVER-ROLES.md](docs/SERVER-ROLES.md) and
   [docs/OUTPUT.md](docs/OUTPUT.md#services).
+  Paths are compared through the `/usr` merge where it is in effect. dpkg on
+  Ubuntu 24.04 records `netcat-openbsd` as owning `/bin/nc.openbsd` while
+  `/proc/<pid>/exe` reports `/usr/bin/nc.openbsd`, and a plain comparison
+  reports the running `nc` as unmanaged software. Whether each directory is
+  actually a symlink is checked rather than assumed, because on Alpine `/bin`
+  is real and `/bin/busybox` is not `/usr/bin/busybox`.
 - **`--no-services`** skips the whole section, and **`--no-service-command`**
   omits just the `command` field. Command lines are where secrets end up — a
   `--password` on a daemon's ExecStart, a connection string with credentials in

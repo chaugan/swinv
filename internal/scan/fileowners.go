@@ -1,7 +1,9 @@
 package scan
 
 import (
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/anchore/syft/syft/pkg"
@@ -25,7 +27,7 @@ import (
 // thousands of paths, and holding that map costs tens of megabytes to answer
 // perhaps forty questions. So the caller supplies the paths it cares about
 // first, and this checks membership instead of inverting the relation.
-func resolveOwners(probe map[string]bool, p pkg.Package, hits map[string][]int, index int) {
+func resolveOwners(probe map[string]string, canon func(string) string, p pkg.Package, hits map[string][]int, index int) {
 	if len(probe) == 0 {
 		return
 	}
@@ -36,10 +38,50 @@ func resolveOwners(probe map[string]bool, p pkg.Package, hits map[string][]int, 
 		if !strings.HasPrefix(f, "/") {
 			f = "/" + f
 		}
-		f = path.Clean(f)
-		if probe[f] {
-			hits[f] = append(hits[f], index)
+		if probed, ok := probe[canon(path.Clean(f))]; ok {
+			hits[probed] = append(hits[probed], index)
 		}
+	}
+}
+
+// mergedUsrDirs are the top-level directories that the /usr merge turned into
+// symlinks into /usr.
+var mergedUsrDirs = []string{"bin", "sbin", "lib", "lib32", "lib64", "libx32"}
+
+// usrMerge builds the path canonicalisation the ownership probe compares
+// through, by checking which of those directories are symlinks under root.
+//
+// It is needed because the two sides disagree about the same file. dpkg on
+// Ubuntu 24.04 records netcat-openbsd as owning /bin/nc.openbsd, while
+// /proc/<pid>/exe reports the running process as /usr/bin/nc.openbsd -- the
+// kernel resolves the symlink, the package database preserves the path from
+// before the merge. A plain string comparison misses, and the service is
+// reported as software no package manager installed: the confident wrong
+// answer, about a file that is very much installed.
+//
+// The check is a stat rather than an assumption because /bin is a real
+// directory on Alpine, where /bin/busybox and /usr/bin/busybox would be
+// genuinely different files and folding them together would invent a match.
+func usrMerge(root string) func(string) string {
+	merged := make(map[string]bool, len(mergedUsrDirs))
+	for _, d := range mergedUsrDirs {
+		if fi, err := os.Lstat(filepath.Join(root, d)); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			merged[d] = true
+		}
+	}
+	if len(merged) == 0 {
+		return func(p string) string { return p }
+	}
+	return func(p string) string {
+		rest, ok := strings.CutPrefix(p, "/")
+		if !ok {
+			return p
+		}
+		first, _, ok := strings.Cut(rest, "/")
+		if !ok || !merged[first] {
+			return p
+		}
+		return "/usr" + p
 	}
 }
 
@@ -112,19 +154,23 @@ func finalizeOwners(components []model.Component, hits map[string][]int) map[str
 // probeSet normalises the caller's paths into the form the package databases
 // spell them, so a caller passing "/usr/sbin/sshd/" or a relative path still
 // gets an answer.
-func probeSet(paths []string) map[string]bool {
+// probeSet normalises the caller's paths into the form the package databases
+// are compared in, mapping each back to the path the caller asked about so the
+// answer comes back under the name it will look the answer up by.
+func probeSet(paths []string, canon func(string) string) map[string]string {
 	if len(paths) == 0 {
 		return nil
 	}
-	out := make(map[string]bool, len(paths))
+	out := make(map[string]string, len(paths))
 	for _, p := range paths {
 		if p = strings.TrimSpace(p); p == "" {
 			continue
 		}
+		asked := p
 		if !strings.HasPrefix(p, "/") {
 			p = "/" + p
 		}
-		out[path.Clean(p)] = true
+		out[canon(path.Clean(p))] = asked
 	}
 	return out
 }
