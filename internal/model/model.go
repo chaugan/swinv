@@ -17,7 +17,7 @@ import (
 // 1.1 added Component.SHA256 (--hash) and Report.Delta (--since). Both are
 // additive and omitted when unused, so a 1.0 consumer still parses a 1.1
 // document.
-const SchemaVersion = "1.4"
+const SchemaVersion = "1.5"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -143,6 +143,25 @@ type Component struct {
 	//
 	// Frequently empty. Many ecosystems record no such field at all.
 	Vendor string `json:"vendor,omitempty"`
+
+	// OwnedBy is the PURL of the OS package that owns this component's files,
+	// when one does.
+	//
+	// A distribution-installed language package is reported twice, correctly:
+	// once as the OS package the vendor patches, once as the ecosystem package
+	// upstream advisories are written against. Both rows are right and neither
+	// should be dropped. But without a link between them, a consumer assessing
+	// the second as an upstream release compares a backported version against
+	// upstream's — Ubuntu's python3-cryptography 2.1.4-1ubuntu1.4+esm1 is
+	// patched, while PyPI's cryptography 2.1.4 looks thirty-seven releases
+	// behind. On one reported host that produced 442 false findings.
+	//
+	// Empty when nothing owns the files, which is the normal case for anything
+	// installed by pip, npm or a virtualenv rather than by the distribution --
+	// and those genuinely should be assessed against upstream. Also empty when
+	// --no-file-ownership was passed, since that is the computation this comes
+	// from.
+	OwnedBy string `json:"owned_by,omitempty"`
 
 	// Root is the filesystem root this component was found in: "/" for the
 	// scanned machine, or the path of a nested root such as a snap base or a
@@ -427,6 +446,9 @@ func Normalize(components []Component) []Component {
 		}
 		if existing.Vendor == "" {
 			existing.Vendor = c.Vendor
+		}
+		if existing.OwnedBy == "" {
+			existing.OwnedBy = c.OwnedBy
 		}
 		existing.Attributes = mergeAttributes(existing.Attributes, c.Attributes)
 	}

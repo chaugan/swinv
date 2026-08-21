@@ -48,6 +48,10 @@ var csvColumns = []string{
 	// without it two same-named packages from different roots are
 	// indistinguishable rows.
 	"root",
+	// Appended in schema 1.5. The OS package that owns this component's files,
+	// which is what says a distribution-installed language package carries a
+	// backported fix rather than the upstream version it appears to be.
+	"owned_by",
 }
 
 // CSVColumns returns a copy of the CSV header row, in order. It exists so
@@ -102,6 +106,7 @@ func WriteCSV(w io.Writer, r *model.Report) error {
 		record[16] = c.Change
 		record[17] = c.Vendor
 		record[18] = c.Root
+		record[19] = c.OwnedBy
 		if err := cw.Write(record); err != nil {
 			return fmt.Errorf("output: writing csv row for %q: %w", c.Name, err)
 		}

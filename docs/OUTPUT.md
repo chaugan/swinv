@@ -11,11 +11,43 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.4`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.5`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.4"
+"schema_version": "1.5"
 ```
+
+**1.4 → 1.5** added one thing:
+
+| Addition | Appears in |
+|---|---|
+| `Component.owned_by` | JSON, NDJSON, CSV column 20 |
+
+The PURL of the OS package that owns a component's files, where one does.
+
+A distribution-installed language package is reported twice, and both rows are
+right: the OS package is what the vendor patches, the ecosystem package is what
+upstream advisories are written against. Neither should be dropped. But without
+a link, a consumer assessing the ecosystem row against upstream compares a
+backported version against upstream's own numbering — Ubuntu's
+`python3-cryptography 2.1.4-1ubuntu1.4+esm1` is patched, while PyPI's
+`cryptography 2.1.4` reads as thirty-seven releases behind. One reported host
+produced 442 false findings that way.
+
+```json
+{ "name": "cryptography", "version": "2.1.4", "type": "python",
+  "owned_by": "pkg:deb/ubuntu/python3-cryptography@2.1.4-1ubuntu1.4%2Besm1" }
+```
+
+**An empty `owned_by` is meaningful**: nothing owns the files, so the component
+was installed by `pip`, `npm` or a virtualenv rather than by the distribution,
+and *should* be assessed against upstream. It is also empty when
+`--no-file-ownership` was passed, since that flag disables the computation this
+comes from.
+
+Only an OS package can be an owner, and only an ecosystem package can be owned.
+One `deb` owning another's files is ordinary and says nothing about backporting,
+since one vendor patches both. Ownership never crosses a filesystem `root`.
 
 **1.3 → 1.4** changed one thing:
 
@@ -463,6 +495,7 @@ hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,typ
 | 17 | `change` | `component.change` (schema 1.1) |
 | 18 | `vendor` | `component.vendor` (schema 1.2) |
 | 19 | `root` | `component.root` (schema 1.4) |
+| 20 | `owned_by` | `component.owned_by` (schema 1.5) |
 
 A real row, from the test fixture:
 

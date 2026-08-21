@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/anchore/syft/syft"
+	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/cataloging"
 	"github.com/anchore/syft/syft/cataloging/pkgcataloging"
 	"github.com/anchore/syft/syft/pkg"
@@ -245,19 +246,30 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 
 		var components []model.Component
+		// Package identity to component index, so Syft's relationships can be
+		// resolved back onto the components they describe.
+		byID := make(map[artifact.ID]int)
 		if s.Artifacts.Packages != nil {
 			// Enumerate feeds from a goroutine; drain it completely so that
 			// goroutine always finishes, even on an otherwise uninteresting
 			// package.
 			for p := range s.Artifacts.Packages.Enumerate() {
+				byID[p.ID()] = len(components)
 				components = append(components, componentFromPackage(p, absRoot))
 			}
 		}
+
 		// Root provenance is assigned before normalisation, because it is part
 		// of a component's identity: without it, a package in a snap base and
 		// the host's own copy deduplicate into one row whose locations span
 		// both, and neither the patch state nor the origin survives.
 		components = assignRoots(components, NestedRoots(opts.Root, components))
+
+		// After roots, because ownership must not cross one, and before
+		// normalisation, while indices still line up with the packages Syft
+		// enumerated.
+		components = applyFileOwnership(components, byID, s.Relationships)
+
 		res.Components = model.Normalize(components)
 	}
 	if nested := NestedRoots(opts.Root, res.Components); len(nested) > 0 {

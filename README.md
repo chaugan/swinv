@@ -79,7 +79,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 ```jsonc
 {
-  "schema_version": "1.4",
+  "schema_version": "1.5",
   "tool": { "name": "swinv", "version": "dev", "syft_version": "v1.51.0" },
   "host": {
     "hostname": "web-01",
@@ -137,7 +137,7 @@ one folded onto its 17 columns:
 
 ```console
 $ head -1 /tmp/ex/web-01-20260819.csv
-hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,type,language,purl,cpes,licenses,locations,found_by,sha256,change,vendor,root
+hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,type,language,purl,cpes,licenses,locations,found_by,sha256,change,vendor,root,owned_by
 ```
 
 | Column | Value |

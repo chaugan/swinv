@@ -43,6 +43,7 @@ type ndjsonLine struct {
 	// EveryComponentField now compares the two.
 	Vendor     string            `json:"vendor,omitempty"`
 	Root       string            `json:"root,omitempty"`
+	OwnedBy    string            `json:"owned_by,omitempty"`
 	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
@@ -85,6 +86,7 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 			SHA256:       c.SHA256,
 			Vendor:       c.Vendor,
 			Root:         c.Root,
+			OwnedBy:      c.OwnedBy,
 			Attributes:   c.Attributes,
 			Change:       c.Change,
 		}

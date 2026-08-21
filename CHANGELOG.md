@@ -9,6 +9,20 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Added
+
+- **`Component.owned_by`** links a distribution-installed language package to
+  the OS package that owns its files, and with it schema `1.5`. Syft already
+  computes this and swinv was discarding it: the deb's file list contains the
+  very `egg-info` path the Python cataloger read. Both rows are still reported —
+  the OS package is what the vendor patches, the ecosystem package is what
+  upstream advisories are written against — but a consumer assessing the second
+  against upstream was comparing a backported version with upstream's own
+  numbering. One reported host produced 442 false findings that way, because
+  Ubuntu's `cryptography 2.1.4+esm1` is patched while PyPI's `2.1.4` reads as
+  thirty-seven releases behind. An empty `owned_by` is equally meaningful: the
+  component came from `pip` or `npm` and genuinely should be checked upstream.
+
 ## [0.2.2] — 2026-08-21
 
 Four issues reported by someone building an offline vulnerability matcher
