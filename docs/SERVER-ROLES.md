@@ -91,13 +91,38 @@ thing you hit.
 
 ### Attribution: joining an executable to a component
 
-`swinv` already records `locations` for every component, so an executable path
-can be matched against them. When a package owns the path, the service attaches
-to an existing component and inherits its PURL, version and CPEs — the identity
-CVE matching needs, for free.
+When a package owns the executable's path, the service attaches to an existing
+component and inherits its PURL, version and CPEs — the identity CVE matching
+needs, for free. When nothing owns the path, that is not a failure. That is the
+finding: serving software outside package management.
 
-When nothing owns the path, that is not a failure. That is the finding: serving
-software outside package management.
+**This was designed wrong, and building it proved so.** The plan was to match
+the executable against each component's `locations`, which `swinv` already
+records. Locations are a component's *evidence* files, not its contents: a deb
+records `/var/lib/dpkg/status` and its own `.list`, never `/usr/sbin/sshd`. On
+the first end-to-end run, all 30 attributable services on a normal Ubuntu server
+came back as unmanaged software — `sshd`, `postgres`, `chronyd`, `systemd`,
+`docker-proxy`, every one of them. Not a missing answer: a confident wrong one,
+in the exact direction the section exists to avoid.
+
+The file lists do exist, in the package databases, and Syft already parses them
+into `DpkgDBEntry.Files` and its `Rpm`/`Apk`/`Alpm` equivalents. What is not
+affordable is indexing them: a normal server's run to hundreds of thousands of
+paths, and building that map to answer forty questions costs tens of megabytes
+in a tool that advertises `--max-memory`.
+
+So the order is inverted. The socket snapshot is taken **before** the scan, the
+few dozen executable paths it produces are handed to the scan as a probe, and
+the catalogers test membership as they enumerate. Cost is proportional to the
+question rather than to the machine, the answer is exact, and a path that was
+not probed stays distinguishable from a path that no package owns.
+
+The same run, after: 27 high, 3 medium, 1 low. The three mediums are real —
+a binary under `/opt`, and two copies of `/usr/local/bin/node`.
+
+Components in a nested root are excluded from the join, for the reason
+`applyFileOwnership` already excludes them: the path a hit matched is a path
+inside that tree, not on the host.
 
 ## Where the spine breaks
 
@@ -382,7 +407,8 @@ that silently covers only the current user's processes.
 
 ## Schema
 
-A new top-level `services[]` array, schema `1.5` → `1.6`, additive.
+A new top-level `services[]` array, schema `1.5` → `1.6`, additive. **Shipped**;
+the field reference is in [OUTPUT.md](OUTPUT.md#services).
 
 A service is a **relation**, not a property of a component: one `nginx` backs
 many sites; one service involves the daemon, the OpenSSL it has loaded, and the
@@ -410,7 +436,7 @@ loses context and loses nothing else.
 | Phase | Work | Why this order |
 |---|---|---|
 | 1 | ~~Linux socket → PID → exe → component, with cgroup unit labelling and container resolution~~ **Done** | The spine. Cheap, no dependencies, and immediately surfaces unmanaged serving software |
-| 2 | `services[]` schema, CycloneDX services, `services.csv`, confidence and evidence model | Proves the shape before more collectors depend on it |
+| 2 | ~~`services[]` schema, CycloneDX services, `services.csv`, confidence and evidence model~~ **Done** | Proves the shape before more collectors depend on it |
 | 3 | IIS vertical slice: `applicationHost.config`, `InetStp`, app pool → `w3wp` | The motivating case. Early, because the generic pipeline is weakest here and waiting would demo badly |
 | 4 | Interpreted and JVM: launcher classification, deployment-root scanning | The largest coverage gain and the most work |
 | 5 | Drift detection, scoped and filtered | Valuable, independent, and safe to defer |
@@ -468,6 +494,28 @@ following socket → process lands on `systemd` for one of the most obviously
 interesting ports on the machine. That is now marked rather than reported as a
 systemd service, because it is a genuinely different state — the daemon may not
 be running at all — and not a failure to resolve one.
+
+## Measured: the shape, shipped
+
+The same host, `--format json,csv,cyclonedx-json`, as root:
+
+```
+swinv: services: 27 attributed to installed software, 3 running software nothing installed, 1 unidentified
+swinv: wrote svcout/host-20260821T205516.499Z.json
+swinv: wrote svcout/host-20260821T205516.499Z.csv
+swinv: wrote svcout/host-20260821T205516.499Z-services.csv
+swinv: wrote svcout/host-20260821T205516.499Z.cdx.json
+```
+
+The three `medium` findings are the point of the exercise: a vendor binary under
+`/opt` and two copies of `/usr/local/bin/node`, none of them installed by a
+package manager, all of them listening. Nothing in a package inventory says so.
+
+The one `low` is port 22, still correctly marked socket-activated rather than
+attributed to `systemd`.
+
+The summary line leads with the high count but the middle number is the one to
+read, and the wording says so: *"running software nothing installed"*.
 
 ## Rejected alternatives
 

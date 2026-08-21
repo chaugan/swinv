@@ -11,6 +11,37 @@ schema and cataloger coverage may still change between releases. See
 
 ### Added
 
+- **What is listening is now part of the inventory**, on Linux, and with it
+  schema `1.6`. A new top-level `services[]` array records each listening
+  socket, the process behind it, its systemd unit and container, and which
+  installed software owns its executable — with a `confidence` and an
+  `evidence` trail, because a service finding is assembled from evidence of
+  varying strength and a bare claim that "port 443 is nginx 1.24" is
+  indistinguishable from a guess.
+
+  The interesting rows are the `medium` ones: software that is serving traffic
+  and that no package manager installed. A package inventory cannot produce
+  that finding at all. On the development host it is three of thirty-one — a
+  vendor binary under `/opt` and two copies of `/usr/local/bin/node`.
+
+  Everything comes from `/proc`: no `ss`, no `netstat`, no `lsof`, no D-Bus.
+  Unprivileged it degrades rather than fails, since `/proc/net` is world-
+  readable but another process's open files are not; the ports are still
+  reported and the count that could not be attributed becomes one aggregate
+  entry and a warning. Socket-activated ports are marked as such rather than
+  attributed to `systemd`, because the daemon may not be running at all.
+
+  Output: `services[]` in JSON; CycloneDX `services[]` with the schema's own
+  `endpoints`, plus `dependencies[]` edges linking each service to the
+  components behind it; and a separate `<name>-services.csv` sidecar alongside
+  the component CSV. NDJSON carries components only. See
+  [docs/SERVER-ROLES.md](docs/SERVER-ROLES.md) and
+  [docs/OUTPUT.md](docs/OUTPUT.md#services).
+- **`--no-services`** skips the whole section, and **`--no-service-command`**
+  omits just the `command` field. Command lines are where secrets end up — a
+  `--password` on a daemon's ExecStart, a connection string with credentials in
+  it — and an inventory file is usually copied somewhere with a different
+  audience. [SECURITY.md](SECURITY.md) now says so plainly.
 - **Base snaps are recognised as their own filesystem root**, so the components
   inside them stop being attributed to the host. A base snap is a different
   operating system — `core18` is Ubuntu 18.04 while the host may be 26.04, with

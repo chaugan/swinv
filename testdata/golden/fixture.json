@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.5",
+  "schema_version": "1.6",
   "tool": {
     "name": "swinv",
     "version": "test",
@@ -38,6 +38,7 @@
         "cpe:2.3:a:bash:bash:5.2.15-2\\+b7:*:*:*:*:*:*:*"
       ],
       "locations": [
+        "/var/lib/dpkg/info/bash.md5sums",
         "/var/lib/dpkg/status"
       ],
       "found_by": "dpkg-db-cataloger"
@@ -53,6 +54,7 @@
         "cpe:2.3:a:openssl:openssl:3.0.11-1\\~deb12u2:*:*:*:*:*:*:*"
       ],
       "locations": [
+        "/var/lib/dpkg/info/openssl.md5sums",
         "/var/lib/dpkg/status"
       ],
       "found_by": "dpkg-db-cataloger"

@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 	"io"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ const (
 	propHostPrefix      = "swinv:host:"
 	propScanPrefix      = "swinv:scan:"
 	propComponentPrefix = "swinv:component:"
+	propServicePrefix   = "swinv:service:"
 )
 
 // hostBOMRef is the bom-ref of the metadata component describing the scanned
@@ -50,8 +52,18 @@ func WriteCycloneDX(w io.Writer, r *model.Report) error {
 
 	components := make([]cyclonedx.Component, 0, len(r.Components))
 	refs := make(map[string]int, len(r.Components))
+	// byIdentity maps the string a service names its software by onto the
+	// bom-ref that software actually got, so the dependency graph below points
+	// at real components rather than at plausible-looking strings.
+	byIdentity := make(map[string]string, len(r.Components))
 	for _, c := range r.Components {
-		components = append(components, cdxComponent(c, refs))
+		cdx := cdxComponent(c, refs)
+		components = append(components, cdx)
+		if id := model.Identify(c); id != "" {
+			if _, seen := byIdentity[id]; !seen {
+				byIdentity[id] = cdx.BOMRef
+			}
+		}
 	}
 
 	bom := cyclonedx.NewBOM()
@@ -62,6 +74,13 @@ func WriteCycloneDX(w io.Writer, r *model.Report) error {
 		Properties: cdxScanProperties(r),
 	}
 	bom.Components = &components
+
+	if services, deps := cdxServices(r.Services, byIdentity); len(services) > 0 {
+		bom.Services = &services
+		if len(deps) > 0 {
+			bom.Dependencies = &deps
+		}
+	}
 
 	enc := cyclonedx.NewBOMEncoder(w, cyclonedx.BOMFileFormatJSON)
 	enc.SetPretty(true)
@@ -337,6 +356,106 @@ func cdxScanProperties(r *model.Report) *[]cyclonedx.Property {
 		return nil
 	}
 	return &props
+}
+
+// cdxServices maps the report's services onto CycloneDX services, and returns
+// the dependency edges linking each one to the components that implement it.
+//
+// CycloneDX has a first-class service type, and it is the right home for this:
+// a consumer that already reads SBOMs gets "what is listening, and which of
+// these components is behind it" without learning an swinv-specific shape. The
+// endpoints go in the schema's own "endpoints" field; everything swinv knows
+// that the schema has no field for -- pid, unit, container, confidence, the
+// evidence trail -- becomes a namespaced property.
+//
+// The aggregate entry for sockets that could not be attributed to a process
+// carries no endpoints and no name of its own; it is still emitted, because a
+// document that quietly omits "and there were 38 more I could not see" is
+// making a stronger claim than the scan supports.
+func cdxServices(in []model.Service, byIdentity map[string]string) ([]cyclonedx.Service, []cyclonedx.Dependency) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+
+	services := make([]cyclonedx.Service, 0, len(in))
+	deps := make([]cyclonedx.Dependency, 0, len(in))
+	refs := make(map[string]int, len(in))
+
+	for _, s := range in {
+		ref := uniqueRef(serviceRef(s), refs)
+		out := cyclonedx.Service{
+			BOMRef: ref,
+			Name:   serviceName(s),
+		}
+		if len(s.Endpoints) > 0 {
+			endpoints := append([]string(nil), s.Endpoints...)
+			out.Endpoints = &endpoints
+		}
+
+		var props []cyclonedx.Property
+		props = appendProp(props, propServicePrefix+"confidence", string(s.Confidence))
+		props = appendProp(props, propServicePrefix+"executable", s.Executable)
+		props = appendProp(props, propServicePrefix+"command", s.Command)
+		props = appendProp(props, propServicePrefix+"unit", s.Unit)
+		props = appendProp(props, propServicePrefix+"container", s.Container)
+		props = appendProp(props, propServicePrefix+"user", s.User)
+		if s.PID != 0 {
+			props = appendProp(props, propServicePrefix+"pid", strconv.Itoa(s.PID))
+		}
+		if s.SocketActivated {
+			props = appendProp(props, propServicePrefix+"socket_activated", "true")
+		}
+		// Duplicate property names are permitted, so the evidence trail is one
+		// property per line rather than a joined blob.
+		for _, e := range s.Evidence {
+			props = appendProp(props, propServicePrefix+"evidence", e)
+		}
+		if len(props) > 0 {
+			out.Properties = &props
+		}
+		services = append(services, out)
+
+		// dependsOn is the edge that makes this worth emitting: it is how a
+		// consumer answers "is anything internet-facing running the component
+		// this advisory is about".
+		var on []string
+		for _, id := range s.Components {
+			if target, ok := byIdentity[id]; ok {
+				on = append(on, target)
+			}
+		}
+		if len(on) > 0 {
+			deps = append(deps, cyclonedx.Dependency{Ref: ref, Dependencies: &on})
+		}
+	}
+	return services, deps
+}
+
+// serviceName is what a human scanning the document reads first. The systemd
+// unit is the best answer where there is one, since it is the name the
+// operator already uses for the thing; the executable's basename is the next
+// best.
+func serviceName(s model.Service) string {
+	switch {
+	case s.Unit != "":
+		return s.Unit
+	case s.Executable != "":
+		// Backslashes are replaced explicitly rather than with
+		// filepath.ToSlash, which is a no-op off Windows: the writer is not
+		// necessarily running on the platform the report describes.
+		return path.Base(strings.ReplaceAll(s.Executable, `\`, "/"))
+	case len(s.Endpoints) > 0:
+		return s.Endpoints[0]
+	default:
+		return "unattributed-listeners"
+	}
+}
+
+// serviceRef derives a stable bom-ref. It deliberately does not include the
+// pid: a document diffed against yesterday's should not show every service
+// replaced because the machine rebooted.
+func serviceRef(s model.Service) string {
+	return "swinv:service:" + serviceName(s)
 }
 
 // appendProp appends a property, skipping empty values so that absent facts

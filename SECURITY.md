@@ -36,6 +36,18 @@ machine it runs on.
 - **Reports list installed software and its paths.** With `--include-home` those
   paths include the contents of users' home directories, which is the main
   reason home directories are excluded by default.
+- **Reports list what is listening, including full command lines.** The
+  `services` block records each listening socket, the process behind it, and
+  that process's `argv`. Command lines are frequently where a secret ends up:
+  a `--password` on a daemon's ExecStart, a token in a wrapper script, a
+  connection string with credentials in it. Anything visible in `ps` to a user
+  on the machine can therefore end up in an inventory file that is copied
+  somewhere with a different audience. **`--no-service-command` omits the
+  `command` field**, keeping the endpoint, the executable, the unit and the
+  attribution; **`--no-services` skips the whole section**. Collecting services
+  also means reading `/proc/<pid>/fd` for processes swinv does not own, which
+  needs root — unprivileged, the ports are still reported and the processes
+  behind them mostly are not.
 - **Output permissions default to permissive, and are configurable.** Reports
   are written `0644` in a `0755` directory so a collector running as another
   user can read them, which is the documented deployment model. The cost is

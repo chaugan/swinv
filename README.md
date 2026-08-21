@@ -16,6 +16,10 @@ software it can find — OS packages on Linux, the registry on Windows, language
 packages on both, and loose binaries that no package manager ever installed —
 then writes the result to local JSON and CSV files.
 
+On Linux it also records **what is actually listening**, and which of that
+software no package manager installed. That is the question an inventory of
+packages cannot answer on its own.
+
 There is no server, no daemon and no database, and **no inventory data ever
 leaves the machine**. Collecting the files afterwards is deliberately your job:
 `rsync`, Ansible, a log shipper, or `scp`.
@@ -83,7 +87,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 ```jsonc
 {
-  "schema_version": "1.5",
+  "schema_version": "1.6",
   "tool": { "name": "swinv", "version": "dev", "syft_version": "v1.51.0" },
   "host": {
     "hostname": "web-01",
@@ -155,7 +159,7 @@ to stop a consumer drawing the wrong conclusion:
 
 The CSV is the same data, one row per component, with host identity repeated on
 every row so files concatenate cleanly across a fleet. Rows are wide, so here is
-one folded onto its 17 columns:
+one folded onto its 20 columns:
 
 ```console
 $ head -1 /tmp/ex/web-01-20260819.csv
@@ -188,6 +192,50 @@ present even when unused, so the column shape never varies with flags.
 
 A real host produces the same shape at a very different scale — around 14,000
 components on the machine this was developed on.
+
+#### What is listening
+
+Run as root on Linux, the report also carries a `services` block: every
+listening socket, the process behind it, its systemd unit or container, and
+which installed software owns its executable.
+
+```console
+$ sudo swinv --out /var/lib/swinv
+swinv: services: 27 attributed to installed software, 3 running software nothing installed, 1 unidentified
+swinv: wrote /var/lib/swinv/web-01-20260821T205516.499Z.json
+swinv: wrote /var/lib/swinv/web-01-20260821T205516.499Z.csv
+swinv: wrote /var/lib/swinv/web-01-20260821T205516.499Z-services.csv
+```
+
+```jsonc
+{
+  "endpoints": ["0.0.0.0:22/tcp", "[::]:22/tcp6"],
+  "pid": 811,
+  "executable": "/usr/sbin/sshd",
+  "unit": "ssh.service",
+  "components": ["pkg:deb/ubuntu/openssh-server@1:10.2p1-2ubuntu3.5"],
+  "confidence": "high",
+  "evidence": ["socket 0.0.0.0:22/tcp held by pid 811", "…"]
+}
+```
+
+**The middle number in that summary is the one to read.** Three of the
+thirty-one services on that host are software that is serving traffic and that
+no package manager installed — a vendor binary under `/opt`, and two copies of
+`/usr/local/bin/node`. Nothing in a package list says so.
+
+`confidence` is recorded rather than implied, and every finding carries the
+`evidence` it rests on, because a bare claim that "port 443 is nginx 1.24" is
+indistinguishable from a guess by the time it reaches anyone. Socket-activated
+ports are marked as such rather than blamed on `systemd`, since the daemon may
+not be running at all. Unprivileged, the ports are still reported and the
+processes behind them mostly are not — which is stated, not hidden.
+
+It all comes from `/proc`: no `ss`, no `netstat`, no `lsof`, no D-Bus.
+`--no-services` skips it; `--no-service-command` keeps it but drops the command
+lines, which is where secrets end up.
+
+**[Why this exists and how it is built →](docs/SERVER-ROLES.md)**
 
 **[Full schema, NDJSON, CycloneDX and SQL loading →](docs/OUTPUT.md)**
 
@@ -522,6 +570,8 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--offline` | false | Perform no network activity at all (skips the FQDN lookup) |
 | `--perm OCTAL` | `0644` | Permission bits for the reports; the directory derives from it |
 | `--skip-nested-rootfs` | false | Drop packages that came from a nested root filesystem (see Known limitations) |
+| `--no-services` | false | Linux: do not report what is listening |
+| `--no-service-command` | false | Linux: keep the services block, drop the command lines |
 | `--since PATH` | — | Diff against a previous report |
 | `--hash` | false | Record a SHA-256 per component |
 | `--fast` | false | Scan at normal priority and full parallelism (see below) |
@@ -618,6 +668,12 @@ Worth knowing before you roll this out fleet-wide:
 - **It records installed software paths.** With `--include-home`, that includes
   paths inside users' home directories. This is the main reason home directories
   are off by default.
+- **It records service command lines.** The `services` block includes each
+  listening process's `argv`, and command lines are where secrets end up — a
+  `--password` on a daemon's ExecStart, a connection string with credentials in
+  it. Anything visible in `ps` can therefore reach an inventory file that gets
+  copied elsewhere. **`--no-service-command`** drops that one field;
+  **`--no-services`** drops the section.
 - **Protect the output directory.** `--out` is created `0755` and files `0644`,
   so an inventory is world-readable by default. Tighten it if your threat model
   needs that.

@@ -17,7 +17,7 @@ import (
 // 1.1 added Component.SHA256 (--hash) and Report.Delta (--since). Both are
 // additive and omitted when unused, so a 1.0 consumer still parses a 1.1
 // document.
-const SchemaVersion = "1.5"
+const SchemaVersion = "1.6"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -27,6 +27,19 @@ type Report struct {
 	Scan          ScanMeta    `json:"scan"`
 	Delta         *Delta      `json:"delta,omitempty"`
 	Components    []Component `json:"components"`
+
+	// Services are what is listening on this machine, and which installed
+	// software is behind it.
+	//
+	// A relation rather than a property of a component: one nginx backs many
+	// sites, and one service involves the daemon, the libraries it loaded and
+	// the application it serves. A "role" field on Component would collapse a
+	// many-to-many reality into a one-to-one lie.
+	//
+	// Software that appears here always also appears in Components. A consumer
+	// that ignores this array loses context and loses nothing else -- which
+	// matters because most vulnerability matchers do ignore it.
+	Services []Service `json:"services,omitempty"`
 }
 
 // Delta is the difference between this scan and an earlier report, produced by
@@ -574,4 +587,94 @@ func mergeAttributes(a, b map[string]string) map[string]string {
 		}
 	}
 	return a
+}
+
+// Identify names a component the way a consumer joins on it: its PURL where
+// one exists, and "name@version" otherwise -- which is the case for Windows
+// registry entries and for anything a cataloger could not give a canonical
+// identifier.
+//
+// It lives here rather than beside its callers because two of them have to
+// agree exactly: the service attribution that writes these strings into
+// Service.Components, and the CycloneDX writer that resolves them back to
+// bom-refs. A second, subtly different spelling in either place would produce
+// a document whose dependency graph silently points at nothing.
+func Identify(c Component) string {
+	if c.PURL != "" {
+		return c.PURL
+	}
+	if c.Version != "" {
+		return c.Name + "@" + c.Version
+	}
+	return c.Name
+}
+
+// Confidence is how firmly a service is attributed to software.
+//
+// Recorded rather than implied, because a service finding is assembled from
+// evidence of varying strength and a consumer cannot tell the difference by
+// looking. A single field claiming "port 443 is nginx 1.24" is
+// indistinguishable from a guess by the time it reaches anyone.
+type Confidence string
+
+const (
+	// ConfidenceHigh: the listening process was identified and its executable
+	// belongs to a package in the inventory.
+	ConfidenceHigh Confidence = "high"
+
+	// ConfidenceMedium: the process was identified but nothing installed owns
+	// its executable. Not a weaker observation -- it is the interesting one,
+	// since software running outside package management is what an inventory
+	// cannot otherwise see -- but the product and version are unknown.
+	ConfidenceMedium Confidence = "medium"
+
+	// ConfidenceLow: something is listening and the process behind it could not
+	// be identified, because the scan lacked the privilege to read another
+	// user's open files, or because init holds the socket.
+	ConfidenceLow Confidence = "low"
+)
+
+// Service is one listening process and what is known about it.
+type Service struct {
+	// Endpoints are what it accepts on, as "0.0.0.0:443/tcp".
+	Endpoints []string `json:"endpoints"`
+
+	PID int `json:"pid,omitempty"`
+
+	// Executable is the path as it exists in the process's own mount
+	// namespace, which for a containerised process need not exist on the host.
+	Executable string `json:"executable,omitempty"`
+
+	// Command is the process's argv.
+	//
+	// It is the only identification available for an interpreted daemon, where
+	// the executable names the runtime -- java, python, node -- and the
+	// application is named in the arguments. It may also contain a secret
+	// passed on a command line, which is why --no-service-command exists and
+	// why SECURITY.md says so plainly.
+	Command string `json:"command,omitempty"`
+
+	// Unit is the owning systemd unit; Container the container id, when the
+	// process runs in one.
+	Unit      string `json:"unit,omitempty"`
+	Container string `json:"container,omitempty"`
+
+	// User is the numeric uid the process runs as.
+	User string `json:"user,omitempty"`
+
+	// SocketActivated marks a socket held by init rather than by the service
+	// that will answer on it. The daemon may not be running at all.
+	SocketActivated bool `json:"socket_activated,omitempty"`
+
+	// Components identifies the installed software behind this service, by
+	// PURL where one exists and by "name@version" otherwise. Empty means
+	// nothing installed owns the executable.
+	Components []string `json:"components,omitempty"`
+
+	Confidence Confidence `json:"confidence"`
+
+	// Evidence records what produced this finding, in the order it was
+	// established. A consumer that disagrees with the conclusion can see what
+	// it rests on.
+	Evidence []string `json:"evidence,omitempty"`
 }

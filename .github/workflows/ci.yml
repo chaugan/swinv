@@ -98,6 +98,71 @@ jobs:
           ./bin/swinv --version
           ./bin/swinv --help 2>&1 | head -40 || true
 
+      - name: Assert the services block is collected and attributed
+        # The join is from a listening executable to the package that installed
+        # it, and it comes from the package databases' file lists rather than
+        # from component.locations -- which record dpkg metadata files, never
+        # /usr/sbin/sshd. That distinction is invisible in unit tests and was
+        # wrong in the first implementation, where every daemon on a normal
+        # server reported as unmanaged software. So this asserts against a
+        # listener whose owning package is known: nc, from netcat-openbsd.
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends netcat-openbsd
+          setsid nc -l 127.0.0.1 39999 >/dev/null 2>&1 </dev/null &
+          sleep 2
+
+          run() {
+            out="$1"; shift
+            sudo ./bin/swinv --out "$out" --catalogers os --fast --format json,csv \
+              --exclude './snap/**' --exclude './opt/**' \
+              --exclude './var/lib/docker/**' "$@"
+          }
+
+          run /tmp/svc
+          report="$(ls /tmp/svc/*.json | head -1)"
+
+          echo "--- services ---"
+          jq -r '.services[] | "\(.confidence)\t\((.endpoints // [])|join(","))\t\((.components // [])|join(","))"' "$report"
+
+          test "$(jq -r .schema_version "$report")" = "1.6"
+
+          # The listener we started, attributed to the deb that installed nc.
+          owner="$(jq -r '.services[] | select((.endpoints // [])|join(",")|test("39999")) | (.components // [])[0]' "$report" | head -1)"
+          case "$owner" in
+            pkg:deb/*netcat-openbsd*) echo "OK: 127.0.0.1:39999 -> $owner" ;;
+            *) echo "FAIL: the nc listener attributed to '$owner'," >&2
+               echo "      want the netcat-openbsd package that owns /usr/bin/nc.openbsd." >&2
+               exit 1 ;;
+          esac
+
+          # And it must be stated as a high-confidence finding with evidence,
+          # not an unqualified claim.
+          jq -e '.services[] | select((.endpoints // [])|join(",")|test("39999"))
+                 | select(.confidence == "high") | select((.evidence|length) > 0)' "$report" >/dev/null
+
+          # The sidecar, with the documented column contract.
+          sidecar="$(ls /tmp/svc/*-services.csv | head -1)"
+          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,endpoints,pid,executable,command,unit,container,user,socket_activated,components,confidence,evidence'
+          got="$(head -1 "$sidecar")"
+          test "$got" = "$want" || { echo "FAIL: services CSV header drifted"; echo "got:  $got"; echo "want: $want"; exit 1; }
+          test "$(wc -l < "$sidecar")" -gt 1
+
+          # --no-service-command keeps the section and drops only argv, which
+          # is what SECURITY.md promises.
+          run /tmp/svc-nocmd --no-service-command
+          nocmd="$(ls /tmp/svc-nocmd/*.json | head -1)"
+          test "$(jq '[.services[] | select(.command != null)] | length' "$nocmd")" = "0"
+          test "$(jq '.services | length' "$nocmd")" -gt 0
+
+          # --no-services drops the section and writes no sidecar at all.
+          run /tmp/svc-off --no-services
+          off="$(ls /tmp/svc-off/*.json | head -1)"
+          test "$(jq -r '.services // "absent"' "$off")" = "absent"
+          test -z "$(ls /tmp/svc-off/*-services.csv 2>/dev/null || true)"
+
+          echo "OK: services collected, attributed, and both opt-outs honoured"
+
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:

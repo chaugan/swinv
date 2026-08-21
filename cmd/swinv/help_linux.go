@@ -39,6 +39,10 @@ func helpSections() []helpSection {
 			{"--catalogers EXPR", "e.g. os or +binary,-python; narrows output only"},
 			{"--offline", "no network activity at all"},
 		}},
+		{"What is listening", []helpFlag{
+			{"--no-services", "do not report listening sockets and their software"},
+			{"--no-service-command", "omit command lines; they can carry passwords"},
+		}},
 		{"Comparing against a previous run", []helpFlag{
 			{"--since PATH", "diff against an earlier swinv JSON report"},
 			{"--delta-only", "with --since, emit only what changed"},
@@ -71,6 +75,11 @@ Examples:
 
   swinv --format cyclonedx-json --stdout | grype
         Pipe an SBOM straight into a vulnerability scanner.
+
+  sudo swinv --out /var/lib/swinv
+        As root, also identify what is listening and which installed package
+        each listener came from. Unprivileged, the ports are still reported
+        but the processes behind them mostly are not.
 
 Exit codes:
   0 complete    1 incomplete    2 usage error    3 failed    4 timed out

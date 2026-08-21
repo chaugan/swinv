@@ -93,6 +93,40 @@ The final exclusion list — defaults, mount-derived exclusions, your patterns,
 and any symlinks quarantined by the preflight — is always recorded in
 `scan.excluded`.
 
+### Services
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--no-services` | `false` | Do not report what is listening on the network |
+| `--no-service-command` | `false` | Omit each service's command line from the report |
+
+Linux only; the collector is built on `/proc`. On Windows both flags parse and
+do nothing, so a runbook written for the Linux fleet does not fail there.
+
+Services are collected by default because the question they answer — which of
+the installed software is actually serving, and which serving software nothing
+installed accounts for — is not answerable from a package list. The cost is
+milliseconds against a scan that costs minutes.
+
+Two reasons to turn something off:
+
+- **`--no-service-command`** drops the `command` field and keeps everything
+  else. Command lines are where secrets end up — a `--password` on a daemon's
+  ExecStart, a connection string with credentials in it — and an inventory file
+  is usually copied somewhere with a different audience. See
+  [SECURITY.md](../SECURITY.md).
+- **`--no-services`** skips the section entirely, including reading
+  `/proc/<pid>/fd`.
+
+Unprivileged, this degrades rather than fails: `/proc/net` is world-readable so
+the ports are still reported, but attributing a socket to a process needs to
+read that process's open files, which on a server is nearly all of them. The
+count that could not be attributed becomes one aggregate entry and a warning,
+not silence.
+
+See [docs/SERVER-ROLES.md](SERVER-ROLES.md) for the design, and
+[docs/OUTPUT.md](OUTPUT.md#services) for the schema.
+
 ### Change detection
 
 | Flag | Default | Meaning |
@@ -542,6 +576,29 @@ content digests for change detection:
 
 ```sh
 swinv --include-home --exclude './opt/build/**' --hash --out /var/lib/swinv
+```
+
+What is listening, and what installed it — the reason to run this as root:
+
+```sh
+sudo swinv --out /var/lib/swinv --format json,csv
+jq -r '.services[] | [.confidence, (.endpoints|join(",")), (.components|join(","))] | @tsv' \
+   /var/lib/swinv/*-latest.json
+```
+
+Serving software that no package manager installed, which is the finding a
+package inventory cannot produce on its own:
+
+```sh
+jq -r '.services[] | select(.confidence == "medium") | "\(.endpoints[0])\t\(.executable)"' \
+   /var/lib/swinv/*-latest.json
+```
+
+An inventory destined for somewhere with a wider audience, without the command
+lines that carry secrets:
+
+```sh
+swinv --no-service-command --out /var/lib/swinv --perm 0640
 ```
 
 Just the diff, for a change feed rather than an inventory (remember the

@@ -83,6 +83,14 @@ type Options struct {
 	// on-disk file. Off by default: it reads every such file in full.
 	Hash bool
 
+	// OwnerProbe is a short list of absolute paths whose installing package
+	// the caller wants named, filled into Result.FileOwners.
+	//
+	// It is a probe rather than an index because the answer comes from the
+	// package databases' full file lists, and those are far too large to keep
+	// in order to answer a few dozen questions. See resolveOwners.
+	OwnerProbe []string
+
 	// SkipSymlinkPreflight disables the symlink quarantine pass. The preflight
 	// costs one lstat-only walk but prevents a single unresolvable symlink from
 	// aborting the entire scan; see QuarantineSymlinks. Leave it off.
@@ -128,6 +136,13 @@ type Result struct {
 	// Unknowns is the number of files Syft saw but could not identify. Only
 	// the count is surfaced; the list is large and low-value.
 	Unknowns int
+
+	// FileOwners answers Options.OwnerProbe: each probed path that a package
+	// database claims, mapped to the identities of the packages claiming it.
+	// A probed path that no package owns is absent rather than present and
+	// empty, so "not installed by a package manager" and "not asked about"
+	// stay distinguishable.
+	FileOwners map[string][]string
 }
 
 // Run scans opts.Root with Syft and converts the result into model
@@ -249,12 +264,15 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		// Package identity to component index, so Syft's relationships can be
 		// resolved back onto the components they describe.
 		byID := make(map[artifact.ID]int)
+		probe := probeSet(opts.OwnerProbe)
+		ownerHits := make(map[string][]int)
 		if s.Artifacts.Packages != nil {
 			// Enumerate feeds from a goroutine; drain it completely so that
 			// goroutine always finishes, even on an otherwise uninteresting
 			// package.
 			for p := range s.Artifacts.Packages.Enumerate() {
 				byID[p.ID()] = len(components)
+				resolveOwners(probe, p, ownerHits, len(components))
 				components = append(components, componentFromPackage(p, absRoot))
 			}
 		}
@@ -269,6 +287,11 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		// normalisation, while indices still line up with the packages Syft
 		// enumerated.
 		components = applyFileOwnership(components, byID, s.Relationships)
+
+		// After roots for the same reason, and before Normalize, which
+		// reorders and merges components so the recorded indices stop meaning
+		// anything.
+		res.FileOwners = finalizeOwners(components, ownerHits)
 
 		res.Components = model.Normalize(components)
 	}

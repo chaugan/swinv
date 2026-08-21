@@ -107,6 +107,8 @@ type config struct {
 	deltaOnly        bool
 	catalogers       string
 	noFileOwnership  bool
+	noServices       bool
+	noServiceCommand bool
 	parallelism      int
 	fast             bool
 	stacksAfter      time.Duration
@@ -272,6 +274,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		logf("cataloger parallelism %d of %d CPUs", parallelism, runtime.NumCPU())
 	}
 
+	// --- what is listening, part one --------------------------------------
+	// Taken before the scan so the scan can be told which executables to
+	// resolve ownership for; see listenSnapshot.
+	listeners := listenSnapshot(ctx, cfg, &meta, logf)
+
 	// --- scan -------------------------------------------------------------
 	logf("scanning %s ...", scanTarget(cfg))
 	stopHeartbeat := startHeartbeat(cfg.quiet, cfg.timeout, cfg.stacksAfter, cfg.out, logf)
@@ -286,6 +293,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			Parallelism:      parallelism,
 			Hash:             cfg.hash,
 			SkipNestedRootfs: cfg.skipNestedRootfs,
+			OwnerProbe:       listeners.ExePaths(),
 			Verbose:          cfg.verbose && !cfg.quiet,
 		})
 	}
@@ -338,6 +346,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Scan:       meta,
 		Components: model.Normalize(result.Components),
 	}
+
+	// --- what is listening, part two --------------------------------------
+	// After the components, because the attribution joins against them, and
+	// before the delta, so that a --delta-only report still carries the
+	// services block: "what changed" is most interesting about the things
+	// serving traffic.
+	attributeServices(cfg, report, listeners, result.FileOwners, logf)
 
 	// --- delta against a previous report ----------------------------------
 	if baseline != nil {
@@ -464,6 +479,14 @@ func writeFiles(cfg *config, report *model.Report, logf func(string, ...any), st
 			return exitFatal
 		}
 		logf("wrote %s", target)
+
+		// The services sidecar rides along with the component CSV: same run,
+		// same basename, same permissions.
+		if f == "csv" {
+			if code := writeServicesCSV(cfg, report, base, logf, stderr); code != exitOK {
+				return code
+			}
+		}
 
 		if cfg.latestSymlink {
 			link := filepath.Join(cfg.out, latestBase(report)+ext)

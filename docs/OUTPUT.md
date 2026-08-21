@@ -11,11 +11,30 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.5`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.6`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.5"
+"schema_version": "1.6"
 ```
+
+**1.5 → 1.6** added one thing:
+
+| Addition | Appears in |
+|---|---|
+| `Report.services` | JSON, CycloneDX `services[]` + `dependencies[]`, and a separate `-services.csv` file |
+
+What is listening on the machine, and which of the installed software is behind
+it. See [`services`](#services) below, and
+[docs/SERVER-ROLES.md](SERVER-ROLES.md) for why it exists.
+
+It is a **top-level array, not a component field**: a component appears once,
+a service appears once per listening process, and most components are behind no
+service at all. The component rows and the CSV column order are untouched, so
+every 1.5 consumer keeps working unchanged.
+
+`services` is absent — not empty — when services were never collected: on
+Windows, with `--no-services`, or when `--root` points at a tree other than
+this machine. An empty array means the scan looked and found nothing listening.
 
 **1.4 → 1.5** added one thing:
 
@@ -343,6 +362,78 @@ a digest of a file backing many components identifies none of them
 Files above 512 MiB and anything that is not a regular file are also skipped. So
 in practice OS packages have no `sha256` and language packages do.
 
+### `services`
+
+Schema 1.6. One entry per listening process, plus at most one aggregate entry
+for sockets that could not be attributed to a process at all. Linux only —
+see [docs/SERVER-ROLES.md](SERVER-ROLES.md).
+
+```jsonc
+"services": [
+  {
+    "endpoints": ["0.0.0.0:22/tcp", "[::]:22/tcp6"],
+    "pid": 811,
+    "executable": "/usr/sbin/sshd",
+    "command": "sshd: /usr/sbin/sshd -D [listener]",
+    "unit": "ssh.service",
+    "user": "0",
+    "components": ["pkg:deb/ubuntu/openssh-server@1:10.2p1-2ubuntu3.5"],
+    "confidence": "high",
+    "evidence": [
+      "socket 0.0.0.0:22/tcp held by pid 811",
+      "executable /usr/sbin/sshd",
+      "systemd unit ssh.service",
+      "the package database records pkg:deb/ubuntu/openssh-server@... as owning this file"
+    ]
+  }
+]
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `endpoints` | []string | What it accepts on, as `address:port/protocol`. |
+| `pid` | int | The listening process. Omitted where there is none. |
+| `executable` | string | The path **as it exists in that process's mount namespace**, which for a containerised process need not exist on this host. |
+| `command` | string | The process's `argv`. Omitted with `--no-service-command`; see [SECURITY.md](../SECURITY.md), because command lines carry secrets. |
+| `unit` | string | The owning systemd unit, from the process's cgroup. |
+| `container` | string | The container id, when the process runs in one. |
+| `user` | string | The numeric uid the process runs as. |
+| `socket_activated` | bool | `init` holds the socket, not the service. The daemon may not be running at all. |
+| `components` | []string | The installed software behind it, by PURL where one exists and `name@version` otherwise. **Empty means nothing installed owns the executable** — which is the interesting case. |
+| `confidence` | string | `high`, `medium` or `low`; see below. |
+| `evidence` | []string | What produced the finding, in the order it was established. |
+
+#### Confidence is recorded, not implied
+
+A service finding is assembled from evidence of varying strength, and a single
+field claiming "port 443 is nginx 1.24" is indistinguishable from a guess by
+the time it reaches anyone.
+
+| `confidence` | What was established |
+|---|---|
+| `high` | The process was identified and an installed package's own file list claims its executable. Product and version are known. |
+| `medium` | The process was identified, but **nothing installed owns its executable** — so it was not installed by a package manager. Not a weaker observation: this is the finding a package inventory alone cannot produce. Also used for a containerised process, whose executable path belongs to the container's filesystem and must not be matched against this host's packages. |
+| `low` | Something is listening and the process behind it could not be identified: the scan lacked the privilege to read another user's open files, or `init` holds the socket. |
+
+#### How the attribution works
+
+The join is from a listening executable's path to the package that installed
+it, and it comes from the **package databases' own file lists** — `dpkg`,
+`rpm`, `apk`, `pacman` — not from `component.locations`. A deb's locations are
+its evidence files (`/var/lib/dpkg/status`, its own `.list`), never
+`/usr/sbin/sshd`, so a naive join finds nothing and reports every daemon on a
+stock server as unmanaged software.
+
+Those file lists run to hundreds of thousands of paths on a normal server, so
+swinv does not index them. It takes the socket snapshot **before** the scan,
+hands the scan the few dozen executable paths it actually needs answered, and
+the catalogers check membership as they go. A path that was not probed and a
+path that no package owns are kept distinguishable.
+
+Where the package databases say nothing, a component that recorded the exact
+path as one of its own locations is used instead — which is what a Windows
+registry entry naming its own executable looks like.
+
 ---
 
 ## Identity and ordering — the guarantees consumers rely on
@@ -474,7 +565,7 @@ useful standalone and rows from many machines can simply be concatenated.
 - **The header row is always present**, including for a report with zero
   components.
 
-### The 17 columns, in exactly this order
+### The 20 columns, in exactly this order
 
 ```
 hostname,machine_id,os_id,os_version_id,architecture,scanned_at,name,version,type,language,purl,cpes,licenses,locations,found_by,sha256,change
@@ -524,6 +615,41 @@ empty, but present. The column shape therefore never varies with the flags a
 given host happened to run with. That is what keeps CSVs concatenable across
 machines and across runs, and it is why they must not be made conditional.
 
+### The services sidecar
+
+When `--format` includes `csv` and services were collected, a second file is
+written alongside the component CSV with `-services` before the extension:
+
+```
+web-01-20240309.csv            components
+web-01-20240309-services.csv   what is listening
+web-01-latest-services.csv     symlink, with --latest-symlink
+```
+
+A sidecar rather than extra columns, for the same reason `services` is a
+top-level array in the JSON: a component appears once, a service appears once
+per listening process, and wedging them together would give every inventory row
+fourteen empty columns. A sidecar rather than a `--format` of its own, because
+an operator asking for CSV wants the whole run as CSV, and making them name a
+second format to get half of it is a trap.
+
+**17 columns, in exactly this order:**
+
+```
+hostname,machine_id,os_id,os_version_id,architecture,scanned_at,endpoints,pid,executable,command,unit,container,user,socket_activated,components,confidence,evidence
+```
+
+The first six are the same host identity the component CSV repeats, for the
+same reason. `endpoints`, `components` and `evidence` are multi-valued and are
+joined with `;` inside their single field. `pid` is empty rather than `0` on the
+aggregate row: `0` is a real pid and would read as a claim. The header is always
+present.
+
+The file is written whenever services were collected at all, even when nothing
+was listening — a header with no rows says "we looked and found nothing", which
+a missing file does not. It is **not** written when services were never
+collected: on Windows, with `--no-services`, or when `--root` is not `/`.
+
 ---
 
 ## NDJSON
@@ -536,6 +662,11 @@ Each line repeats the host identity and the scan time alongside the component
 fields, using the same `snake_case` names and the same order as the CSV columns,
 so a single line is self-describing when it arrives at a log pipeline with no
 surrounding context.
+
+**NDJSON carries components only.** Services are not represented: every line in
+this format is one component, and mixing two record shapes into one stream would
+break every consumer that reads it positionally today. Use JSON, the services
+CSV, or CycloneDX for the `services` block.
 
 ```json
 {"hostname":"web-01","os_id":"debian","os_version_id":"12","architecture":"amd64","scanned_at":"2026-08-19T11:35:35Z","name":"bash","version":"5.2.15-2+b7","type":"deb","purl":"pkg:deb/debian/bash@5.2.15-2%2Bb7?arch=amd64&distro=debian-12","cpes":["cpe:2.3:a:bash:bash:5.2.15-2\\+b7:*:*:*:*:*:*:*"],"locations":["/var/lib/dpkg/status"],"found_by":"dpkg-db-cataloger"}
@@ -605,6 +736,8 @@ identity (the PURL when there is one, otherwise `type:name@version`, with a
 | `components[].licenses` | SPDX `id` for a single-token value, `name` for free text, `expression` for a lone compound expression containing `AND`/`OR`/`WITH` or parentheses |
 | `components[].evidence.occurrences` | One entry per `location` |
 | `components[].properties` | `swinv:component:type`, `:language`, `:found_by`, and any extra `:cpe` values |
+| `services[]` | Each entry of the `services` block, with `bom-ref: swinv:service:<unit or executable basename>`, the schema's own `endpoints` field, and everything else as `swinv:service:*` properties — `confidence`, `executable`, `command`, `unit`, `container`, `user`, `pid`, `socket_activated`, and one `:evidence` property per line of the evidence trail |
+| `dependencies[]` | One edge per service that was attributed, `dependsOn` the `bom-ref`s of the components behind it. This is the edge worth having: it answers "is anything internet-facing running the component this advisory is about" without a join |
 
 Custom property names are namespaced with `swinv:` as CycloneDX asks. Note that
 `type`, `language` and `found_by` survive only as properties — CycloneDX has no

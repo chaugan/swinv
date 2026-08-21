@@ -169,6 +169,8 @@ func registerFlags(fs *flag.FlagSet, cfg *config) {
 	fs.BoolVar(&cfg.deltaOnly, "delta-only", false, "with --since, emit only the changed components instead of the full inventory")
 	fs.StringVar(&cfg.catalogers, "catalogers", "", "cataloger selection expression, e.g. 'os' or '+binary,-python'")
 	fs.BoolVar(&cfg.noFileOwnership, "no-file-ownership", false, "skip package-file ownership (faster, but reintroduces binary/package duplicates)")
+	fs.BoolVar(&cfg.noServices, "no-services", false, "do not report what is listening on the network; skips reading /proc/net and other processes' open files")
+	fs.BoolVar(&cfg.noServiceCommand, "no-service-command", false, "omit each service's command line from the report; command lines sometimes carry passwords and tokens, and an inventory file is usually copied somewhere else")
 	fs.IntVar(&cfg.parallelism, "parallelism", 0, "cataloger parallelism (0 = automatic: a quarter of the CPUs, or all of them with --fast)")
 	fs.BoolVar(&cfg.fullScan, "full-scan", false, "Windows only: also enumerate the filesystem and extract versions from executables the registry does not account for")
 	fs.BoolVar(&cfg.usnProbe, "usn-probe", false, "Windows only, experimental: enumerate the NTFS Master File Table and report what it finds, without scanning; see docs/WINDOWS.md")

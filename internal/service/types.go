@@ -1,6 +1,9 @@
 package service
 
-import "context"
+import (
+	"context"
+	"sort"
+)
 
 // Process is the process holding a listening socket.
 type Process struct {
@@ -66,4 +69,30 @@ type Result struct {
 // without /proc has not done anything wrong.
 func Collect(ctx context.Context, procRoot string) (*Result, error) {
 	return collect(ctx, procRoot)
+}
+
+// ExePaths returns the distinct executable paths of the collected services, in
+// sorted order, for use as an ownership probe against the package databases.
+//
+// Containerised processes are left out. Their executable path is a path in the
+// container's mount namespace, so asking the host's package databases about it
+// invites exactly the false match the attribution refuses to make.
+func (r *Result) ExePaths() []string {
+	if r == nil {
+		return nil
+	}
+	seen := make(map[string]bool, len(r.Services))
+	var out []string
+	for _, s := range r.Services {
+		if s.Process.Exe == "" || s.Process.Container != "" || s.SocketActivated {
+			continue
+		}
+		if seen[s.Process.Exe] {
+			continue
+		}
+		seen[s.Process.Exe] = true
+		out = append(out, s.Process.Exe)
+	}
+	sort.Strings(out)
+	return out
 }
