@@ -13,17 +13,27 @@ disk, nothing leaves the host.**
 
 `swinv` scans the machine it runs on and records every piece of installed
 software it can find — OS packages on Linux, the registry on Windows, language
-packages on both, and loose binaries that no package manager ever installed —
-then writes the result to local JSON and CSV files.
+packages on both, loose binaries that no package manager ever installed, and
+the contents of the containers it is running or has stopped — then writes the
+result to local JSON and CSV files.
 
 It also records **what is actually listening and what is exposed at the
 network edge**, on Linux and Windows both — including the software running
 inside Docker and Kubernetes containers. That is the question an inventory of
 packages cannot answer on its own.
 
-There is no server, no daemon and no database, and **no inventory data ever
-leaves the machine**. Collecting the files afterwards is deliberately your job:
-`rsync`, Ansible, a log shipper, or `scp`.
+`swinv` **is** no server, no daemon and no database — it is one binary that
+runs, writes files and exits — and **no inventory data ever leaves the
+machine**. Collecting the files afterwards is deliberately your job: `rsync`,
+Ansible, a log shipper, or `scp`.
+
+It *talks to* exactly one daemon, and only when containers are present: the
+local container runtime, over its Unix socket or named pipe. That is the only
+way to see inside a stopped container, and the only way to see inside any
+container from Windows, where a Docker Desktop container is a Linux process in
+a virtual machine that no Windows API reaches. It is local kernel IPC with no
+address and no route, it reads the container list and files and nothing else —
+no create, no exec, no attach — and `--no-containers` turns it off.
 
 The one piece of network activity is an optional reverse-DNS lookup used to
 fill in the host's FQDN — ordinary name resolution against your configured
@@ -47,13 +57,17 @@ No package? The binary is static and has no dependencies, so
 `install -m0755 swinv-v0.4.1-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
-That writes dated files plus `-latest` symlinks:
+That writes timestamped files plus `-latest` symlinks — and, run as root with
+containers present, two more alongside them for the services and the network
+edge:
 
 ```console
-/tmp/inv/web-01-20260819.json
-/tmp/inv/web-01-20260819.csv
-/tmp/inv/web-01-latest.json -> web-01-20260819.json
-/tmp/inv/web-01-latest.csv  -> web-01-20260819.csv
+/tmp/inv/web-01-20260822T131806.571Z.json
+/tmp/inv/web-01-20260822T131806.571Z.csv
+/tmp/inv/web-01-20260822T131806.571Z-services.csv     # root, Linux or Windows
+/tmp/inv/web-01-20260822T131806.571Z-exposure.csv     # one row per open port
+/tmp/inv/web-01-latest.json -> web-01-20260822T131806.571Z.json
+/tmp/inv/web-01-latest.csv  -> web-01-20260822T131806.571Z.csv
 ```
 
 Look at what came out, pipe a single format, or ask what changed since last time:
@@ -202,10 +216,13 @@ which installed software owns its executable.
 
 ```console
 $ sudo swinv --out /var/lib/swinv
-swinv: services: 27 attributed to installed software, 3 running software nothing installed, 1 unidentified
-swinv: wrote /var/lib/swinv/web-01-20260821T205516.499Z.json
-swinv: wrote /var/lib/swinv/web-01-20260821T205516.499Z.csv
-swinv: wrote /var/lib/swinv/web-01-20260821T205516.499Z-services.csv
+swinv: containers: 609 package(s) from inside containers added to the inventory
+swinv: services: 29 attributed to installed software, 9 running software nothing installed, 1 unidentified
+swinv: exposure: 15 of 46 endpoint(s) bound beyond loopback, 11 of those identified; 17 container(s) with 32 listening service(s)
+swinv: wrote /var/lib/swinv/web-01-20260822T131806.571Z.json
+swinv: wrote /var/lib/swinv/web-01-20260822T131806.571Z.csv
+swinv: wrote /var/lib/swinv/web-01-20260822T131806.571Z-services.csv
+swinv: wrote /var/lib/swinv/web-01-20260822T131806.571Z-exposure.csv
 ```
 
 ```jsonc
@@ -254,16 +271,36 @@ port into the container that answers it.
 }
 ```
 
-That PURL is the point. It comes from the **container's own package database**,
-read through `/proc/<pid>/root` — an Alpine container on an Ubuntu host — and
-it is a coordinate Grype and Trivy match today. An image reference is not:
-there is no `oci` matcher anywhere in the chain, so an image PURL alone yields
-a component that gets reported clean because nothing ever looked at it. swinv
-emits the image digest as a *locator*, on its own field, never as an identity.
+That PURL is the point. It comes from the **container's own package database**
+— an Alpine container on an Ubuntu host — and it is a coordinate Grype and
+Trivy match today. An image reference is not: there is no `oci` matcher
+anywhere in the chain, so an image PURL alone yields a component that gets
+reported clean because nothing ever looked at it. swinv emits the image digest
+as a *locator*, on its own field, never as an identity.
 
-`containers[]` lists every container and what it runs, published or not, with
-its own OS: `rhel-8.10`, `alpine-3.21.3`, `wolfi-20230201` — each a different
-operating system from the host, deciding which advisories apply.
+`containers[]` lists every container and what it runs, with its own OS —
+`rhel-8.10`, `alpine-3.21.3`, `wolfi-20230201`, each a different operating
+system from the host, deciding which advisories apply.
+
+**Stopped containers are included too.** They serve nothing, so they get no
+exposure row — but an image with a known CVE does not stop having it because
+the container is down, and it will be up again. They carry `state: "exited"`
+and `declared_endpoints`: the ports `EXPOSE` or `-p` says they would serve on,
+which is a declaration and never an observation. A container with no network
+endpoint at all is skipped, since it is not part of this machine's attack
+surface.
+
+There are two routes in, with different precision, and the report says which
+was used:
+
+| Route | Gives | Where |
+|---|---|---|
+| `/proc/<pid>/root` | the package owning a **specific listening executable** | Linux, running containers |
+| the runtime's archive endpoint | the container's **whole package list** | stopped containers, and everything on Windows |
+
+The first wins where it can be asked: naming the package behind a listener
+beats listing the two hundred packages that share its filesystem. Components
+carry `attributes.scan_scope` saying which produced them.
 
 **`bind_scope` is about the bind, not about reachability.** swinv reads no
 firewall, no NAT table and no security group, so there is no "public" and
@@ -447,15 +484,26 @@ Beyond OS packages, on real hosts:
 | Go modules and ELF binaries | **Tested** on Fedora, CVE-matched via `grype` |
 | CycloneDX → `grype` | **Tested** — 234 matches from a 568-component document |
 | `linux/arm64` | **Tested** under emulation — apk 16/16, dpkg 78/78, rpm 147/147, `architecture` correctly `arm64` |
+| Listening sockets and exposure | **Tested** on Linux and on Windows, in CI and on real hosts |
+| Containers, running and stopped | **Tested** on a host with 17 containers across 5 distributions; CI starts its own and asserts the published port resolves to the package inside |
 
 All of this runs in CI on every push, so a Syft upgrade that quietly stops
 reading one package database shows up as a count mismatch rather than as a
 thinner inventory noticed months later.
 
-The remaining caveat is honest rather than alarming: arm64 is verified under
-QEMU emulation, not on physical ARM hardware. Emulation exercises the code but
-not the machine, so if you run this on a Raspberry Pi or an ARM instance, that
-is still worth reporting.
+Two caveats, honest rather than alarming.
+
+arm64 is verified under QEMU emulation, not on physical ARM hardware.
+Emulation exercises the code but not the machine, so if you run this on a
+Raspberry Pi or an ARM instance, that is still worth reporting.
+
+**Kubernetes has not been run against a real node.** `hostNetwork` pods are
+ordinary host listeners and work; `NodePort` is a netfilter rule with no
+listening socket and is invisible by construction, which every report declares
+in `scan.exposure_blind_spots`. What is untested is the pod and namespace
+identity, which is read from CRI annotations whose on-disk paths differ between
+containerd and CRI-O. If you run this on a node, that is the result I most want
+to see.
 
 ### Windows
 
@@ -497,6 +545,29 @@ sources.
 | uninstall registry | installed applications, with version and publisher |
 | package repository | Store and MSIX apps |
 | component store | Windows servicing state — cumulative update, servicing stack, .NET rollup |
+| `iphlpapi` | what is listening, with the process holding each socket |
+| the container runtime | containers, their images and their packages |
+
+The same run produces `services[]`, `exposure[]` and `containers[]` — see
+[what is exposed](#what-is-exposed-and-what-is-inside-the-containers). Two
+things work differently here than on Linux, and the report says so rather than
+leaving you to infer it:
+
+- **Most of what listens on Windows is the operating system.** On one real
+  laptop, 77 of 173 non-loopback endpoints were `svchost.exe` and the kernel.
+  They carry `os_component: true` — **filter that out before treating
+  `medium` as "unmanaged software"**, or every host contributes several dozen
+  false entries.
+- **A container's software comes from the runtime, not the filesystem.** A
+  Docker Desktop container is a Linux process inside a WSL2 virtual machine
+  that no Windows API reaches, so swinv asks the engine over its named pipe.
+  That covers running and stopped containers alike.
+
+Attribution on Windows leans on `--full-scan`: the uninstall registry records
+an install *directory* and never the executables under it, and 72% of entries
+record no directory at all. With `--full-scan` a listening executable matches a
+catalogued PE file exactly. On that same laptop it took identified endpoints
+from 49 to 58, and from zero `high` confidence to 21.
 
 ### `--full-scan`
 
@@ -609,7 +680,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--perm OCTAL` | `0644` | Permission bits for the reports; the directory derives from it |
 | `--skip-nested-rootfs` | false | Drop packages that came from a nested root filesystem (see Known limitations) |
 | `--no-services` | false | Do not report what is listening |
-| `--no-containers` | false | Do not identify containers or what they run |
+| `--no-containers` | false | Do not identify containers or what they run; also stops swinv talking to the container runtime |
 | `--no-service-command` | false | Linux: keep the services block, drop the command lines |
 | `--since PATH` | — | Diff against a previous report |
 | `--hash` | false | Record a SHA-256 per component |
@@ -707,6 +778,15 @@ Worth knowing before you roll this out fleet-wide:
 - **It records installed software paths.** With `--include-home`, that includes
   paths inside users' home directories. This is the main reason home directories
   are off by default.
+- **It talks to the container runtime, if one is there.** Naming the software
+  inside a container means asking the local Docker engine over its Unix socket
+  or named pipe — the only route into a stopped container, and the only route
+  into any container from Windows. It reads the container list and files from
+  container filesystems; it never creates, execs or attaches. This is local
+  kernel IPC, not network activity: no address, no route, nothing leaves the
+  machine. Reaching the socket implies membership of `docker`/`docker-users`,
+  which is itself a privileged position on the host. `--no-containers`
+  disables it.
 - **It records service command lines.** The `services` block includes each
   listening process's `argv`, and command lines are where secrets end up — a
   `--password` on a daemon's ExecStart, a connection string with credentials in
@@ -882,13 +962,19 @@ cmd/swinv/          flags, wiring, exit codes — thin
 internal/model/     output types + schema version. Stdlib only.
 internal/hostfacts/ machine identity, read straight from kernel interfaces
 internal/scan/      the Syft integration — the ONLY package that imports Syft
+internal/wincollect/ the Windows collector: registry, Appx, servicing, MFT
+internal/service/   what is listening, and what is behind it
+internal/dockerapi/ the container runtime client — the ONLY package that
+                    talks to a daemon
+internal/ctrpkg/    package databases read from inside a container
 internal/output/    JSON, CSV, NDJSON, CycloneDX writers + atomic writes
 ```
 
-`internal/scan` is the only package permitted to import Syft; everything
-downstream operates on `internal/model` types. That keeps a Syft API break
-contained to one package and leaves room for a second collection backend without
-touching the writers.
+Two packages are deliberately the only door to something. `internal/scan` is
+the only one permitted to import Syft, which keeps a Syft API break contained
+to one package. `internal/dockerapi` is the only one that talks to a daemon,
+which keeps that exception visible and reviewable rather than spread around.
+Everything downstream operates on `internal/model` types.
 
 ## Documentation
 
@@ -908,4 +994,16 @@ touching the writers.
 ## Non-goals
 
 No central server or phone-home. No configuration management, patching or
-remediation. No vulnerability scanning. No Windows or macOS support. No TUI.
+remediation. No vulnerability scanning — swinv produces the inventory and the
+SBOM; matching them against advisories is a separate job with a database that
+moves daily. No macOS support. No TUI.
+
+Not a container scanner, either. It reads the package database of a container
+that has a network endpoint, because that is part of this machine's attack
+surface; it does not walk container filesystems or unpack images. A full walk
+of one container rootfs on the development host ran past ten minutes without
+finishing, which is the measurement that settled it.
+
+It reads no firewall, NAT table or security group, so nothing it reports is a
+statement about reachability — `bind_scope` describes a bind, and
+`scan.exposure_blind_spots` names what could not be seen.

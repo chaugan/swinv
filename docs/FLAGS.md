@@ -101,8 +101,9 @@ and any symlinks quarantined by the preflight — is always recorded in
 | `--no-containers` | `false` | Do not look inside containers for what they run |
 | `--no-service-command` | `false` | Omit each service's command line from the report |
 
-Linux only; the collector is built on `/proc`. On Windows both flags parse and
-do nothing, so a runbook written for the Linux fleet does not fail there.
+Both platforms. On Linux the sockets come from `/proc`; on Windows from
+`iphlpapi`, which returns the socket tables with an owning pid already
+attached.
 
 Services are collected by default because the question they answer — which of
 the installed software is actually serving, and which serving software nothing
@@ -119,10 +120,12 @@ Two reasons to turn something off:
 - **`--no-services`** skips the section entirely, including reading
   `/proc/<pid>/fd`.
 - **`--no-containers`** keeps the host services and the exposure list but stops
-  swinv reading each container's filesystem through `/proc/<pid>/root`. The
-  cost is the identity of everything behind a published port: without it a
-  container's software cannot be named, because the answer comes from that
-  container's own package database.
+  swinv identifying containers at all — including its one conversation with a
+  daemon, the local container runtime. The cost is the identity of everything
+  behind a published port, and of every stopped container: the answer comes
+  from the container's own package database, reached either through
+  `/proc/<pid>/root` (Linux, running) or through the runtime's archive
+  endpoint (stopped containers, and everything on Windows).
 
 Unprivileged, this degrades rather than fails: `/proc/net` is world-readable so
 the ports are still reported, but attributing a socket to a process needs to
