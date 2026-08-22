@@ -120,6 +120,7 @@ func exposeOne(s Service, e Endpoint, attributed model.Service, runtime string, 
 	if !forwards {
 		out.Components = attributed.Components
 		out.Confidence = attributed.Confidence
+		out.OSComponent = attributed.OSComponent
 		if out.Confidence == "" {
 			out.Confidence = model.ConfidenceLow
 		}

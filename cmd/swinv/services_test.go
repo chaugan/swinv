@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/chaugan/swinv/internal/model"
@@ -93,6 +94,29 @@ func TestWriteServicesCSVSkippedWhenNotCollected(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Errorf("wrote %v, want nothing", entries)
+	}
+}
+
+func TestSummariseExposureNamesOSComponentsSeparately(t *testing.T) {
+	got := summariseExposure([]model.Exposure{
+		{BindScope: model.BindWildcard, Components: []string{"pkg:deb/x@1"}},
+		{BindScope: model.BindWildcard, OSComponent: true},
+		{BindScope: model.BindWildcard, OSComponent: true},
+		{BindScope: model.BindWildcard},
+		{BindScope: model.BindLoopback},
+	}, nil)
+	want := "4 of 5 endpoint(s) bound beyond loopback, 1 of those identified, " +
+		"2 served by the operating system; 0 container(s) with 0 listening service(s)"
+	if got != want {
+		t.Errorf("summariseExposure =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// A host with no operating-system listeners must not gain an empty clause.
+func TestSummariseExposureOmitsTheOSClauseWhenThereIsNone(t *testing.T) {
+	got := summariseExposure([]model.Exposure{{BindScope: model.BindWildcard}}, nil)
+	if strings.Contains(got, "operating system") {
+		t.Errorf("summariseExposure = %q", got)
 	}
 }
 

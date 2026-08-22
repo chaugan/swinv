@@ -792,6 +792,10 @@ type Exposure struct {
 	Unit       string `json:"unit,omitempty"`
 	User       string `json:"user,omitempty"`
 
+	// OSComponent marks an endpoint served by the operating system itself.
+	// See Service.OSComponent.
+	OSComponent bool `json:"os_component,omitempty"`
+
 	// Container is set when the *listening* process is itself containerised,
 	// which on the host network namespace means a --network=host container or
 	// a hostNetwork pod.
@@ -878,6 +882,19 @@ type Service struct {
 	// established. A consumer that disagrees with the conclusion can see what
 	// it rests on.
 	Evidence []string `json:"evidence,omitempty"`
+
+	// OSComponent marks a listener that is part of the operating system
+	// itself.
+	//
+	// It exists because "medium" would otherwise be a lie about it. Medium
+	// means the process was identified and nothing installed owns its
+	// executable -- software running outside package management, which is the
+	// interesting finding. A Windows service running from C:\Windows\System32
+	// is the opposite of that: it came with the operating system, which swinv
+	// represents by the installed servicing updates rather than file by file.
+	// Without this flag a consumer filtering for unmanaged software would
+	// collect several dozen of them from every Windows host.
+	OSComponent bool `json:"os_component,omitempty"`
 
 	// Processes is how many processes share this listener, when more than one
 	// does. A prefork server -- nginx with its workers, php-fpm, gunicorn --

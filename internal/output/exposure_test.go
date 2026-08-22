@@ -115,6 +115,7 @@ func TestExposureCSVCarriesEveryField(t *testing.T) {
 	// Nested structs are flattened with a prefix; the rest map by snake case.
 	renamed := map[string]string{
 		"PID":                "pid",
+		"OSComponent":        "os_component",
 		"BindScope":          "bind_scope",
 		"WildcardCoversIPv4": "wildcard_covers_ipv4",
 		"Backend":            "backend_address",

@@ -39,6 +39,7 @@ var exposureCSVColumns = []string{
 	"unit",
 	"user",
 	"container",
+	"os_component",
 	"backend_address",
 	"backend_port",
 	"backend_container",
@@ -106,27 +107,28 @@ func WriteExposureCSV(w io.Writer, r *model.Report) error {
 		record[14] = e.Unit
 		record[15] = e.User
 		record[16] = e.Container
-		record[17], record[18], record[19], record[20], record[21] = "", "", "", "", ""
+		record[17] = strconv.FormatBool(e.OSComponent)
+		record[18], record[19], record[20], record[21], record[22] = "", "", "", "", ""
 		if e.Backend != nil {
-			record[17] = e.Backend.Address
+			record[18] = e.Backend.Address
 			if e.Backend.Port != 0 {
-				record[18] = strconv.Itoa(int(e.Backend.Port))
+				record[19] = strconv.Itoa(int(e.Backend.Port))
 			}
-			record[19] = e.Backend.Container
-			record[20] = e.Backend.Executable
-			record[21] = e.Backend.Via
+			record[20] = e.Backend.Container
+			record[21] = e.Backend.Executable
+			record[22] = e.Backend.Via
 		}
-		record[22], record[23] = "", ""
+		record[23], record[24] = "", ""
 		if e.Image != nil {
-			record[22] = e.Image.Ref
-			record[23] = e.Image.ManifestDigest
+			record[23] = e.Image.Ref
+			record[24] = e.Image.ManifestDigest
 		}
-		record[24] = strings.Join(e.Components, multiValueSep)
-		record[25] = string(e.Confidence)
-		record[26] = strings.Join(e.Evidence, multiValueSep)
-		record[27] = ranAsRoot
-		record[28] = firewall
-		record[29] = blindSpots
+		record[25] = strings.Join(e.Components, multiValueSep)
+		record[26] = string(e.Confidence)
+		record[27] = strings.Join(e.Evidence, multiValueSep)
+		record[28] = ranAsRoot
+		record[29] = firewall
+		record[30] = blindSpots
 		if err := cw.Write(record); err != nil {
 			return fmt.Errorf("output: writing exposure csv row for %s:%d: %w", e.Address, e.Port, err)
 		}

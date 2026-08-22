@@ -43,6 +43,7 @@ var serviceCSVColumns = []string{
 	// row and a consumer reading by position keeps working.
 	"processes",
 	"published_as",
+	"os_component",
 }
 
 // ServiceCSVColumns returns a copy of the services CSV header row, in order,
@@ -99,6 +100,7 @@ func WriteServicesCSV(w io.Writer, r *model.Report) error {
 			record[17] = strconv.Itoa(s.Processes)
 		}
 		record[18] = strings.Join(s.PublishedAs, multiValueSep)
+		record[19] = strconv.FormatBool(s.OSComponent)
 		if err := cw.Write(record); err != nil {
 			return fmt.Errorf("output: writing services csv row for pid %d: %w", s.PID, err)
 		}

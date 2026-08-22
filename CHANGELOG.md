@@ -35,8 +35,23 @@ schema and cataloger coverage may still change between releases. See
   services are reported at `medium` with the workload and image named, and
   `container-packages-not-readable` joins the blind spots.
 
+- **`Service.os_component` and `Exposure.os_component`** mark a listener that
+  is part of the operating system. Without it `medium` was a lie about a
+  Windows service running from `System32`: medium means software running
+  outside package management, which is the interesting finding, and an OS
+  binary is the opposite of that. A first Windows run produced 65 exposure
+  rows and identified none of them, most being `svchost.exe`.
+
 ### Fixed
 
+- **Windows could attribute nothing at all.** The join matched an executable
+  against a component's recorded locations, but a Windows registry entry
+  records the directory a product was installed into — `C:\Program Files\7-Zip`
+  — and never the executables under it, so nothing ever matched and every
+  listener reported as unmanaged software. The longest containing install
+  directory now counts, case-insensitively, graded `medium` because a
+  containing directory says the product was installed there rather than that
+  it ships that particular file.
 - **Sockets with no identifiable process vanished from `exposure[]`.** They
   were counted and then dropped, so a privileged run inside WSL2 reported
   twelve listening sockets and zero exposure rows — a machine described as

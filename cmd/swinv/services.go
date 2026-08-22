@@ -139,23 +139,32 @@ func containersWithoutPackages(containers []model.Container) int {
 // leads with what is bound beyond loopback, because that is the number the
 // question was asked about.
 func summariseExposure(exposure []model.Exposure, containers []model.Container) string {
-	var beyondLoopback, identified int
+	var beyondLoopback, identified, osComponents int
 	for _, e := range exposure {
 		if e.BindScope == model.BindLoopback {
 			continue
 		}
 		beyondLoopback++
-		if len(e.Components) > 0 {
+		switch {
+		case len(e.Components) > 0:
 			identified++
+		case e.OSComponent:
+			osComponents++
 		}
 	}
 	var containerServices int
 	for _, c := range containers {
 		containerServices += len(c.Services)
 	}
-	return fmt.Sprintf("%d of %d endpoint(s) bound beyond loopback, %d of those identified; "+
-		"%d container(s) with %d listening service(s)",
-		beyondLoopback, len(exposure), identified, len(containers), containerServices)
+	summary := fmt.Sprintf("%d of %d endpoint(s) bound beyond loopback, %d of those identified",
+		beyondLoopback, len(exposure), identified)
+	if osComponents > 0 {
+		// Named separately so they are not read as unmanaged software, which
+		// is what an operating-system binary would otherwise look like.
+		summary += fmt.Sprintf(", %d served by the operating system", osComponents)
+	}
+	return summary + fmt.Sprintf("; %d container(s) with %d listening service(s)",
+		len(containers), containerServices)
 }
 
 // summariseServices is the one line an operator reads about this section. It

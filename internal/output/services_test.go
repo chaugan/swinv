@@ -115,7 +115,7 @@ func TestServicesCSVCarriesEveryServiceField(t *testing.T) {
 		columns[c] = true
 	}
 	// Field name -> column name, where they differ.
-	renamed := map[string]string{"PID": "pid"}
+	renamed := map[string]string{"PID": "pid", "OSComponent": "os_component"}
 
 	st := reflect.TypeOf(model.Service{})
 	for i := 0; i < st.NumField(); i++ {

@@ -123,7 +123,7 @@ func attributeOne(s Service, fileOwners map[string][]string, owners map[string][
 	// Failing that, a component that recorded this exact path as one of its
 	// locations -- a Windows registry entry naming its own executable, or a
 	// binary a file cataloger identified in place.
-	if matches := owners[s.Process.Exe]; len(matches) > 0 {
+	if matches := owners[lookupKey(s.Process.Exe)]; len(matches) > 0 {
 		for _, c := range matches {
 			out.Components = append(out.Components, model.Identify(c))
 		}
@@ -134,11 +134,87 @@ func attributeOne(s Service, fileOwners map[string][]string, owners map[string][
 		return out
 	}
 
+	// Then the directory a product was installed into. A Windows registry
+	// entry records InstallLocation -- "C:\Program Files\7-Zip" -- and never
+	// the executables under it, so nothing above can ever match on Windows
+	// and every listener would report as unmanaged software.
+	//
+	// Weaker evidence than a package's own file list, and graded as such: a
+	// containing directory says the product was installed there, not that it
+	// ships this particular file.
+	if ids, dir := containingProduct(s.Process.Exe, owners); len(ids) > 0 {
+		out.Components = ids
+		out.Confidence = model.ConfidenceMedium
+		out.Evidence = append(out.Evidence, fmt.Sprintf(
+			"installed under %s, which belongs to %s", dir, strings.Join(ids, ", ")))
+		return out
+	}
+
+	// An operating-system component. Not "software nothing installed": it came
+	// with the operating system, which swinv represents by the installed
+	// servicing updates rather than file by file.
+	if IsOSComponent(s.Process.Exe) {
+		out.OSComponent = true
+		out.Confidence = model.ConfidenceMedium
+		out.Evidence = append(out.Evidence,
+			"an operating-system component, which this inventory represents by the "+
+				"installed updates rather than file by file, so no component owns it")
+		return out
+	}
+
 	out.Confidence = model.ConfidenceMedium
 	out.Evidence = append(out.Evidence,
 		"no installed package owns this executable, so it was not installed "+
 			"by a package manager")
 	return out
+}
+
+// containingProduct finds the installed product whose recorded location is the
+// directory this executable sits under.
+//
+// The longest matching directory wins, which is what keeps
+// "C:\Program Files\Adobe\Adobe Photoshop 2024\x.exe" attributed to
+// Photoshop rather than to whatever else recorded "C:\Program Files\Adobe".
+// A tie is reported as a tie: two products claiming the same directory are two
+// candidates, not a coin flip.
+func containingProduct(exe string, owners map[string][]model.Component) ([]string, string) {
+	if exe == "" {
+		return nil, ""
+	}
+	sep := "/"
+	if strings.Contains(exe, "\\") {
+		sep = "\\"
+	}
+	key := lookupKey(exe)
+
+	var best string
+	for dir := range owners {
+		if len(dir) >= len(key) || !strings.HasPrefix(key, dir+sep) {
+			continue
+		}
+		if len(dir) > len(best) {
+			best = dir
+		}
+	}
+	if best == "" {
+		return nil, ""
+	}
+
+	var ids []string
+	for _, c := range owners[best] {
+		ids = append(ids, model.Identify(c))
+	}
+	return model.SortedSet(ids), best
+}
+
+// lookupKey normalises a path for comparison against recorded locations.
+// Windows paths are case-insensitive, and the registry and the process table
+// disagree about case often enough that an exact comparison misses.
+func lookupKey(p string) string {
+	if pathsAreCaseInsensitive() {
+		return strings.ToLower(p)
+	}
+	return p
 }
 
 // indexByLocation maps every recorded file location to the components claiming
@@ -147,7 +223,7 @@ func indexByLocation(components []model.Component) map[string][]model.Component 
 	out := make(map[string][]model.Component)
 	for _, c := range components {
 		for _, loc := range c.Locations {
-			out[loc] = append(out[loc], c)
+			out[lookupKey(loc)] = append(out[lookupKey(loc)], c)
 		}
 	}
 	return out

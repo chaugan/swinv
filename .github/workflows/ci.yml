@@ -166,7 +166,7 @@ jobs:
 
           # The sidecar, with the documented column contract.
           sidecar="$(ls /tmp/svc/*-services.csv | head -1)"
-          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,endpoints,pid,executable,command,unit,container,user,socket_activated,components,confidence,evidence,processes,published_as'
+          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,endpoints,pid,executable,command,unit,container,user,socket_activated,components,confidence,evidence,processes,published_as,os_component'
           got="$(head -1 "$sidecar")"
           test "$got" = "$want" || { echo "FAIL: services CSV header drifted"; echo "got:  $got"; echo "want: $want"; exit 1; }
           test "$(wc -l < "$sidecar")" -gt 1
@@ -261,7 +261,7 @@ jobs:
 
           # The exposure sidecar and its column contract.
           exposure_csv="$(ls /tmp/svc-ctr/*-exposure.csv | head -1)"
-          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,address,port,protocol,family,bind_scope,wildcard_covers_ipv4,pid,executable,unit,user,container,backend_address,backend_port,backend_container,backend_executable,backend_via,image_ref,image_manifest_digest,components,confidence,evidence,ran_as_root,firewall_examined,exposure_blind_spots'
+          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,address,port,protocol,family,bind_scope,wildcard_covers_ipv4,pid,executable,unit,user,container,os_component,backend_address,backend_port,backend_container,backend_executable,backend_via,image_ref,image_manifest_digest,components,confidence,evidence,ran_as_root,firewall_examined,exposure_blind_spots'
           got="$(head -1 "$exposure_csv")"
           test "$got" = "$want" || { echo "FAIL: exposure CSV header drifted"; echo "got:  $got"; echo "want: $want"; exit 1; }
 
@@ -490,6 +490,15 @@ jobs:
           if ($bad) { throw "$($bad.Count) exposure row(s) carry no bind_scope" }
           $claim = $r.exposure | Where-Object { $_.bind_scope -in @("public", "private") }
           if ($claim) { throw "a bind_scope claimed reachability swinv cannot observe" }
+
+          # A Windows runner serves most of its ports from System32. Those must
+          # be marked as operating-system components, or anyone filtering
+          # "medium" for unmanaged software collects several dozen of them.
+          $os = ($r.exposure | Where-Object { $_.os_component }).Count
+          "operating-system endpoints: $os"
+          if ($os -eq 0) { throw "no endpoint was marked as an operating-system component" }
+          $wrong = $r.exposure | Where-Object { $_.os_component -and $_.components }
+          if ($wrong) { throw "an operating-system endpoint also claimed an owning component" }
 
           # A Windows host cannot see inside a container, so the blind spots
           # must say so rather than leaving a short list looking complete.
