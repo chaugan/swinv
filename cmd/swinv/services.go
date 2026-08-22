@@ -81,6 +81,18 @@ func attributeServices(cfg *config, report *model.Report, snapshot *service.Resu
 	report.Containers = service.EnrichContainers("", snapshot.Containers, cfg.noServiceCommand)
 	report.Exposure = service.Expose(snapshot, services, report.Containers)
 
+	// The packages found inside containers join the inventory. Without this
+	// their PURLs exist only in containers[], which breaks CVE matching for
+	// every consumer that reads components[] and nothing else -- most of them,
+	// `grype sbom:` included -- and leaves the CycloneDX dependency edges
+	// pointing at bom-refs no component has. Each carries the scope it was
+	// found at, because only the packages owning a listening executable were
+	// probed and these rows are not the container's inventory.
+	if extra := service.ContainerComponents(report.Containers); len(extra) > 0 {
+		report.Components = model.Normalize(append(report.Components, extra...))
+		logf("services: %d package(s) from inside containers added to the inventory", len(extra))
+	}
+
 	// Named in the document, not only in the docs. An ingest pipeline drops
 	// prose, and these are the only thing that distinguishes "nothing is
 	// exposed" from "the exposure could not be observed".
