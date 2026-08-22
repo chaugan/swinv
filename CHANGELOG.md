@@ -7,6 +7,16 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Fixed
+
+- **`container_state` is now stamped by both routes.** The runtime route set it
+  and the targeted probe did not, so a consumer filtering on it silently
+  dropped whatever the probe had found — which is the more precisely
+  identified half of the two, the packages tied to a specific listening
+  executable.
+
 ## [0.5.1] — 2026-08-22
 
 Two things a v0.5.0 run on a real Windows laptop found, both about the same

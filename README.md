@@ -18,9 +18,17 @@ the contents of the containers it is running or has stopped — then writes the
 result to local JSON and CSV files.
 
 It also records **what is actually listening and what is exposed at the
-network edge**, on Linux and Windows both — including the software running
-inside Docker and Kubernetes containers. That is the question an inventory of
-packages cannot answer on its own.
+network edge**, on Linux and Windows both, and follows a published port into
+the container that answers it — so an open port on the host resolves to the
+exact package inside the container serving it:
+
+```
+0.0.0.0:80  →  docker-proxy  →  container 9d5a98d0dc04  →  /usr/sbin/nginx
+            →  pkg:apk/alpine/nginx@1.27.5-r1  (Alpine 3.21.3, on an Ubuntu host)
+```
+
+That is the question an inventory of packages cannot answer on its own, and
+the reason this exists — see [why not just use…?](#why-not-just-use)
 
 `swinv` **is** no server, no daemon and no database — it is one binary that
 runs, writes files and exits — and **no inventory data ever leaves the
@@ -280,15 +288,72 @@ as a *locator*, on its own field, never as an identity.
 
 `containers[]` lists every container and what it runs, with its own OS —
 `rhel-8.10`, `alpine-3.21.3`, `wolfi-20230201`, each a different operating
-system from the host, deciding which advisories apply.
+system from the host, deciding which advisories apply. On the machine this was
+developed on that is 17 containers across five distributions and **1,281
+packages**, 570 of them inside containers that are not even running.
+
+Here is that same nginx from the other end — the container itself, with what
+it runs and where the host publishes it:
+
+```jsonc
+{
+  "id": "9d5a98d0dc04…", "name": "notprem", "runtime": "docker",
+  "state": "running",
+  "declared_endpoints": ["8080/tcp"],
+  "image": {
+    "ref": "nginxinc/nginx-unprivileged:1.27-alpine",
+    "manifest_digest": "sha256:28d91bdce70ad09025ea901458fdd149259d8e05982ade79d4ef2c0d9470eb48"
+  },
+  "os_id": "alpine", "os_version_id": "3.21.3",
+  "services": [{
+    "endpoints": ["0.0.0.0:8080/tcp"],
+    "executable": "/usr/sbin/nginx",
+    "processes": 9,
+    "components": ["pkg:apk/alpine/nginx@1.27.5-r1?arch=x86_64&distro=alpine-3.21.3"],
+    "confidence": "high",
+    "published_as": ["0.0.0.0:80/tcp", "[::]:80/tcp6"],
+    "evidence": [
+      "listening inside the container's own network namespace, which is reachable from this host only if something publishes it",
+      "the container's own os-release says alpine 3.21.3",
+      "the container's package database records pkg:apk/alpine/nginx@1.27.5-r1… as owning this file"
+    ]
+  }]
+}
+```
+
+`processes: 9` is nginx's master and its eight workers folded back into one
+service — they share the socket, and reporting nine would misstate both what is
+running and how much of it. `published_as` is the back-link to the `exposure`
+row above.
 
 **Stopped containers are included too.** They serve nothing, so they get no
-exposure row — but an image with a known CVE does not stop having it because
-the container is down, and it will be up again. They carry `state: "exited"`
-and `declared_endpoints`: the ports `EXPOSE` or `-p` says they would serve on,
-which is a declaration and never an observation. A container with no network
-endpoint at all is skipped, since it is not part of this machine's attack
-surface.
+exposure row — but a stopped `postgres:14` still holds 142 packages with the
+same advisories, and it will be up again:
+
+```jsonc
+{
+  "id": "5c9bf9afa5d7…", "name": "argilla-postgres-1",
+  "state": "exited",
+  "declared_endpoints": ["5432/tcp"],
+  "image": {"ref": "postgres:14", "manifest_digest": "sha256:aff5787306…"},
+  "os_id": "debian", "os_version_id": "13",
+  "services": [{
+    "endpoints": ["5432/tcp"],
+    "command": "docker-entrypoint.sh postgres",
+    "confidence": "medium",
+    "evidence": [
+      "reported by the container runtime, state exited",
+      "these endpoints are declared by the image or the run configuration, not observed",
+      "142 package(s) read from the container's own database"
+    ]
+  }]
+}
+```
+
+`declared_endpoints` is what `EXPOSE` or `-p` says it would serve on — **a
+declaration, never an observation**, which is why a stopped container's ports
+appear here and never in `exposure`. A container with no network endpoint at
+all is skipped, since it is not part of this machine's attack surface.
 
 There are two routes in, with different precision, and the report says which
 was used:
@@ -636,12 +701,57 @@ as a service account sees that account's and no other's.
 
 ## Why not just use…?
 
+Most of what `swinv` does, something else also does. One thing it does I have
+not found in another tool, and it is the reason this exists — see
+[the chain](#the-chain-nobody-else-seems-to-walk) below.
+
 | | What it gives you | Why `swinv` |
 |---|---|---|
-| **`syft` CLI** | The same detection engine — `swinv` imports it | Adds host identity, stable dated/rotating filenames, atomic writes, day-over-day deltas, and a flat CSV built for SQL. One binary, no JSON round-trip |
-| **osquery** | Far broader host telemetry, SQL over live state | `swinv` is a oneshot binary, not an always-on agent with a daemon and its own query language. Nothing listens, nothing persists |
+| **`syft` CLI** | The same detection engine — `swinv` imports it | Adds host identity, stable dated/rotating filenames, atomic writes, day-over-day deltas, and a flat CSV built for SQL. Syft has no concept of a listening socket. One binary, no JSON round-trip |
+| **osquery** | Far broader host telemetry, SQL over live state | `swinv` is a oneshot binary, not an always-on agent with a daemon and its own query language. osquery can join `listening_ports` to `processes`, but it has no table saying which *package* owns a process's executable, and no package table for the inside of a container |
 | **`dpkg -l` / `rpm -qa`** | Fast, already installed | OS packages only. Misses every language ecosystem and every unmanaged binary, and the output differs per distro |
-| **`grype dir:/`** | Package discovery *and* CVE matching in one pass — also Anchore's, also Syft-powered | A complement, not a competitor. `grype` needs a vulnerability database it downloads and refreshes; `swinv` runs `--offline` with no network at all. `grype` produces findings, `swinv` produces an inventory: host identity, dated files, deltas, CSV. Keep the SBOM and you can re-match new CVEs daily **without re-walking the filesystem** — see [below](#vulnerability-scanning) |
+| **`grype dir:/`** | Package discovery *and* CVE matching in one pass — also Anchore's, also Syft-powered | A complement, not a competitor. `grype` needs a vulnerability database it downloads and refreshes; `swinv` runs `--offline` with no network at all. `grype` produces findings, `swinv` produces an inventory. Keep the SBOM and you can re-match new CVEs daily **without re-walking the filesystem** — see [below](#vulnerability-scanning) |
+| **`trivy` / image scanners** | Deep, authoritative container image analysis, and CVE matching | Image-centric: you point them at an image. They do not tell you *which* image is running on *this* host, on *which* port, or that a stopped container still holds a vulnerable one. `swinv` answers that and hands you the digest to scan |
+| **Wazuh / agent inventory** | Fleet inventory with a server, dashboards, alerting | A server, an agent and a database. `swinv` writes files and exits; collecting them is your job. If you want the dashboards, use Wazuh |
+
+### The chain nobody else seems to walk
+
+Every tool above can tell you *some* of this. What I have not found elsewhere
+is a tool that walks the whole way, on one host, in one pass, offline:
+
+```
+0.0.0.0:80 on this host
+  → held by docker-proxy, whose own package is not the answer
+  → forwards to container 9d5a98d0dc04
+  → /usr/sbin/nginx inside it
+  → pkg:apk/alpine/nginx@1.27.5-r1  (Alpine 3.21.3, on an Ubuntu host)
+```
+
+That last line is a coordinate Grype and Trivy match today. Getting to it means
+crossing three boundaries most tools stop at: **socket to process**, **host to
+container**, and **executable to the package that installed it**. Package
+scanners do the third and know nothing of the first; port scanners and osquery
+do the first and cannot do the third; image scanners live entirely on the other
+side of the second.
+
+Three more things follow from taking that seriously, and I have not seen them
+together elsewhere either:
+
+- **Stopped containers are inventoried too.** They serve nothing — but a
+  stopped `postgres:14` still holds 142 packages with the same advisories, and
+  it will be up again.
+- **Every finding carries its evidence and a confidence.** A row saying "port
+  443 is nginx 1.24" is indistinguishable from a guess unless it shows its
+  working.
+- **What could not be seen is machine-readable.** `scan.exposure_blind_spots`
+  names it, because a host running Kubernetes NodePort or Docker with
+  `userland-proxy` disabled otherwise produces a document identical to a host
+  with nothing exposed at all.
+
+None of this makes `swinv` better at what those tools are for. It does not
+match CVEs, it has no dashboard, and it will never know your fleet. It answers
+one question they leave to you: **what is reachable on this machine, and
+exactly which package is behind it.**
 
 ## Output file naming
 
