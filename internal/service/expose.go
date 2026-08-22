@@ -78,6 +78,14 @@ func Expose(r *Result, attributed []model.Service, containers []model.Container)
 		mergeRow(&out, at, row)
 	}
 
+	// A lone socket says nothing by being alone, so the count is dropped
+	// rather than repeated as "1" on every row in the document.
+	for i := range out {
+		if out[i].Processes < 2 {
+			out[i].Processes = 0
+		}
+	}
+
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Port != out[j].Port {
 			return out[i].Port < out[j].Port

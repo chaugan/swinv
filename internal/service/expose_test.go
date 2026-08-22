@@ -279,6 +279,14 @@ func TestExposeFoldsManySocketsOnOneEndpoint(t *testing.T) {
 	if got[0].Processes != 20 {
 		t.Errorf("processes = %d, want 20", got[0].Processes)
 	}
+
+	// And a lone socket says nothing by being alone, so it carries no count.
+	lone := Expose(&Result{Services: []Service{
+		hostService(1, "/usr/sbin/sshd", endpoint("0.0.0.0", 22, TCP, 1)),
+	}}, nil, nil)
+	if lone[0].Processes != 0 {
+		t.Errorf("a single-socket endpoint reported processes = %d", lone[0].Processes)
+	}
 	if len(got[0].Components) != 1 {
 		t.Errorf("components = %v", got[0].Components)
 	}
