@@ -4,6 +4,7 @@ go 1.26.6
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.11.0
+	github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29
 	github.com/anchore/go-rpmdb v0.2.0
 	github.com/anchore/syft v1.51.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
@@ -29,7 +30,6 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
-	github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29 // indirect
 	github.com/Microsoft/hcsshim v0.15.0-rc.1 // indirect
 	github.com/OneOfOne/xxhash v1.2.8 // indirect
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect

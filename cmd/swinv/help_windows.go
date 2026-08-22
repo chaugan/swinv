@@ -37,6 +37,11 @@ func helpSections() []helpSection {
 			{"--catalogers EXPR", "e.g. os or +binary,-python"},
 			{"--offline", "no network activity at all"},
 		}},
+		{"What is listening", []helpFlag{
+			{"--no-services", "do not report listening sockets and their software"},
+			{"--no-containers", "do not ask the Docker engine what it runs"},
+			{"--no-service-command", "omit command lines; they can carry passwords"},
+		}},
 		{"Comparing against a previous run", []helpFlag{
 			{"--since PATH", "diff against an earlier swinv JSON report"},
 			{"--delta-only", "with --since, emit only what changed"},
@@ -70,6 +75,9 @@ Examples:
 
   swinv --out C:\inventory --full-scan --volumes D:,E:
         Enumerate D: and E: instead of C:.
+
+  swinv --out C:\inventory --no-containers
+        Skip asking the Docker engine what it runs.
 
 Exit codes:
   0 complete    1 incomplete    2 usage error    3 failed    4 timed out

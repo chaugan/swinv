@@ -474,6 +474,37 @@ jobs:
           $r.components | Group-Object type | ForEach-Object { "  $($_.Count)  type=$($_.Name)" }
           $r.components | Select-Object -First 5 name, version, vendor, type | Format-Table
 
+          # Windows now reports what is listening, from iphlpapi rather than
+          # from /proc. A Windows runner always has something bound -- RPC on
+          # 135 at the very least -- so an empty services array means the
+          # collector did not run, not that the machine is quiet.
+          "services: $($r.services.Count)"
+          "exposure: $($r.exposure.Count)"
+          if ($r.services.Count -eq 0) { throw "no listening services found on a Windows host" }
+          if ($r.exposure.Count -eq 0) { throw "services were found but no exposure rows were produced" }
+          $r.exposure | Select-Object -First 8 address, port, protocol, bind_scope, confidence | Format-Table
+
+          # Every exposure row must carry a bind scope, and none may claim a
+          # reachability swinv cannot observe.
+          $bad = $r.exposure | Where-Object { -not $_.bind_scope }
+          if ($bad) { throw "$($bad.Count) exposure row(s) carry no bind_scope" }
+          $claim = $r.exposure | Where-Object { $_.bind_scope -in @("public", "private") }
+          if ($claim) { throw "a bind_scope claimed reachability swinv cannot observe" }
+
+          # A Windows host cannot see inside a container, so the blind spots
+          # must say so rather than leaving a short list looking complete.
+          "blind spots: $($r.scan.exposure_blind_spots -join ', ')"
+          if ($r.scan.firewall_examined -ne $false) { throw "firewall_examined is not false" }
+          if (-not ($r.scan.exposure_blind_spots -contains "firewall-rules-not-read")) {
+            throw "the firewall blind spot is not declared"
+          }
+
+          # --no-services must drop the section entirely, not empty it.
+          .\swinv.exe --out inv-nosvc --offline --quiet --no-services --timeout 5m
+          $nosvc = Get-Content (Get-ChildItem inv-nosvc\*.json | Select-Object -Last 1) -Raw | ConvertFrom-Json
+          if ($null -ne $nosvc.services) { throw "--no-services still produced a services array" }
+          if ($null -ne $nosvc.exposure) { throw "--no-services still produced an exposure array" }
+
           # Store apps and Windows updates are registry reads, so they must be
           # present in the default run, not only under --full-scan.
           $msix = ($r.components | Where-Object { $_.type -eq "msix" }).Count

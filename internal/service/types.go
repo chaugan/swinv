@@ -96,6 +96,18 @@ type Container struct {
 	Services []Service
 }
 
+// Publish is one host endpoint that a runtime says forwards into a container.
+type Publish struct {
+	HostAddress   string
+	HostPort      uint16
+	Protocol      string
+	ContainerID   string
+	ContainerPort uint16
+
+	// Via names where the mapping came from, so a consumer can weigh it.
+	Via string
+}
+
 // Result is what a scan of the machine's listening sockets produced.
 type Result struct {
 	// Services are the listeners in the *host* network namespace. Membership
@@ -108,9 +120,32 @@ type Result struct {
 	// claim.
 	Containers []Container
 
+	// Publishes are host-port-to-container mappings learned from a container
+	// runtime rather than inferred.
+	//
+	// Where they exist they are better than anything derivable from a
+	// forwarding process's command line: the runtime is stating the mapping it
+	// created. On Windows they are the only route at all, since a Docker
+	// Desktop container is a Linux process inside a virtual machine and no
+	// Windows API reaches it.
+	Publishes []Publish
+
 	// Unattributed counts listening sockets whose owning process could not be
 	// identified, which unprivileged means nearly all of them.
 	Unattributed int
+
+	// Unowned are those sockets themselves, in the host network namespace.
+	//
+	// Kept, not merely counted, because "something is listening on 443 and I
+	// could not see what" is the statement this section exists to make. A
+	// socket whose process is unknown is still an open port, and dropping it
+	// from the exposure list would report a machine as having nothing exposed
+	// on the strength of not having been able to look.
+	Unowned []Endpoint
+
+	// HostNamespace is the network namespace init is in, so a caller can tell
+	// which of the above are the host's.
+	HostNamespace string
 
 	Warnings []string
 }

@@ -205,3 +205,56 @@ func TestExposeIgnoresContainerNamespaces(t *testing.T) {
 		}
 	}
 }
+
+// A socket whose holder could not be identified is still an open port. A
+// privileged WSL2 run reported twelve listening sockets and zero exposure
+// rows, because unattributable sockets were counted and then dropped -- which
+// reports a machine as having nothing exposed on the strength of not having
+// been able to look.
+func TestExposeKeepsSocketsWithNoIdentifiableProcess(t *testing.T) {
+	r := &Result{
+		Services: []Service{hostService(811, "/usr/sbin/sshd", endpoint("0.0.0.0", 22, TCP, 1))},
+		Unowned: []Endpoint{
+			endpoint("0.0.0.0", 443, TCP, 2),
+			endpoint("::", 8443, TCP6, 3),
+		},
+		Unattributed: 2,
+	}
+
+	got := Expose(r, nil, nil)
+	if len(got) != 3 {
+		t.Fatalf("got %d rows, want 3: %+v", len(got), got)
+	}
+
+	byPort := map[uint16]model.Exposure{}
+	for _, e := range got {
+		byPort[e.Port] = e
+	}
+	if byPort[443].BindScope != model.BindWildcard {
+		t.Errorf("443 bind_scope = %q", byPort[443].BindScope)
+	}
+	if byPort[443].Confidence != model.ConfidenceLow {
+		t.Errorf("443 confidence = %q, want low", byPort[443].Confidence)
+	}
+	if byPort[443].PID != 0 || byPort[443].Executable != "" {
+		t.Errorf("443 claims a process it could not see: %+v", byPort[443])
+	}
+	if !containsSubstring(byPort[443].Evidence, "could not be identified") {
+		t.Errorf("443 evidence does not say why: %v", byPort[443].Evidence)
+	}
+	if !byPort[8443].WildcardCoversIPv4 {
+		t.Error("a :: bind did not record that it covers IPv4")
+	}
+}
+
+// An unowned socket that a service also reports must not produce a second row.
+func TestExposeDoesNotDoubleCountAnUnownedSocket(t *testing.T) {
+	shared := endpoint("0.0.0.0", 22, TCP, 7)
+	r := &Result{
+		Services: []Service{hostService(811, "/usr/sbin/sshd", shared)},
+		Unowned:  []Endpoint{shared},
+	}
+	if got := Expose(r, nil, nil); len(got) != 1 {
+		t.Errorf("got %d rows for one socket", len(got))
+	}
+}

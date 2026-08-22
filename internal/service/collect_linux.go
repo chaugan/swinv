@@ -55,15 +55,23 @@ func collect(ctx context.Context, procRoot string) (*Result, error) {
 		return &Result{Warnings: warnings}, nil
 	}
 
-	owners, unattributed, err := mapSocketsToProcesses(ctx, procRoot, endpoints)
+	owners, unowned, err := mapSocketsToProcesses(ctx, procRoot, endpoints)
 	if err != nil {
 		return nil, err
 	}
-	if unattributed > 0 {
+	if len(unowned) > 0 {
+		// Two causes, and the message names both rather than asserting the
+		// common one. Unprivileged, another user's open files are unreadable.
+		// Privileged, the holder can still be invisible: under WSL2 a socket
+		// in this namespace may belong to a process in another distribution's
+		// PID namespace, and a privileged run there reported every socket
+		// unattributed while being told it was not root.
 		warnings = append(warnings, fmt.Sprintf(
-			"%d of %d listening sockets could not be attributed to a process; "+
-				"reading another user's open files needs root, so an unprivileged scan "+
-				"sees only its own", unattributed, len(endpoints)))
+			"%d of %d listening sockets could not be attributed to a process: either the "+
+				"scan cannot read another user's open files, which needs root, or the "+
+				"holding process is outside this PID namespace. The sockets are still "+
+				"reported, without a process against them",
+			len(unowned), len(endpoints)))
 	}
 
 	services := groupByProcess(owners, nsByID)
@@ -75,11 +83,32 @@ func collect(ctx context.Context, procRoot string) (*Result, error) {
 	})
 
 	host, containers := split(procRoot, services, nsByID)
+
+	// Only the host namespace's unowned sockets are carried forward: an
+	// unattributable socket inside some container's namespace is not an open
+	// port on this machine, and reporting it as one would be the wrong answer
+	// in the direction that matters.
+	var hostNS string
+	for _, ns := range spaces {
+		if ns.Host {
+			hostNS = ns.ID
+			break
+		}
+	}
+	var hostUnowned []Endpoint
+	for _, e := range unowned {
+		if e.NetNS == hostNS {
+			hostUnowned = append(hostUnowned, e)
+		}
+	}
+
 	return &Result{
-		Services:     host,
-		Containers:   containers,
-		Warnings:     warnings,
-		Unattributed: unattributed,
+		Services:      host,
+		Containers:    containers,
+		Warnings:      warnings,
+		Unattributed:  len(unowned),
+		Unowned:       hostUnowned,
+		HostNamespace: hostNS,
 	}, nil
 }
 
@@ -176,7 +205,7 @@ type socketOwner struct {
 // One pass over every process, rather than one pass per socket: a busy host has
 // tens of thousands of file descriptors and a few dozen listeners, so the walk
 // is the expensive part and doing it once matters.
-func mapSocketsToProcesses(ctx context.Context, procRoot string, endpoints []Endpoint) ([]socketOwner, int, error) {
+func mapSocketsToProcesses(ctx context.Context, procRoot string, endpoints []Endpoint) ([]socketOwner, []Endpoint, error) {
 	wanted := make(map[uint64]Endpoint, len(endpoints))
 	for _, e := range endpoints {
 		wanted[e.Inode] = e
@@ -184,7 +213,7 @@ func mapSocketsToProcesses(ctx context.Context, procRoot string, endpoints []End
 
 	entries, err := os.ReadDir(procRoot)
 	if err != nil {
-		return nil, 0, fmt.Errorf("service: reading %s: %w", procRoot, err)
+		return nil, nil, fmt.Errorf("service: reading %s: %w", procRoot, err)
 	}
 
 	var owners []socketOwner
@@ -192,7 +221,7 @@ func mapSocketsToProcesses(ctx context.Context, procRoot string, endpoints []End
 
 	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
-			return nil, 0, err
+			return nil, nil, err
 		}
 		pid, err := strconv.Atoi(entry.Name())
 		if err != nil || !entry.IsDir() {
@@ -210,7 +239,19 @@ func mapSocketsToProcesses(ctx context.Context, procRoot string, endpoints []End
 			found[inode] = true
 		}
 	}
-	return owners, len(wanted) - len(found), nil
+	var unowned []Endpoint
+	for inode, e := range wanted {
+		if !found[inode] {
+			unowned = append(unowned, e)
+		}
+	}
+	sort.Slice(unowned, func(i, j int) bool {
+		if unowned[i].Port != unowned[j].Port {
+			return unowned[i].Port < unowned[j].Port
+		}
+		return unowned[i].Address < unowned[j].Address
+	})
+	return owners, unowned, nil
 }
 
 // socketInodes returns which of the wanted socket inodes this process holds.

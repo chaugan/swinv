@@ -99,6 +99,14 @@ func attributeServices(cfg *config, report *model.Report, snapshot *service.Resu
 	// prose, and these are the only thing that distinguishes "nothing is
 	// exposed" from "the exposure could not be observed".
 	report.Scan.ExposureBlindSpots = service.DetectBlindSpots(cfg.root, report.Scan.RanAsRoot)
+	// Containers whose software could not be named. On Windows this is every
+	// one of them, because the filesystem is inside a virtual machine; the
+	// image is still reported, and an image reference is not something a
+	// vulnerability matcher can resolve.
+	if unreadable := containersWithoutPackages(report.Containers); unreadable > 0 {
+		report.Scan.ExposureBlindSpots = append(report.Scan.ExposureBlindSpots,
+			service.BlindContainerFilesystem)
+	}
 	// Always false, always emitted. The constant is the whole difference
 	// between "no firewall rules were found" and "firewall rules were never
 	// read" for anyone building an exposure report on this.
@@ -106,6 +114,25 @@ func attributeServices(cfg *config, report *model.Report, snapshot *service.Resu
 
 	logf("services: %s", summariseServices(services))
 	logf("exposure: %s", summariseExposure(report.Exposure, report.Containers))
+}
+
+// containersWithoutPackages counts containers where no service could be tied
+// to a package the container itself installed.
+func containersWithoutPackages(containers []model.Container) int {
+	var n int
+	for _, c := range containers {
+		named := false
+		for _, s := range c.Services {
+			if len(s.Components) > 0 {
+				named = true
+				break
+			}
+		}
+		if !named {
+			n++
+		}
+	}
+	return n
 }
 
 // summariseExposure is the line an operator reads about the network edge. It

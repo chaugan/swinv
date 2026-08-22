@@ -52,6 +52,36 @@ func Expose(r *Result, attributed []model.Service, containers []model.Container)
 		}
 	}
 
+	// A socket whose holder could not be identified is still an open port.
+	// Leaving it out would report a machine as having nothing exposed on the
+	// strength of not having been able to look -- which is the failure this
+	// whole section is built to avoid, and which a privileged WSL2 run hit
+	// while reporting twelve listening sockets and zero exposure rows.
+	for _, e := range r.Unowned {
+		if _, seen := byInode[e.Inode]; seen && e.Inode != 0 {
+			continue
+		}
+		row := model.Exposure{
+			Address:    e.Address,
+			Port:       e.Port,
+			Protocol:   transportOf(e.Protocol),
+			Family:     familyOf(e.Protocol),
+			BindScope:  BindScopeOf(e.Address),
+			Confidence: model.ConfidenceLow,
+			Evidence: []string{
+				fmt.Sprintf("socket %s is open in the host network namespace", e),
+				"the process holding it could not be identified: either another user's " +
+					"open files were unreadable, which needs root, or the holder is " +
+					"outside this PID namespace",
+			},
+		}
+		if row.BindScope == model.BindWildcard && row.Family == "ipv6" {
+			row.WildcardCoversIPv4 = true
+		}
+		byInode[e.Inode] = len(out)
+		out = append(out, row)
+	}
+
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Port != out[j].Port {
 			return out[i].Port < out[j].Port
@@ -110,6 +140,14 @@ func exposeOne(s Service, e Endpoint, attributed model.Service, runtime string, 
 		"held by %s, which forwards for %s, so its own package is not the software behind this port",
 		s.Process.Exe, runtime))
 
+	// A mapping the runtime itself stated beats one parsed out of a command
+	// line, and on Windows it is the only one available.
+	if p, ok := publishFor(r, e); ok {
+		return withBackend(out, r, containers, Forward{
+			BackendAddress: "", BackendPort: p.ContainerPort, Via: p.Via,
+		}, p.ContainerID, e)
+	}
+
 	forward, ok := ParseDockerProxy(s.Process.Command)
 	if !ok {
 		out.Confidence = model.ConfidenceLow
@@ -130,11 +168,48 @@ func exposeOne(s Service, e Endpoint, attributed model.Service, runtime string, 
 			"no container was found listening on %s:%d", forward.BackendAddress, forward.BackendPort))
 		return out
 	}
-	out.Backend.Container = target.ID
+	return withBackend(out, r, containers, forward, target.ID, e)
+}
+
+// publishFor finds a runtime-stated mapping for a host endpoint.
+//
+// A mapping bound to a specific host address matches only that address; one
+// the runtime recorded with an empty or wildcard address matches any, which is
+// how Docker records "-p 3000:3000".
+func publishFor(r *Result, e Endpoint) (Publish, bool) {
+	for _, p := range r.Publishes {
+		if p.HostPort != e.Port || p.Protocol != transportOf(e.Protocol) {
+			continue
+		}
+		switch p.HostAddress {
+		case "", "0.0.0.0", "::":
+			return p, true
+		default:
+			if p.HostAddress == e.Address {
+				return p, true
+			}
+		}
+	}
+	return Publish{}, false
+}
+
+// withBackend fills in the container behind a forwarded endpoint, and records
+// on that container's own service where it is published.
+func withBackend(out model.Exposure, r *Result, containers []model.Container,
+	forward Forward, containerID string, e Endpoint) model.Exposure {
+
+	if out.Backend == nil {
+		out.Backend = &model.Backend{
+			Address: forward.BackendAddress,
+			Port:    forward.BackendPort,
+			Via:     forward.Via,
+		}
+	}
+	out.Backend.Container = containerID
 
 	matched := false
 	for i := range containers {
-		if containers[i].ID != target.ID {
+		if containers[i].ID != containerID {
 			continue
 		}
 		out.Image = containers[i].Image
@@ -147,7 +222,7 @@ func exposeOne(s Service, e Endpoint, attributed model.Service, runtime string, 
 			out.Components = svc.Components
 			out.Confidence = svc.Confidence
 			out.Evidence = append(out.Evidence, fmt.Sprintf(
-				"forwards to %s in container %s", svc.Executable, shortID(target.ID)))
+				"forwards to %s in container %s", svc.Executable, shortID(containerID)))
 			svc.PublishedAs = model.SortedSet(append(svc.PublishedAs, e.String()))
 			matched = true
 		}
@@ -161,7 +236,7 @@ func exposeOne(s Service, e Endpoint, attributed model.Service, runtime string, 
 		// the answer.
 		out.Evidence = append(out.Evidence, fmt.Sprintf(
 			"container %s was identified, but no process in it was seen listening on port %d",
-			shortID(target.ID), forward.BackendPort))
+			shortID(containerID), forward.BackendPort))
 	}
 	if out.Confidence == "" {
 		out.Confidence = model.ConfidenceLow

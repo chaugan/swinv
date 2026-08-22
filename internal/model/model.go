@@ -715,11 +715,14 @@ type Image struct {
 	// "splunk/splunk:latest".
 	Ref string `json:"ref,omitempty"`
 
-	// ManifestDigest is the registry manifest digest -- what "repo@sha256:..."
-	// means and what an image scanner will have seen. Distinct from ID, which
-	// is the local config digest; conflating the two is the classic bug here,
-	// and a locally built image that was never pushed has no manifest digest
-	// at all.
+	// ManifestDigest is the "repo@sha256:..." digest, which is what an image
+	// scanner elsewhere will have seen, and ID is the local image identifier.
+	//
+	// Both are reported rather than one, because which is which depends on the
+	// daemon: a Docker 29 engine using the containerd image store reported the
+	// same sha256 for both on a pulled image, while the same host's on-disk
+	// container state carried a different manifest digest for it. A locally
+	// built image that was never pushed has no repo digest at all.
 	ManifestDigest string `json:"manifest_digest,omitempty"`
 	ID             string `json:"id,omitempty"`
 

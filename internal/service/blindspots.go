@@ -33,6 +33,14 @@ const (
 	// partially observed one.
 	BlindKubernetes = "kubernetes-node-nodeport-not-observable"
 
+	// BlindContainerFilesystem: containers are running, but their filesystems
+	// are not reachable, so the packages inside them could not be read. This
+	// is the normal state on Windows, where a Docker Desktop container is a
+	// Linux process inside a virtual machine. The workload and its image are
+	// still named; what is missing is the package identity a vulnerability
+	// matcher can use.
+	BlindContainerFilesystem = "container-packages-not-readable"
+
 	// BlindDockerNoProxy: the Docker daemon is configured with
 	// "userland-proxy": false, so published ports are netfilter rules and no
 	// process holds them. Without this the host is indistinguishable from one
