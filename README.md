@@ -57,60 +57,41 @@ in-process with no subprocess overhead.
 Every box is a source `swinv` reads directly. Nothing is inferred, nothing is
 fetched over a network, and nothing is left running afterwards.
 
-```mermaid
-flowchart LR
-  classDef src  fill:#eef4fb,stroke:#5b8db8,color:#12303f
-  classDef win  fill:#f3eefb,stroke:#8b6bb8,color:#2a1240
-  classDef ctr  fill:#eefbf3,stroke:#4fa877,color:#0f3323
-  classDef core fill:#fbf6ee,stroke:#c08a3e,stroke-width:2px,color:#3f2a0f
-  classDef out  fill:#ffffff,stroke:#6d7480,color:#22262c
-
-  subgraph LINUX["Linux host"]
-    direction TB
-    L1["OS packages<br/>dpkg · rpm · apk · pacman · portage"]:::src
-    L2["~40 language ecosystems<br/>python · npm · go · java · gem · cargo"]:::src
-    L3["Loose binaries<br/>ELF that nothing installed"]:::src
-    L4["Package file lists<br/>which package owns this executable"]:::src
-    L5["Listening sockets<br/>proc net tcp · tcp6 · udp · udp6"]:::src
-    L6["Processes and namespaces<br/>fd · exe · cgroup · ns"]:::src
-  end
-
-  subgraph WINDOWS["Windows host"]
-    direction TB
-    W1["Uninstall registry<br/>HKLM · WOW6432Node · HKU"]:::win
-    W2["Store and MSIX packages"]:::win
-    W3["Component store<br/>cumulative · servicing stack · .NET"]:::win
-    W4["NTFS Master File Table<br/>full-scan, opens no file"]:::win
-    W5["PE VERSIONINFO<br/>plus Python and npm manifests"]:::win
-    W6["Listening sockets<br/>iphlpapi, with the owning pid"]:::win
-  end
-
-  subgraph CONTAINERS["Containers — running and stopped"]
-    direction TB
-    C1["Container package database<br/>dpkg · apk · rpm, its own"]:::ctr
-    C2["Container os-release<br/>a different OS from the host"]:::ctr
-    C3["Runtime API<br/>images · digests · port mappings"]:::ctr
-  end
-
-  subgraph HOST["Machine identity"]
-    direction TB
-    H1["machine-id · os-release · kernel"]:::src
-    H2["DMI vendor · product · serial"]:::src
-    H3["IPs · MACs · virtualisation"]:::src
-  end
-
-  CORE(["swinv<br/>one binary · no daemon · offline"]):::core
-
-  LINUX --> CORE
-  WINDOWS --> CORE
-  CONTAINERS --> CORE
-  HOST --> CORE
-
-  CORE --> O1["components<br/>every package, with PURL and CPE"]:::out
-  CORE --> O2["services<br/>what is listening, and what installed it"]:::out
-  CORE --> O3["exposure<br/>one row per open port on this host"]:::out
-  CORE --> O4["containers<br/>each container, its OS and its software"]:::out
-  CORE --> O5["JSON · CSV · NDJSON · CycloneDX<br/>plus services and exposure sidecars"]:::out
+```
+┌─────────────────────────────────────┬─────────────────────────────────────┐
+│ LINUX HOST                          │ WINDOWS HOST                        │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│ dpkg · rpm · apk · pacman · alpm    │ uninstall registry   HKLM · HKU     │
+│ ~40 language ecosystems             │ Store and MSIX packages             │
+│   python npm go java gem cargo      │ component store   servicing state   │
+│ loose ELF binaries                  │ NTFS master file table              │
+│ package file lists                  │   --full-scan, opens no file        │
+│ /proc/net/{tcp,tcp6,udp,udp6}       │ PE VERSIONINFO  + py/npm manifests  │
+│ /proc/<pid>/{fd,exe,cgroup,ns}      │ iphlpapi   sockets with owning pid  │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│ CONTAINERS   running + stopped      │ MACHINE IDENTITY                    │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│ its own dpkg / apk / rpm database   │ machine-id · os-release · kernel    │
+│ its own os-release                  │ DMI vendor · product · serial       │
+│ runtime API   image · ports         │ IPs · MACs · virtualisation         │
+└─────────────────────────────────────┴─────────────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌───────────────────────────────────┐
+                    │  swinv                            │
+                    │  one binary · no daemon · offline │
+                    └───────────────────────────────────┘
+                                      │
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ components[]   every package, with PURL and CPE                           │
+│ services[]     what is listening, and what installed it                   │
+│ exposure[]     one row per open port on this host                         │
+│ containers[]   each container, its OS and its software                    │
+├───────────────────────────────────────────────────────────────────────────┤
+│ written as     JSON · CSV · NDJSON · CycloneDX                            │
+│                + services and exposure CSV sidecars                       │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 The two kinds of source answer different questions and neither knows the
