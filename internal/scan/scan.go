@@ -26,6 +26,7 @@ import (
 	"github.com/anchore/syft/syft/source"
 
 	"github.com/chaugan/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/pathnorm"
 
 	// Syft v1.51.0's RPM cataloger opens the RPM package database through
 	// database/sql and needs a registered "sqlite" driver. Without this blank
@@ -264,7 +265,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		// Package identity to component index, so Syft's relationships can be
 		// resolved back onto the components they describe.
 		byID := make(map[artifact.ID]int)
-		canonPath := usrMerge(absRoot)
+		canonPath := pathnorm.UsrMerge(absRoot)
 		probe := probeSet(opts.OwnerProbe, canonPath)
 		ownerHits := make(map[string][]int)
 		if s.Artifacts.Packages != nil {

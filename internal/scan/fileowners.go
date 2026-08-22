@@ -1,9 +1,7 @@
 package scan
 
 import (
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/anchore/syft/syft/pkg"
@@ -41,47 +39,6 @@ func resolveOwners(probe map[string]string, canon func(string) string, p pkg.Pac
 		if probed, ok := probe[canon(path.Clean(f))]; ok {
 			hits[probed] = append(hits[probed], index)
 		}
-	}
-}
-
-// mergedUsrDirs are the top-level directories that the /usr merge turned into
-// symlinks into /usr.
-var mergedUsrDirs = []string{"bin", "sbin", "lib", "lib32", "lib64", "libx32"}
-
-// usrMerge builds the path canonicalisation the ownership probe compares
-// through, by checking which of those directories are symlinks under root.
-//
-// It is needed because the two sides disagree about the same file. dpkg on
-// Ubuntu 24.04 records netcat-openbsd as owning /bin/nc.openbsd, while
-// /proc/<pid>/exe reports the running process as /usr/bin/nc.openbsd -- the
-// kernel resolves the symlink, the package database preserves the path from
-// before the merge. A plain string comparison misses, and the service is
-// reported as software no package manager installed: the confident wrong
-// answer, about a file that is very much installed.
-//
-// The check is a stat rather than an assumption because /bin is a real
-// directory on Alpine, where /bin/busybox and /usr/bin/busybox would be
-// genuinely different files and folding them together would invent a match.
-func usrMerge(root string) func(string) string {
-	merged := make(map[string]bool, len(mergedUsrDirs))
-	for _, d := range mergedUsrDirs {
-		if fi, err := os.Lstat(filepath.Join(root, d)); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-			merged[d] = true
-		}
-	}
-	if len(merged) == 0 {
-		return func(p string) string { return p }
-	}
-	return func(p string) string {
-		rest, ok := strings.CutPrefix(p, "/")
-		if !ok {
-			return p
-		}
-		first, _, ok := strings.Cut(rest, "/")
-		if !ok || !merged[first] {
-			return p
-		}
-		return "/usr" + p
 	}
 }
 

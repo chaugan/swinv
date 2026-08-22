@@ -4,6 +4,7 @@ go 1.26.6
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.11.0
+	github.com/anchore/go-rpmdb v0.2.0
 	github.com/anchore/syft v1.51.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	golang.org/x/sys v0.47.0
@@ -43,7 +44,6 @@ require (
 	github.com/anchore/go-logger v0.1.1 // indirect
 	github.com/anchore/go-lzo v0.1.1 // indirect
 	github.com/anchore/go-macholibre v0.1.1 // indirect
-	github.com/anchore/go-rpmdb v0.2.0 // indirect
 	github.com/anchore/go-struct-converter v0.2.0-rc2 // indirect
 	github.com/anchore/go-sync v0.1.1 // indirect
 	github.com/anchore/go-version v1.2.2-0.20200701162849-18adb9c92b9b // indirect

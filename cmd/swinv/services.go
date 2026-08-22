@@ -73,7 +73,48 @@ func attributeServices(cfg *config, report *model.Report, snapshot *service.Resu
 		}
 	}
 	report.Services = services
+
+	// Containers before exposure: a published host port's identity is the
+	// software inside the container behind it, so that has to be resolved
+	// first, and publishing it is then recorded back onto the container's own
+	// service.
+	report.Containers = service.EnrichContainers("", snapshot.Containers, cfg.noServiceCommand)
+	report.Exposure = service.Expose(snapshot, services, report.Containers)
+
+	// Named in the document, not only in the docs. An ingest pipeline drops
+	// prose, and these are the only thing that distinguishes "nothing is
+	// exposed" from "the exposure could not be observed".
+	report.Scan.ExposureBlindSpots = service.DetectBlindSpots(cfg.root, report.Scan.RanAsRoot)
+	// Always false, always emitted. The constant is the whole difference
+	// between "no firewall rules were found" and "firewall rules were never
+	// read" for anyone building an exposure report on this.
+	report.Scan.FirewallExamined = false
+
 	logf("services: %s", summariseServices(services))
+	logf("exposure: %s", summariseExposure(report.Exposure, report.Containers))
+}
+
+// summariseExposure is the line an operator reads about the network edge. It
+// leads with what is bound beyond loopback, because that is the number the
+// question was asked about.
+func summariseExposure(exposure []model.Exposure, containers []model.Container) string {
+	var beyondLoopback, identified int
+	for _, e := range exposure {
+		if e.BindScope == model.BindLoopback {
+			continue
+		}
+		beyondLoopback++
+		if len(e.Components) > 0 {
+			identified++
+		}
+	}
+	var containerServices int
+	for _, c := range containers {
+		containerServices += len(c.Services)
+	}
+	return fmt.Sprintf("%d of %d endpoint(s) bound beyond loopback, %d of those identified; "+
+		"%d container(s) with %d listening service(s)",
+		beyondLoopback, len(exposure), identified, len(containers), containerServices)
 }
 
 // summariseServices is the one line an operator reads about this section. It
@@ -106,6 +147,19 @@ func scanningLiveHost(root string) bool {
 	return filepath.Clean(root) == filepath.Clean("/")
 }
 
+// writeExposureCSV writes the exposure sidecar next to the component CSV.
+//
+// A separate file from the services one because the two have different units:
+// a service is a process, an exposure row is a socket, and a consumer whose
+// job is the network edge wants the second without having to explode the
+// first.
+func writeExposureCSV(cfg *config, report *model.Report, base string, logf func(string, ...any), stderr io.Writer) int {
+	if report.Exposure == nil {
+		return exitOK
+	}
+	return writeSidecar(cfg, report, base, "-exposure.csv", output.WriteExposureCSV, logf, stderr)
+}
+
 // writeServicesCSV writes the services sidecar next to the component CSV.
 //
 // Sidecar rather than a --format of its own: an operator asking for CSV wants
@@ -118,9 +172,16 @@ func writeServicesCSV(cfg *config, report *model.Report, base string, logf func(
 	if report.Services == nil {
 		return exitOK
 	}
-	target := filepath.Join(cfg.out, base+"-services.csv")
+	return writeSidecar(cfg, report, base, "-services.csv", output.WriteServicesCSV, logf, stderr)
+}
+
+// writeSidecar writes one sidecar file and maintains its -latest symlink.
+func writeSidecar(cfg *config, report *model.Report, base, suffix string,
+	write func(io.Writer, *model.Report) error, logf func(string, ...any), stderr io.Writer) int {
+
+	target := filepath.Join(cfg.out, base+suffix)
 	if err := output.AtomicWriteFile(target, cfg.filePerm, func(w io.Writer) error {
-		return output.WriteServicesCSV(w, report)
+		return write(w, report)
 	}); err != nil {
 		fmt.Fprintf(stderr, "swinv: writing %s: %v\n", target, err)
 		return exitFatal
@@ -128,7 +189,7 @@ func writeServicesCSV(cfg *config, report *model.Report, base string, logf func(
 	logf("wrote %s", target)
 
 	if cfg.latestSymlink {
-		link := filepath.Join(cfg.out, latestBase(report)+"-services.csv")
+		link := filepath.Join(cfg.out, latestBase(report)+suffix)
 		if link != target {
 			if err := output.UpdateSymlink(link, filepath.Base(target)); err != nil {
 				fmt.Fprintf(stderr, "swinv: warning: updating %s: %v\n", link, err)

@@ -17,7 +17,7 @@ import (
 // 1.1 added Component.SHA256 (--hash) and Report.Delta (--since). Both are
 // additive and omitted when unused, so a 1.0 consumer still parses a 1.1
 // document.
-const SchemaVersion = "1.6"
+const SchemaVersion = "1.7"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -40,6 +40,32 @@ type Report struct {
 	// that ignores this array loses context and loses nothing else -- which
 	// matters because most vulnerability matchers do ignore it.
 	Services []Service `json:"services,omitempty"`
+
+	// Containers are the containerised workloads found on this machine and what
+	// each is listening on *inside its own network namespace*.
+	//
+	// Separate from Services and from Exposure because it answers a separate
+	// question -- what is running in the containers, with an identity a
+	// vulnerability matcher can use -- and because nothing in here is a claim
+	// about host reachability. A container port reaches the host only if
+	// something published it, and that fact lives in Exposure, cross-linked
+	// from Service.PublishedAs.
+	Containers []Container `json:"containers,omitempty"`
+
+	// Exposure is every listening socket in the *host* network namespace, and
+	// nothing else.
+	//
+	// Membership is the verdict. A socket bound to 0.0.0.0 inside a
+	// container's network namespace is not reachable on this host, and if such
+	// a row appeared here alongside an address a reader would draw the
+	// opposite conclusion -- so those rows are not here at all, and a consumer
+	// reading only this array cannot get it wrong. BindScope then says how
+	// widely each of these is bound.
+	//
+	// It is a separate array rather than a view of Services because for a
+	// forwarded port the two carry different facts: docker-proxy holds the
+	// socket, and the software worth naming is inside the container behind it.
+	Exposure []Exposure `json:"exposure,omitempty"`
 }
 
 // Delta is the difference between this scan and an earlier report, produced by
@@ -128,6 +154,25 @@ type ScanMeta struct {
 	RanAsRoot  bool      `json:"ran_as_root"`
 	Incomplete bool      `json:"incomplete"`
 	Warnings   []string  `json:"warnings,omitempty"`
+
+	// FirewallExamined is always false, and is emitted anyway.
+	//
+	// A constant costs a few bytes and is the entire difference between "no
+	// firewall rules were found" and "firewall rules were never read" for a
+	// consumer building an exposure report. Putting the disclaimer in the
+	// document rather than only in the documentation is what makes it reach
+	// the ingest pipeline, which drops prose.
+	FirewallExamined bool `json:"firewall_examined"`
+
+	// ExposureBlindSpots names, in machine-readable form, the classes of
+	// exposure this scan could not observe.
+	//
+	// The most important field in the exposure section. Without it a host
+	// running Docker with userland-proxy disabled -- where publishing is pure
+	// netfilter DNAT and no process holds a socket -- produces a document
+	// identical to a host with nothing exposed at all. A consumer must be able
+	// to tell "looked and found nothing" from "could not look".
+	ExposureBlindSpots []string `json:"exposure_blind_spots,omitempty"`
 }
 
 // Component is one piece of installed software.
@@ -609,6 +654,159 @@ func Identify(c Component) string {
 	return c.Name
 }
 
+// BindScope describes how widely a socket is bound. It is a fact about the
+// bind, not a claim about reachability: swinv reads no firewall, no NAT table
+// and no cloud security group, and a field that implied otherwise would be the
+// most dangerous one in the document.
+type BindScope string
+
+const (
+	// BindWildcard: 0.0.0.0 or ::, so every address the host has now and every
+	// one added tomorrow.
+	BindWildcard BindScope = "wildcard"
+
+	// BindLoopback: 127.0.0.0/8 or ::1, reachable only from this machine.
+	BindLoopback BindScope = "loopback"
+
+	// BindLinkLocal: 169.254.0.0/16 or fe80::/10.
+	BindLinkLocal BindScope = "link_local"
+
+	// BindSpecific: one particular address. Deliberately not split into
+	// "private" and "public": swinv cannot tell a lab bridge from a flat
+	// datacentre L2 where every host reaches every address, and emitting
+	// "private" would invite the conclusion that it is therefore safe. The
+	// address is in the record; the consumer classifies it against a network
+	// model swinv does not have.
+	BindSpecific BindScope = "specific"
+)
+
+// Backend is what a forwarded host port leads to.
+//
+// A published container port is held on the host by a forwarding process --
+// docker-proxy, rootlessport, pasta -- whose own package is not the answer to
+// "what is running here". Recording the forward separately is what lets the
+// identity be the software behind it while keeping the fact that a forward was
+// involved.
+type Backend struct {
+	Address string `json:"address,omitempty"`
+	Port    uint16 `json:"port,omitempty"`
+
+	// Container is the container id the forward leads to, and Executable the
+	// listening executable inside it, when both were resolved.
+	Container  string `json:"container,omitempty"`
+	Executable string `json:"executable,omitempty"`
+
+	// Via names how the forward was learned, so a consumer can weigh it:
+	// "docker-proxy-argv" is the forwarding process's own command line.
+	Via string `json:"via,omitempty"`
+}
+
+// Image identifies a container image.
+//
+// Every field here is a **locator, not an identity a vulnerability matcher can
+// use**. There is no `oci` matcher in Grype, no OCI coordinates in OSV or OSS
+// Index, and Dependency-Track will ingest an image PURL, find nothing, and
+// display the component as clean -- which is indistinguishable from "analysed
+// and safe". So this never appears in Components. It is here so a consumer can
+// join to an image scan it performs elsewhere, which is the thing that
+// actually produces findings for an image.
+type Image struct {
+	// Ref is the image reference as the runtime recorded it, e.g.
+	// "splunk/splunk:latest".
+	Ref string `json:"ref,omitempty"`
+
+	// ManifestDigest is the registry manifest digest -- what "repo@sha256:..."
+	// means and what an image scanner will have seen. Distinct from ID, which
+	// is the local config digest; conflating the two is the classic bug here,
+	// and a locally built image that was never pushed has no manifest digest
+	// at all.
+	ManifestDigest string `json:"manifest_digest,omitempty"`
+	ID             string `json:"id,omitempty"`
+
+	// PURL is the pkg:oci form, for consumers that key on it. A locator, as
+	// above.
+	PURL string `json:"purl,omitempty"`
+}
+
+// Container is one containerised workload and what it runs.
+type Container struct {
+	// ID is the runtime's container identifier, as it appears in the cgroup.
+	ID string `json:"id"`
+
+	// Name is the human name where one could be read; Runtime names the
+	// runtime that was identified ("docker", "containerd", "cri-o", "podman").
+	Name    string `json:"name,omitempty"`
+	Runtime string `json:"runtime,omitempty"`
+
+	Image *Image `json:"image,omitempty"`
+
+	// OSID and OSVersionID come from the container's own /etc/os-release, read
+	// through /proc/<pid>/root. A container is a different operating system
+	// from its host -- this one is RHEL 8.10 on an Ubuntu 26.04 machine -- and
+	// that is what decides which advisories apply to its packages.
+	OSID        string `json:"os_id,omitempty"`
+	OSVersionID string `json:"os_version_id,omitempty"`
+
+	// Pod names the Kubernetes pod, when the runtime recorded one. Absent is
+	// the normal case, including on Kubernetes when the annotations could not
+	// be read; it is never inferred.
+	Pod *Pod `json:"pod,omitempty"`
+
+	// Services are what this container is listening on inside its own network
+	// namespace. These endpoints carry no host-reachability claim.
+	Services []Service `json:"services,omitempty"`
+}
+
+// Pod is the Kubernetes identity of a container, read from the runtime's own
+// annotations or from the container's filesystem. Never inferred.
+type Pod struct {
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	UID       string `json:"uid,omitempty"`
+	Container string `json:"container,omitempty"`
+}
+
+// Exposure is one listening socket in the host network namespace.
+//
+// The unit is the socket rather than the process because that is the unit of
+// work for the consumer this exists for: the question is "is this port a
+// problem", and a process bound to four sockets can be four different answers.
+type Exposure struct {
+	Address  string `json:"address"`
+	Port     uint16 `json:"port"`
+	Protocol string `json:"protocol"` // tcp or udp
+	Family   string `json:"family"`   // ipv4 or ipv6
+
+	BindScope BindScope `json:"bind_scope"`
+
+	// WildcardCoversIPv4 marks a "::" bind on a kernel with bindv6only
+	// disabled, which accepts IPv4 traffic too. Without it a reader counting
+	// IPv4 exposure from the family field alone would undercount.
+	WildcardCoversIPv4 bool `json:"wildcard_covers_ipv4,omitempty"`
+
+	PID        int    `json:"pid,omitempty"`
+	Executable string `json:"executable,omitempty"`
+	Unit       string `json:"unit,omitempty"`
+	User       string `json:"user,omitempty"`
+
+	// Container is set when the *listening* process is itself containerised,
+	// which on the host network namespace means a --network=host container or
+	// a hostNetwork pod.
+	Container string `json:"container,omitempty"`
+
+	Backend *Backend `json:"backend,omitempty"`
+	Image   *Image   `json:"image,omitempty"`
+
+	// Components identifies the software behind this endpoint, by PURL. For a
+	// forwarded port this is the package inside the container, never the
+	// forwarding process's own package -- naming docker-ce as the software
+	// behind a published port is true and useless.
+	Components []string `json:"components,omitempty"`
+
+	Confidence Confidence `json:"confidence"`
+	Evidence   []string   `json:"evidence,omitempty"`
+}
+
 // Confidence is how firmly a service is attributed to software.
 //
 // Recorded rather than implied, because a service finding is assembled from
@@ -677,4 +875,16 @@ type Service struct {
 	// established. A consumer that disagrees with the conclusion can see what
 	// it rests on.
 	Evidence []string `json:"evidence,omitempty"`
+
+	// Processes is how many processes share this listener, when more than one
+	// does. A prefork server -- nginx with its workers, php-fpm, gunicorn --
+	// is one service on one socket, and reporting it as nine would misstate
+	// both what is running and how much of it.
+	Processes int `json:"processes,omitempty"`
+
+	// PublishedAs lists the host endpoints that forward to this service, for a
+	// service inside a container. Empty means nothing was found publishing it,
+	// which is the ordinary case and is not the same as "it is not reachable"
+	// -- see ScanMeta.ExposureBlindSpots.
+	PublishedAs []string `json:"published_as,omitempty"`
 }

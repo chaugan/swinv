@@ -56,6 +56,16 @@ type Service struct {
 	Process   Process
 	Endpoints []Endpoint
 
+	// NetNS is the network namespace its sockets were read from, and
+	// HostNetwork whether that is init's.
+	//
+	// This is the distinction the whole exposure section rests on. A process
+	// bound to 0.0.0.0 inside a container's namespace is not reachable at this
+	// machine's addresses; the identical bind in the host's namespace is. No
+	// amount of looking at the address tells the two apart.
+	NetNS       string
+	HostNetwork bool
+
 	// SocketActivated is true when init holds the socket rather than the
 	// service itself.
 	//
@@ -68,9 +78,35 @@ type Service struct {
 	SocketActivated bool
 }
 
+// Container is one containerised workload, its listeners, and a way into its
+// filesystem.
+type Container struct {
+	ID      string
+	Runtime string
+
+	// RootPID is a process of this container, whose /proc/<pid>/root is the
+	// container's filesystem and whose namespace the services below were read
+	// from.
+	RootPID int
+
+	// Addresses are the IPv4 addresses assigned inside the namespace, used to
+	// join a published host port to the container behind it.
+	Addresses []string
+
+	Services []Service
+}
+
 // Result is what a scan of the machine's listening sockets produced.
 type Result struct {
+	// Services are the listeners in the *host* network namespace. Membership
+	// is deliberate and unchanged: everything here is reachable at this
+	// machine's addresses, subject to a firewall swinv has not read.
 	Services []Service
+
+	// Containers are the containerised workloads and what each is listening on
+	// inside its own network namespace. Nothing here is a host-reachability
+	// claim.
+	Containers []Container
 
 	// Unattributed counts listening sockets whose owning process could not be
 	// identified, which unprivileged means nearly all of them.

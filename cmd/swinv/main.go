@@ -486,6 +486,9 @@ func writeFiles(cfg *config, report *model.Report, logf func(string, ...any), st
 			if code := writeServicesCSV(cfg, report, base, logf, stderr); code != exitOK {
 				return code
 			}
+			if code := writeExposureCSV(cfg, report, base, logf, stderr); code != exitOK {
+				return code
+			}
 		}
 
 		if cfg.latestSymlink {

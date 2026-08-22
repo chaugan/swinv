@@ -39,6 +39,10 @@ var serviceCSVColumns = []string{
 	"components",
 	"confidence",
 	"evidence",
+	// Appended in schema 1.7, at the end, so a 1.6 row stays a prefix of a 1.7
+	// row and a consumer reading by position keeps working.
+	"processes",
+	"published_as",
 }
 
 // ServiceCSVColumns returns a copy of the services CSV header row, in order,
@@ -90,6 +94,11 @@ func WriteServicesCSV(w io.Writer, r *model.Report) error {
 		record[14] = strings.Join(s.Components, multiValueSep)
 		record[15] = string(s.Confidence)
 		record[16] = strings.Join(s.Evidence, multiValueSep)
+		record[17] = ""
+		if s.Processes > 1 {
+			record[17] = strconv.Itoa(s.Processes)
+		}
+		record[18] = strings.Join(s.PublishedAs, multiValueSep)
 		if err := cw.Write(record); err != nil {
 			return fmt.Errorf("output: writing services csv row for pid %d: %w", s.PID, err)
 		}

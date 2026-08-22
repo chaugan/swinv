@@ -46,7 +46,14 @@ type Endpoint struct {
 	// Inode is the socket inode, which is the only join between this table and
 	// the process that owns it: /proc/<pid>/fd entries are symlinks reading
 	// "socket:[<inode>]".
+	//
+	// Inodes stay unique across network namespaces -- they come from one
+	// global sockfs superblock -- which is what lets a single pass over
+	// /proc/<pid>/fd resolve every namespace's sockets at once.
 	Inode uint64
+
+	// NetNS is the network namespace this endpoint was read from.
+	NetNS string
 }
 
 // String renders an endpoint the way an operator writes one.

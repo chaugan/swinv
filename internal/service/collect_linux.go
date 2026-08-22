@@ -25,7 +25,32 @@ func collect(ctx context.Context, procRoot string) (*Result, error) {
 		procRoot = "/proc"
 	}
 
-	endpoints, warnings := readAllTables(procRoot)
+	spaces, err := namespaces(procRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Every namespace's sockets are read up front, and each endpoint is tagged
+	// with the namespace it came from. Socket inodes come from a single global
+	// sockfs superblock, so they stay unique across namespaces and the one
+	// expensive pass over /proc/<pid>/fd still resolves all of them at once.
+	var (
+		endpoints []Endpoint
+		warnings  []string
+		nsByID    = make(map[string]Namespace, len(spaces))
+	)
+	for _, ns := range spaces {
+		nsByID[ns.ID] = ns
+		if len(ns.PIDs) == 0 {
+			continue
+		}
+		read, w := readAllTables(procRoot, ns.PIDs[0])
+		warnings = append(warnings, w...)
+		for i := range read {
+			read[i].NetNS = ns.ID
+		}
+		endpoints = append(endpoints, read...)
+	}
 	if len(endpoints) == 0 {
 		return &Result{Warnings: warnings}, nil
 	}
@@ -41,7 +66,7 @@ func collect(ctx context.Context, procRoot string) (*Result, error) {
 				"sees only its own", unattributed, len(endpoints)))
 	}
 
-	services := groupByProcess(owners)
+	services := groupByProcess(owners, nsByID)
 	sort.Slice(services, func(i, j int) bool {
 		if services[i].Process.PID != services[j].Process.PID {
 			return services[i].Process.PID < services[j].Process.PID
@@ -49,16 +74,74 @@ func collect(ctx context.Context, procRoot string) (*Result, error) {
 		return services[i].Process.Exe < services[j].Process.Exe
 	})
 
-	return &Result{Services: services, Warnings: warnings, Unattributed: unattributed}, nil
+	host, containers := split(procRoot, services, nsByID)
+	return &Result{
+		Services:     host,
+		Containers:   containers,
+		Warnings:     warnings,
+		Unattributed: unattributed,
+	}, nil
 }
 
-// readAllTables reads the four socket tables. A missing one is not fatal: a
-// host with IPv6 disabled has no tcp6, and a container may have none at all.
-func readAllTables(procRoot string) ([]Endpoint, []string) {
+// split separates the host namespace's listeners from the containerised ones.
+//
+// The separation is the product. A container's listeners must not join the
+// host list, because every consumer of that list reads it as "reachable on
+// this machine" -- and a container port is reachable only if something
+// published it, which is a separate fact recorded separately.
+func split(procRoot string, services []Service, nsByID map[string]Namespace) ([]Service, []Container) {
+	var host []Service
+	byContainer := make(map[string]*Container)
+	var order []string
+
+	for _, s := range services {
+		if s.HostNetwork {
+			host = append(host, s)
+			continue
+		}
+		ns := nsByID[s.NetNS]
+		id := ns.Container
+		if id == "" {
+			// A namespace with no container: systemd's PrivateNetwork=yes
+			// gives a unit its own, and nothing in it is reachable from
+			// anywhere. Keyed on the namespace so it is still grouped, but it
+			// is not called a container.
+			id = s.NetNS
+		}
+		c, ok := byContainer[id]
+		if !ok {
+			c = &Container{ID: ns.Container, RootPID: s.Process.PID}
+			if ns.Container != "" {
+				c.Addresses = localAddresses(procRoot, s.Process.PID)
+			}
+			byContainer[id] = c
+			order = append(order, id)
+		}
+		c.Services = append(c.Services, s)
+	}
+
+	out := make([]Container, 0, len(order))
+	for _, id := range order {
+		if byContainer[id].ID == "" {
+			// Not a container, and nothing published can point at it. Dropped
+			// rather than reported as one.
+			continue
+		}
+		out = append(out, *byContainer[id])
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return host, out
+}
+
+// readAllTables reads one namespace's four socket tables, through a process
+// known to be in it. A missing table is not fatal: a host with IPv6 disabled
+// has no tcp6, and a container may have none at all.
+func readAllTables(procRoot string, pid int) ([]Endpoint, []string) {
 	var (
 		all      []Endpoint
 		warnings []string
 	)
+	base := filepath.Join(procRoot, strconv.Itoa(pid))
 	for _, t := range []struct {
 		file  string
 		proto Protocol
@@ -66,7 +149,7 @@ func readAllTables(procRoot string) ([]Endpoint, []string) {
 		{"net/tcp", TCP}, {"net/tcp6", TCP6},
 		{"net/udp", UDP}, {"net/udp6", UDP6},
 	} {
-		f, err := os.Open(filepath.Join(procRoot, t.file))
+		f, err := os.Open(filepath.Join(base, t.file))
 		if err != nil {
 			continue
 		}
@@ -173,14 +256,25 @@ func socketInode(target string) (uint64, bool) {
 // One process routinely holds several: a web server binds v4 and v6, and often
 // both 80 and 443. Reporting four services where there is one would misstate
 // how much is running.
-func groupByProcess(owners []socketOwner) []Service {
+func groupByProcess(owners []socketOwner, nsByID map[string]Namespace) []Service {
 	byPID := make(map[int]*Service)
 	var order []int
 
 	for _, o := range owners {
 		s, ok := byPID[o.process.PID]
 		if !ok {
-			s = &Service{Process: o.process}
+			ns := nsByID[o.endpoint.NetNS]
+			s = &Service{
+				Process:     o.process,
+				NetNS:       o.endpoint.NetNS,
+				HostNetwork: ns.Host,
+			}
+			// A --network=host container, or a hostNetwork pod: the process is
+			// containerised but its sockets are the host's. Both facts are
+			// true and both are kept.
+			if s.Process.Container == "" && ns.Container != "" {
+				s.Process.Container = ns.Container
+			}
 			byPID[o.process.PID] = s
 			order = append(order, o.process.PID)
 		}
