@@ -7,6 +7,43 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [0.4.1] — 2026-08-22
+
+Everything in this release came out of one afternoon of running 0.4.0 on a
+real Windows laptop. The attributions it did make were all correct; these are
+the ones it failed to make, and the noise it made instead.
+
+### Fixed
+
+- **A product whose only clue was its UninstallString could be named by
+  neither route.** `InstallLocations()` already recovers a directory from
+  `DisplayIcon` and `UninstallString`, because `InstallLocation` is absent on
+  72% of uninstall entries, and the recovered directory was handed to the
+  coverage set — so a full scan treated the files under it as accounted for and
+  never opened them, producing no PE component. But the component itself took
+  its locations from `InstallLocation` alone, so it had no directory either.
+  Good enough to suppress the file scan, not good enough to be reported.
+  Mosquitto came out of a full scan with a registry entry, no PE component, and
+  a listening socket on 1883 that nothing could name. Components now carry every
+  directory the entry points at.
+- **The kernel process is now named.** No handle can be opened to pid 4, so its
+  image was unreadable and the ports it serves — 445, 139, 138, 137 and several
+  http.sys reservations, 29 endpoints on one machine — were reported as software
+  nobody could identify. It is now `System`, marked `os_component`.
+- **An endpoint's sockets fold into one row.** Deduplication was keyed on the
+  socket inode and `iphlpapi` supplies none, so on Windows it never fired:
+  Brave's twenty mDNS sockets on `0.0.0.0:5353` became twenty identical rows,
+  burying the rest of the list. Rows now fold on the endpoint, keeping both
+  identities where two programs genuinely share a UDP port, and recording how
+  many folded in `processes`. On the machine in question, 189 rows for 158
+  endpoints.
+- **The services summary called named software unnamed.** It bucketed on
+  confidence, so an install-directory match — `medium`, but with a product named
+  — was counted as "running software nothing installed". The same scan reported
+  0 attributed on one line and 49 identified on another.
+- `Exposure.processes` is emitted only where more than one socket shares the
+  endpoint, rather than as `1` on every row.
+
 ## [0.4.0] — 2026-08-22
 
 The network edge on Windows, and containers read from the Docker engine.
@@ -591,7 +628,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/chaugan/swinv/releases/tag/v0.4.1
 [0.4.0]: https://github.com/chaugan/swinv/releases/tag/v0.4.0
 [0.3.0]: https://github.com/chaugan/swinv/releases/tag/v0.3.0
 [0.2.3]: https://github.com/chaugan/swinv/releases/tag/v0.2.3

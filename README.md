@@ -39,12 +39,12 @@ in-process with no subprocess overhead.
 ## Quickstart
 
 ```sh
-sudo dpkg -i swinv_0.4.0-1_amd64.deb   # or: sudo rpm -i swinv-0.4.0-1.x86_64.rpm
+sudo dpkg -i swinv_0.4.1-1_amd64.deb   # or: sudo rpm -i swinv-0.4.1-1.x86_64.rpm
 swinv --out /tmp/inv                   # scan /, write JSON + CSV
 ```
 
 No package? The binary is static and has no dependencies, so
-`install -m0755 swinv-v0.4.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
+`install -m0755 swinv-v0.4.1-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
 That writes dated files plus `-latest` symlinks:
