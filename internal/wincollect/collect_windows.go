@@ -279,9 +279,17 @@ func componentFromRegistry(e arp.Entry) model.Component {
 			"install_date": e.InstallDate,
 		}),
 	}
-	if e.InstallLocation != "" {
-		c.Locations = []string{e.InstallLocation}
-	}
+	// Every directory this entry points at, not only InstallLocation.
+	//
+	// The recovered ones were already being computed and handed to the
+	// coverage set, so a product whose only clue is its UninstallString had
+	// its files treated as accounted for -- and therefore never opened by the
+	// full scan -- while its component carried no location for anything to
+	// join against. Mosquitto came out of a full scan of a real machine with
+	// a registry entry, no location, no PE component, and a listening socket
+	// on 1883 that nothing could name. Blocked in both directions by the same
+	// asymmetry.
+	c.Locations = InstallLocations(e.InstallLocation, e.DisplayIcon, e.UninstallString)
 	if e.SystemComponent {
 		c.Attributes["system_component"] = "true"
 	}

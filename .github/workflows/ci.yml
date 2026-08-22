@@ -514,6 +514,16 @@ jobs:
           if ($null -ne $nosvc.services) { throw "--no-services still produced a services array" }
           if ($null -ne $nosvc.exposure) { throw "--no-services still produced an exposure array" }
 
+          # A registry entry whose only clue is its UninstallString must still
+          # carry the directory recovered from it. Without that its files were
+          # treated as accounted for by the full scan and never opened, while
+          # its component had no location to join against -- so a listener
+          # under it could be named by neither route.
+          $withLoc = ($r.components | Where-Object { $_.type -eq "windows" -and $_.locations }).Count
+          $total   = ($r.components | Where-Object { $_.type -eq "windows" }).Count
+          "registry products with a location: $withLoc of $total"
+          if ($withLoc -eq 0) { throw "no registry product carries an install location" }
+
           # Store apps and Windows updates are registry reads, so they must be
           # present in the default run, not only under --full-scan.
           $msix = ($r.components | Where-Object { $_.type -eq "msix" }).Count
