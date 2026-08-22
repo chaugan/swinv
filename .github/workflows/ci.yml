@@ -20,7 +20,14 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on a pull request, never on a branch.
+  #
+  # Cancelling on push saved minutes and cost the record: several commits on
+  # main were cancelled by the next push and so were never verified at all,
+  # while the run history filled with red entries that had not failed
+  # anything. A cancelled run is indistinguishable from a broken one at a
+  # glance, which makes the signal worth less than the minutes.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Syft v1.51.0 declares go >= 1.26.3; an older toolchain fails with
