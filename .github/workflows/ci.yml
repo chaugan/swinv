@@ -105,6 +105,80 @@ jobs:
           ./bin/swinv --version
           ./bin/swinv --help 2>&1 | head -40 || true
 
+      - name: Assert the heartbeat sends components only on change
+        run: |
+          set -euo pipefail
+          root=testdata/rootfs
+          work="$(mktemp -d)"
+          cp -r "$root" "$work/rootfs"
+          out="$work/out"
+
+          lines() {
+            ./bin/swinv --root "$work/rootfs" --out "$out" --format ndjson --heartbeat --quiet "$@"
+            f="$(ls -t "$out"/*.ndjson | grep -v latest | head -1)"
+            wc -l < "$f" | tr -d ' '
+          }
+
+          first="$(lines)"
+          test "$first" -gt 1 || { echo "FAIL: the first scan sent no components" >&2; exit 1; }
+
+          # Unchanged: the heartbeat is the whole message.
+          quiet_run="$(lines)"
+          test "$quiet_run" = "1" || { echo "FAIL: an unchanged scan sent $quiet_run lines, want 1" >&2; exit 1; }
+
+          # And that one line is a heartbeat carrying the real component count,
+          # so a quiet host stays distinguishable from an empty one.
+          hb="$(ls -t "$out"/*.ndjson | grep -v latest | head -1)"
+          test "$(jq -r .record_type "$hb")" = "heartbeat"
+          test "$(jq -r .n_components "$hb")" -gt 0
+          test "$(jq -r .digest "$hb")" != "null"
+
+          # A package appears: the whole list is sent again.
+          printf '\nPackage: curl\nStatus: install ok installed\nArchitecture: amd64\nVersion: 8.5.0-1\n' \
+            >> "$work/rootfs/var/lib/dpkg/status"
+          changed="$(lines)"
+          test "$changed" -gt 1 || { echo "FAIL: an added package sent no components" >&2; exit 1; }
+
+          # And is removed again. This is the case a delta cannot express, and
+          # the reason the full list is resent rather than a diff.
+          python3 - "$work/rootfs/var/lib/dpkg/status" <<'PYEOF'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          open(p, "w").write(s.split("\nPackage: curl")[0] + "\n")
+          PYEOF
+          removed="$(lines)"
+          test "$removed" -gt 1 || { echo "FAIL: a removed package sent no components" >&2; exit 1; }
+
+          # --force-full overrides an unchanged inventory.
+          test "$(lines)" = "1"
+          forced="$(lines --force-full)"
+          test "$forced" -gt 1 || { echo "FAIL: --force-full sent no components" >&2; exit 1; }
+
+          # The other formats never omit anything.
+          ./bin/swinv --root "$work/rootfs" --out "$out" --format json,csv,ndjson --heartbeat --quiet
+          ./bin/swinv --root "$work/rootfs" --out "$out" --format json,csv,ndjson --heartbeat --quiet
+          j="$(ls -t "$out"/*.json | grep -v latest | grep -v heartbeat | head -1)"
+          c="$(ls -t "$out"/*.csv | grep -v latest | head -1)"
+          test "$(jq '.components | length' "$j")" -gt 0 || { echo "FAIL: json dropped its components" >&2; exit 1; }
+          test "$(( $(wc -l < "$c") - 1 ))" -gt 0 || { echo "FAIL: csv dropped its rows" >&2; exit 1; }
+          test "$(jq -r '.scan.inventory_unchanged' "$j")" = "true"
+
+          # The state file must not look like a report to a collector.
+          test -f "$out/.swinv-heartbeat.json"
+          test -z "$(find "$out" -maxdepth 1 -name '*.json' -not -name '.*' -newer "$out/.swinv-heartbeat.json" -name 'heartbeat*')"
+
+          # Without the flag nothing changes at all.
+          plain="$work/plain"
+          ./bin/swinv --root "$work/rootfs" --out "$plain" --format ndjson --quiet
+          pf="$(ls "$plain"/*.ndjson | grep -v latest | head -1)"
+          if grep -q record_type "$pf"; then
+            echo "FAIL: a heartbeat appeared without --heartbeat" >&2; exit 1
+          fi
+
+          rm -rf "$work"
+          echo "OK: heartbeat sends a digest every scan and components only on change"
+
       - name: Assert the services block is collected and attributed
         # The join is from a listening executable to the package that installed
         # it, and it comes from the package databases' file lists rather than

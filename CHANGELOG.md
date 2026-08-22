@@ -7,6 +7,45 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Added
+
+- **`--heartbeat`**, closing [#7](https://github.com/chaugan/swinv/issues/7).
+  In NDJSON, one small record at the head of the stream carries a digest of the
+  inventory, and the component records are omitted entirely when that digest
+  matches the previous scan on this host. Schema `1.9`.
+
+  Every scan otherwise restates the whole inventory. That is the right shape
+  for correctness — a package that disappears is genuinely gone rather than
+  merely unmentioned — and the wrong shape for volume: 5,000 hosts averaging
+  14,000 components scanned hourly is over a billion records a day, nearly all
+  identical to the day before.
+
+  **Only NDJSON is affected.** JSON, CSV and CycloneDX carry the full inventory
+  every time, because a CSV with no rows would be a false statement about the
+  machine where a heartbeat is a true one. **And never a delta**: when anything
+  changes the whole list is sent again, because a delta cannot express a
+  removal and "this package is no longer installed" is the fact that decides
+  whether a vulnerability is fixed or merely unreported.
+
+  The digest is built from identity alone — type, name, version, root, purl —
+  and deliberately not from locations, `found_by`, `sha256`, licences, CPEs or
+  vendor. Files get relinked and catalogers get renamed upstream; a digest that
+  moved with them would report change constantly and be ignored within a week.
+
+  A full list is also sent when nothing is known about the host, when the state
+  file cannot be read, on `--force-full`, and whenever `--full-interval` has
+  elapsed (default 24h) — so a digest collision or a hand-edited state file
+  cannot hide a change indefinitely. Any doubt resolves toward sending too
+  much.
+
+  This is the one thing swinv now remembers between runs:
+  `.swinv-heartbeat.json` in the output directory, one digest per hostname. A
+  dotfile so a collector globbing `*.json` does not pick it up, and beside the
+  reports so deleting the output directory deletes the state with it rather
+  than leaving a stale digest to claim a fresh machine is unchanged.
+
 ## [0.5.2] — 2026-08-22
 
 ### Fixed
@@ -699,7 +738,7 @@ First public release.
 While `swinv` is `v0.x`, the CLI surface, the output schema and cataloger
 coverage may change in any release; breaking changes are called out here.
 
-The output document carries its own `schema_version`, currently `1.8`,
+The output document carries its own `schema_version`, currently `1.9`,
 independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.

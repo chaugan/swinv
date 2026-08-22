@@ -105,6 +105,9 @@ type config struct {
 	maxMemoryBytes   int64
 	since            string
 	deltaOnly        bool
+	heartbeat        bool
+	forceFull        bool
+	fullInterval     time.Duration
 	catalogers       string
 	noFileOwnership  bool
 	noServices       bool
@@ -122,7 +125,8 @@ type config struct {
 	verbose          bool
 	showVersion      bool
 
-	nameSet bool // whether --name was given explicitly
+	nameSet         bool // whether --name was given explicitly
+	fullIntervalSet bool // whether --full-interval was given explicitly
 }
 
 // stringList collects a repeatable string flag.
@@ -386,6 +390,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		logf("delta vs %s: +%d added, -%d removed, ~%d changed",
 			cfg.since, len(delta.Added), len(delta.Removed), len(delta.Changed))
 	}
+
+	// --- heartbeat --------------------------------------------------------
+	// After the delta, because both describe change and the delta is the one
+	// that alters the component list. Before writing, because it decides what
+	// the NDJSON stream carries.
+	applyHeartbeat(cfg, report, logf)
 
 	// Warnings are what turn "378 components" from a fact into a qualified
 	// one: whether something was not installed, or merely not looked for.

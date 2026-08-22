@@ -44,10 +44,15 @@ func parseFlags(args []string, stdout, stderr io.Writer) (*config, int, error) {
 		return nil, exitUsage, fmt.Errorf("unexpected argument %q (swinv takes no positional arguments)", fs.Arg(0))
 	}
 
-	// Record whether --name was set explicitly; it overrides --output-mode.
+	// Record which flags were given explicitly, where the default is
+	// indistinguishable from the value.
 	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "name" {
+		switch f.Name {
+		case "name":
+			// --name overrides --output-mode.
 			cfg.nameSet = true
+		case "full-interval":
+			cfg.fullIntervalSet = true
 		}
 	})
 
@@ -87,6 +92,14 @@ func parseFlags(args []string, stdout, stderr io.Writer) (*config, int, error) {
 			return nil, exitUsage, fmt.Errorf("--max-memory: %w", err)
 		}
 		cfg.maxMemoryBytes = n
+	}
+	if cfg.fullInterval < 0 {
+		return nil, exitUsage, fmt.Errorf("--full-interval must not be negative, got %s", cfg.fullInterval)
+	}
+	if (cfg.forceFull || cfg.fullIntervalSet) && !cfg.heartbeat {
+		// Silently ignoring them would leave an operator believing a volume
+		// reduction is in effect that is not.
+		return nil, exitUsage, fmt.Errorf("--force-full and --full-interval require --heartbeat")
 	}
 	if cfg.deltaOnly && cfg.since == "" {
 		return nil, exitUsage, fmt.Errorf("--delta-only requires --since")
@@ -167,6 +180,9 @@ func registerFlags(fs *flag.FlagSet, cfg *config) {
 	fs.BoolVar(&cfg.hash, "hash", false, "record a SHA-256 of each component's primary file; useful for change detection and integrity, at the cost of reading every such file")
 	fs.StringVar(&cfg.since, "since", "", "path to a previous swinv JSON report; adds a delta of added/removed/changed components")
 	fs.BoolVar(&cfg.deltaOnly, "delta-only", false, "with --since, emit only the changed components instead of the full inventory")
+	fs.BoolVar(&cfg.heartbeat, "heartbeat", false, "in NDJSON, emit a one-line digest of the inventory every scan and the component records only when that digest changes; the other formats are unaffected")
+	fs.BoolVar(&cfg.forceFull, "force-full", false, "with --heartbeat, send the full component list even if the inventory is unchanged")
+	fs.DurationVar(&cfg.fullInterval, "full-interval", 24*time.Hour, "with --heartbeat, send the full component list at least this often however unchanged it looks, so a missed change cannot hide indefinitely (0 = never force one)")
 	fs.StringVar(&cfg.catalogers, "catalogers", "", "cataloger selection expression, e.g. 'os' or '+binary,-python'")
 	fs.BoolVar(&cfg.noFileOwnership, "no-file-ownership", false, "skip package-file ownership (faster, but reintroduces binary/package duplicates)")
 	fs.BoolVar(&cfg.noServices, "no-services", false, "do not report what is listening on the network; skips reading /proc/net and other processes' open files")

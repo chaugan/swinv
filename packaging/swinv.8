@@ -27,6 +27,9 @@
 .Op Fl -hash
 .Op Fl -since Ar path
 .Op Fl -delta-only
+.Op Fl -heartbeat
+.Op Fl -force-full
+.Op Fl -full-interval Ar duration
 .Op Fl -catalogers Ar expr
 .Op Fl -no-file-ownership
 .Op Fl -no-services
@@ -281,6 +284,39 @@ in the
 field.
 Requires
 .Fl -since .
+.It Fl -heartbeat
+Emit a one-line digest of the inventory into the NDJSON stream on every scan,
+and the component records only when that digest changes.
+.Pp
+Every scan otherwise restates the whole inventory, which is correct \(em a
+package that disappears is genuinely gone rather than merely unmentioned \(em
+and expensive: five thousand hosts averaging fourteen thousand components,
+scanned hourly, is over a billion records a day, nearly all identical to the
+day before.
+.Pp
+Only NDJSON is affected. JSON, CSV and CycloneDX carry the full inventory every
+time, because a CSV with no rows would be a false statement about the machine.
+When anything does change the whole list is sent again, never a delta: a delta
+cannot express a removal.
+.Pp
+This is the only thing
+.Nm
+remembers between runs, in
+.Pa .swinv-heartbeat.json
+under
+.Fl -out .
+Default: off.
+.It Fl -force-full
+With
+.Fl -heartbeat ,
+send the component records even when the inventory is unchanged.
+.It Fl -full-interval Ar duration
+With
+.Fl -heartbeat ,
+send the full list at least this often however unchanged it looks, so that a
+digest collision or a hand-edited state file cannot hide a change
+indefinitely. Zero never forces one.
+Default: 24h.
 .It Fl -catalogers Ar expr
 Cataloger selection expression, in
 .Ql +name,-tag

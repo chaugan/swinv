@@ -40,14 +40,15 @@ func helpSections() []helpSection {
 			{"--offline", "no network activity at all"},
 		}},
 		{"What is listening", []helpFlag{
-			{"--no-services", "do not report listening sockets and their software"},
-			{"--no-containers", "do not look inside containers for what they run"},
+			{"--no-services, --no-containers", "skip listening sockets, or containers"},
 			{"--no-service-command", "omit command lines; they can carry passwords"},
 		}},
 		{"Comparing against a previous run", []helpFlag{
 			{"--since PATH", "diff against an earlier swinv JSON report"},
 			{"--delta-only", "with --since, emit only what changed"},
 			{"--hash", "record a SHA-256 per component"},
+			{"--heartbeat", "a digest per scan, components only on change"},
+			{"--force-full, --full-interval", "send in full anyway, or at least this often"},
 		}},
 		{"Resources", []helpFlag{
 			{"--fast", "normal priority, every CPU; fast but intrusive"},
@@ -56,8 +57,7 @@ func helpSections() []helpSection {
 			{"--parallelism N", "cataloger workers (0 = auto)"},
 		}},
 		{"Diagnostics", []helpFlag{
-			{"--verbose", "per-stage timing on stderr"},
-			{"--quiet", "no status output; errors still reported"},
+			{"--verbose, --quiet", "per-stage timing on stderr, or no status at all"},
 			{"--debug-stacks-after DUR", "dump goroutine stacks if still running"},
 			{"--require-host-id", "fail if /etc/machine-id cannot be read"},
 			{"--no-file-ownership", "skip file ownership; faster, more duplicates"},

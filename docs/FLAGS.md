@@ -141,8 +141,47 @@ See [docs/SERVER-ROLES.md](SERVER-ROLES.md) for the design, and
 | Flag | Default | Meaning |
 |---|---|---|
 | `--hash` | `false` | Record a SHA-256 of each component's primary file |
+| `--heartbeat` | `false` | NDJSON: a digest every scan, components only when it changes |
+| `--force-full` | `false` | With `--heartbeat`, send the components anyway |
+| `--full-interval DUR` | `24h` | With `--heartbeat`, send in full at least this often (`0` = never force one) |
 | `--since PATH` | *(none)* | Compare against a previous swinv JSON report and emit a delta |
 | `--delta-only` | `false` | With `--since`, emit only the changed components |
+
+### `--heartbeat`
+
+Every scan restates the whole inventory. That is the right shape for
+correctness — a package that disappears is genuinely gone rather than merely
+unmentioned — and the wrong shape for volume: 5,000 hosts averaging 14,000
+components scanned hourly is over a billion NDJSON records a day, nearly all
+identical to the day before.
+
+`--heartbeat` puts one small record at the head of the NDJSON stream carrying
+a digest of the inventory, and omits the component records entirely when that
+digest matches the previous scan on this host.
+
+```sh
+swinv --out /var/lib/swinv --format ndjson --heartbeat
+```
+
+**Only NDJSON is affected.** JSON, CSV and CycloneDX carry the full inventory
+every time. A CSV with no rows would be a false statement about the machine.
+
+**Not a delta.** When anything changes, the *whole* list is sent again. A delta
+cannot express a removal, and "this package is no longer installed" is the fact
+that decides whether a vulnerability is fixed or merely unreported.
+
+A full list is also sent when there is no previous record for the host, when
+the state file cannot be read, on `--force-full`, and whenever
+`--full-interval` has elapsed — so a digest collision or a hand-edited state
+file cannot hide a change indefinitely. Any doubt resolves toward sending too
+much.
+
+This is the only thing swinv remembers between runs: `.swinv-heartbeat.json`
+in the output directory, one digest per hostname. Delete it and the next scan
+sends everything, which costs one redundant send and nothing else.
+
+See [docs/OUTPUT.md](OUTPUT.md#the-heartbeat) for the record shape and what the
+digest is built from.
 
 ### Resources
 
@@ -640,6 +679,12 @@ lines that carry secrets:
 
 ```sh
 swinv --no-service-command --out /var/lib/swinv --perm 0640
+```
+
+Hourly scans into a log pipeline, sending components only when they change:
+
+```sh
+swinv --out /var/lib/swinv --format ndjson --heartbeat --output-mode overwrite
 ```
 
 Just the diff, for a change feed rather than an inventory (remember the

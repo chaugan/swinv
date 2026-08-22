@@ -17,7 +17,7 @@ import (
 // 1.1 added Component.SHA256 (--hash) and Report.Delta (--since). Both are
 // additive and omitted when unused, so a 1.0 consumer still parses a 1.1
 // document.
-const SchemaVersion = "1.8"
+const SchemaVersion = "1.9"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -154,6 +154,23 @@ type ScanMeta struct {
 	RanAsRoot  bool      `json:"ran_as_root"`
 	Incomplete bool      `json:"incomplete"`
 	Warnings   []string  `json:"warnings,omitempty"`
+
+	// InventoryDigest fingerprints the component list, for a consumer deciding
+	// whether this host changed without reading every component of it.
+	//
+	// Only set with --heartbeat. Empty means it was not computed, which is not
+	// the same as an empty inventory.
+	InventoryDigest string `json:"inventory_digest,omitempty"`
+
+	// InventoryUnchanged is true when that digest matches the previous scan's
+	// on this host.
+	//
+	// It is what lets the NDJSON stream carry a heartbeat instead of fourteen
+	// thousand component records that say exactly what the last fourteen
+	// thousand said. Never set without --heartbeat, and never a reason for any
+	// other format to omit anything: a CSV with no rows would be a false
+	// statement about the machine, where a heartbeat is a true one.
+	InventoryUnchanged bool `json:"inventory_unchanged,omitempty"`
 
 	// FirewallExamined is always false, and is emitted anyway.
 	//

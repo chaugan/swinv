@@ -11,11 +11,22 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.8`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.9`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.8"
+"schema_version": "1.9"
 ```
+
+**1.8 → 1.9** added the inventory heartbeat:
+
+| Addition | Appears in |
+|---|---|
+| `scan.inventory_digest`, `scan.inventory_unchanged` | JSON |
+| a `record_type: "heartbeat"` record | NDJSON, with `--heartbeat` |
+
+See [the heartbeat](#the-heartbeat) below. Nothing changes without
+`--heartbeat`: the fields are omitted and the NDJSON stream is exactly what it
+was.
 
 **1.7 → 1.8** brought the network edge to Windows:
 
@@ -1010,6 +1021,71 @@ surrounding context.
 this format is one component, and mixing two record shapes into one stream would
 break every consumer that reads it positionally today. Use JSON, the services
 CSV, or CycloneDX for the `services` block.
+
+### The heartbeat
+
+Schema 1.9, with `--heartbeat`. One extra record at the head of the stream,
+and — when the inventory has not changed since the last scan — the only record
+in it.
+
+```json
+{"record_type":"heartbeat","hostname":"web01","digest":"sha256:9f2c…",
+ "n_components":14425,"scanned_at":"2026-08-22T06:47:35Z",
+ "machine_id":"0123…","os_id":"ubuntu","os_version_id":"24.04","architecture":"amd64"}
+```
+
+**Why it exists.** Every scan restates the whole inventory, which is the right
+shape for correctness — a package that disappears is genuinely gone rather than
+merely unmentioned — and the wrong shape for volume. At 5,000 hosts averaging
+14,000 components scanned hourly that is over a billion records a day, nearly
+all identical to the day before. The heartbeat lets a consumer decide a host is
+unchanged *before* reading any of its components.
+
+| Field | Meaning |
+|---|---|
+| `record_type` | Literally `heartbeat`. **A record without this field is a component** — which is what every line was before this existed, so existing consumers are unaffected. |
+| `digest` | Opaque. Compare it only against the previous value stored for the same host; never parse it, and never assume it is stable across swinv versions. |
+| `n_components` | The real count, **even on a scan that sends none** — so a quiet host stays distinguishable from an empty one. |
+| `machine_id`, `os_id`, `os_version_id`, `architecture` | Host identity, so a consumer's host record stays fed on a scan carrying no components. |
+
+**Only NDJSON is affected.** JSON, CSV and CycloneDX carry the complete
+inventory on every scan regardless. A CSV with no rows would be a false
+statement about the machine; a heartbeat is a true one.
+
+**Full lists on change, never deltas.** A delta cannot express a removal, and
+"this package is no longer installed" is the fact that decides whether a
+vulnerability is fixed or merely unreported. Sending the whole list on change
+keeps that property while removing the volume.
+
+#### What the digest is built from
+
+Identity alone: `type`, `name`, `version`, `root` and `purl` — the same tuple
+deduplication uses. Deliberately **not** `locations`, `found_by`, `sha256`,
+`licenses`, `cpes`, `vendor` or `change`: files get relinked, catalogers get
+renamed upstream, `sha256` appears and disappears with `--hash`, and none of
+that means a package was installed or removed. A digest that moved with them
+would report change constantly and be ignored within a week.
+
+#### When a full list is sent anyway
+
+| Cause | Why |
+|---|---|
+| the digest differs | the point of the exercise |
+| no previous scan is recorded for this host | nothing is known, so assume nothing |
+| the state file is missing or unreadable | any doubt resolves toward sending too much |
+| `--force-full` | an operator with reason to distrust the state |
+| `--full-interval` has elapsed (default 24h; `0` disables) | a digest collision, a hand-edited state file or a bug must not hide a change indefinitely |
+
+`--heartbeat` is the one thing that makes swinv remember something between
+runs: a dotfile, `.swinv-heartbeat.json`, in the output directory, holding the
+last digest per hostname. It is a dotfile so a collector globbing `*.json`
+does not pick it up, and it lives beside the reports so deleting the output
+directory deletes the state with it rather than leaving a stale digest to claim
+a fresh machine is unchanged.
+
+**Clock skew is yours to manage.** `scanned_at` comes from the host's clock. A
+host running fast stamps its heartbeat in the future, and a consumer searching
+a recent window may not see it at all.
 
 ```json
 {"hostname":"web-01","os_id":"debian","os_version_id":"12","architecture":"amd64","scanned_at":"2026-08-19T11:35:35Z","name":"bash","version":"5.2.15-2+b7","type":"deb","purl":"pkg:deb/debian/bash@5.2.15-2%2Bb7?arch=amd64&distro=debian-12","cpes":["cpe:2.3:a:bash:bash:5.2.15-2\\+b7:*:*:*:*:*:*:*"],"locations":["/var/lib/dpkg/status"],"found_by":"dpkg-db-cataloger"}

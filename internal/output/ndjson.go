@@ -47,10 +47,51 @@ type ndjsonLine struct {
 	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
+// heartbeatLine is the one record a scan emits when nothing has changed.
+//
+// It exists because the component stream is the right shape for correctness
+// and the wrong shape for volume: every scan restates the whole inventory, so
+// that a package which disappears is genuinely gone rather than merely
+// unmentioned. At five thousand hosts averaging fourteen thousand components
+// scanned hourly that is well over a billion records a day, nearly all of them
+// identical to the day before.
+//
+// The digest is opaque to whoever reads it. It is never recomputed and never
+// compared against anything but the previous value stored for the same host,
+// which is what allows the algorithm behind it to change: a host whose digest
+// changes shape looks changed exactly once, sends a full list, and agrees with
+// itself thereafter.
+type heartbeatLine struct {
+	RecordType string `json:"record_type"`
+
+	Hostname    string `json:"hostname"`
+	Digest      string `json:"digest"`
+	NComponents int    `json:"n_components"`
+	ScannedAt   string `json:"scanned_at"`
+
+	// Optional identity, so a consumer's host record stays fed on a scan that
+	// sends no components at all.
+	MachineID    string `json:"machine_id,omitempty"`
+	OSID         string `json:"os_id,omitempty"`
+	OSVersionID  string `json:"os_version_id,omitempty"`
+	Architecture string `json:"architecture,omitempty"`
+}
+
 // WriteNDJSON writes one JSON object per component, one per line, with no
 // indentation and a trailing newline after every record. A report with no
 // components produces no output at all, which is the correct empty document
 // for this format.
+//
+// With --heartbeat, a single heartbeat record precedes the components, and the
+// components are omitted entirely when the inventory has not changed since the
+// last scan. The heartbeat carries "record_type": "heartbeat"; a record
+// without that field is a component, which is what every line was before this
+// existed and what every existing consumer already assumes.
+//
+// Deltas are deliberately not an option here. A delta cannot express a
+// removal, and "this package is no longer installed" is the fact that decides
+// whether a vulnerability is fixed or merely unreported. Sending the full list
+// on change keeps that property while removing the volume.
 //
 // Each line repeats the host identity and the scan time alongside the
 // component fields, using the same snake_case names as the CSV columns, so a
@@ -66,6 +107,29 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 	enc.SetEscapeHTML(false)
 
 	scannedAt := formatScannedAt(r.Scan.StartedAt)
+
+	if r.Scan.InventoryDigest != "" {
+		if err := enc.Encode(heartbeatLine{
+			RecordType:   "heartbeat",
+			Hostname:     r.Host.Hostname,
+			Digest:       r.Scan.InventoryDigest,
+			NComponents:  len(r.Components),
+			ScannedAt:    scannedAt,
+			MachineID:    r.Host.MachineID,
+			OSID:         r.Host.OSID,
+			OSVersionID:  r.Host.OSVersionID,
+			Architecture: r.Host.Architecture,
+		}); err != nil {
+			return fmt.Errorf("output: writing ndjson heartbeat: %w", err)
+		}
+		if r.Scan.InventoryUnchanged {
+			// The heartbeat is the whole message. n_components still states
+			// how many there are, so a consumer can tell a quiet host from an
+			// empty one.
+			return nil
+		}
+	}
+
 	for _, c := range r.Components {
 		line := ndjsonLine{
 			Hostname:     r.Host.Hostname,

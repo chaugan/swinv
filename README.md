@@ -157,7 +157,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 ```jsonc
 {
-  "schema_version": "1.8",
+  "schema_version": "1.9",
   "tool": { "name": "swinv", "version": "dev", "syft_version": "v1.51.0" },
   "host": {
     "hostname": "web-01",
@@ -840,6 +840,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--no-containers` | false | Do not identify containers or what they run; also stops swinv talking to the container runtime |
 | `--no-service-command` | false | Linux: keep the services block, drop the command lines |
 | `--since PATH` | — | Diff against a previous report |
+| `--heartbeat` | false | NDJSON: a digest every scan, components only when they change |
 | `--hash` | false | Record a SHA-256 per component |
 | `--fast` | false | Scan at normal priority and full parallelism (see below) |
 | `--max-memory SIZE` | — | Soft memory limit, e.g. `1536MiB` |
