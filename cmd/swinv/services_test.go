@@ -164,3 +164,32 @@ func TestSummariseServicesNamesOSComponentsSeparately(t *testing.T) {
 		t.Errorf("summariseServices =\n%q\nwant\n%q", got, want)
 	}
 }
+
+// The blind spot has to consider both routes into a container. The targeted
+// probe records what it found on the service; the whole-database read lifts
+// its packages into the inventory and leaves the service empty. Checking only
+// the first said the wrong thing out loud: a Windows run that had just read
+// 235 packages out of seven containers declared
+// container-packages-not-readable for every one of them.
+func TestContainersWithoutPackagesConsidersBothRoutes(t *testing.T) {
+	containers := []model.Container{
+		{ID: "aaa"}, // packages lifted into the inventory
+		{ID: "bbb", Services: []model.Service{{Components: []string{"pkg:apk/alpine/nginx@1"}}}},
+		{ID: "ccc"}, // nothing found by either route
+	}
+	components := []model.Component{
+		{Name: "musl", PURL: "pkg:apk/alpine/musl@1", Attributes: map[string]string{"container_id": "aaa"}},
+		{Name: "openssl", PURL: "pkg:deb/debian/openssl@3"}, // a host package
+	}
+
+	if got := containersWithoutPackages(containers, components); got != 1 {
+		t.Errorf("containersWithoutPackages = %d, want 1 (only ccc)", got)
+	}
+	// And with nothing read at all, every container counts.
+	if got := containersWithoutPackages(containers[:1], nil); got != 1 {
+		t.Errorf("containersWithoutPackages = %d, want 1", got)
+	}
+	if got := containersWithoutPackages(nil, nil); got != 0 {
+		t.Errorf("containersWithoutPackages = %d, want 0", got)
+	}
+}

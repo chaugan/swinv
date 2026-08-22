@@ -100,8 +100,8 @@ func RuntimeContainers(ctx context.Context, existing []model.Container, noComman
 
 		declared := declaredEndpoints(c)
 		if i, known := byID[c.ID]; known {
-			// Already described from /proc. Fill in only what the runtime
-			// knows and /proc does not.
+			// Already described from /proc. Fill in what the runtime knows and
+			// /proc does not.
 			out[i].State = c.State
 			out[i].DeclaredEndpoints = declared
 			if out[i].Name == "" {
@@ -110,6 +110,17 @@ func RuntimeContainers(ctx context.Context, existing []model.Container, noComman
 			if out[i].Image == nil {
 				out[i].Image = imageOf(c)
 			}
+			if named(out[i]) {
+				continue
+			}
+			// The targeted probe found the listening executable and no package
+			// owning it -- an application unpacked into the image, which is
+			// most of them. That says nothing about the rest of the container,
+			// and without this a *running* container came out with no software
+			// at all while a stopped one got its whole package list. Six of
+			// seventeen on the development host.
+			components = append(components,
+				packageComponents(out[i], readPackages(ctx, client, c.ID))...)
 			continue
 		}
 
@@ -220,6 +231,22 @@ func packageComponents(c model.Container, packages []ctrpkg.Owner) []model.Compo
 		})
 	}
 	return out
+}
+
+// named reports whether anything in a container was tied to software.
+func named(c model.Container) bool {
+	for _, s := range c.Services {
+		if len(s.Components) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// readPackages lists a container's own package database through the runtime.
+func readPackages(ctx context.Context, client *dockerapi.Client, id string) []ctrpkg.Owner {
+	src := client.Source(ctx, id)
+	return ctrpkg.All(src, ctrpkg.ReadReleaseFrom(src))
 }
 
 // declaredEndpoints renders the ports a container says it serves on.

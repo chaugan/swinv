@@ -7,6 +7,26 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [0.5.1] — 2026-08-22
+
+Two things a v0.5.0 run on a real Windows laptop found, both about the same
+seam between the two ways into a container.
+
+### Fixed
+
+- **A running container whose listening executable is not package-owned came
+  out with no software at all**, while a stopped one got its whole package
+  list. The targeted probe found the executable, found no package owning it —
+  which is most application images, where the app is unpacked rather than
+  installed — and the runtime read was then skipped because the container was
+  already described. That said nothing about the other forty packages in it.
+  Six of seventeen containers on the development host; reading them takes the
+  container package count from 763 to 1281.
+- **`container-packages-not-readable` was declared over 235 packages that had
+  just been read.** The check looked only at what the targeted probe recorded
+  on the service, and the whole-database read lifts its packages into the
+  inventory and leaves the service empty. Both routes are now considered.
+
 ## [0.5.0] — 2026-08-22
 
 Containers, running and stopped, on both platforms.
@@ -665,7 +685,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/chaugan/swinv/releases/tag/v0.5.1
 [0.5.0]: https://github.com/chaugan/swinv/releases/tag/v0.5.0
 [0.4.1]: https://github.com/chaugan/swinv/releases/tag/v0.4.1
 [0.4.0]: https://github.com/chaugan/swinv/releases/tag/v0.4.0

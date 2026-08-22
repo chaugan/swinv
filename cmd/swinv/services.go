@@ -118,11 +118,12 @@ func attributeServices(ctx context.Context, cfg *config, report *model.Report, s
 	// prose, and these are the only thing that distinguishes "nothing is
 	// exposed" from "the exposure could not be observed".
 	report.Scan.ExposureBlindSpots = service.DetectBlindSpots(cfg.root, report.Scan.RanAsRoot)
-	// Containers whose software could not be named. On Windows this is every
-	// one of them, because the filesystem is inside a virtual machine; the
-	// image is still reported, and an image reference is not something a
-	// vulnerability matcher can resolve.
-	if unreadable := containersWithoutPackages(report.Containers); unreadable > 0 {
+	// Containers whose software could not be named at all -- a distroless or
+	// scratch image with no package database, or a runtime that would not
+	// hand over the file. The image is still reported, and an image reference
+	// is not something a vulnerability matcher can resolve, so the gap is
+	// declared rather than left to be inferred from an empty field.
+	if unreadable := containersWithoutPackages(report.Containers, report.Components); unreadable > 0 {
 		report.Scan.ExposureBlindSpots = append(report.Scan.ExposureBlindSpots,
 			service.BlindContainerFilesystem)
 	}
@@ -135,11 +136,28 @@ func attributeServices(ctx context.Context, cfg *config, report *model.Report, s
 	logf("exposure: %s", summariseExposure(report.Exposure, report.Containers))
 }
 
-// containersWithoutPackages counts containers where no service could be tied
-// to a package the container itself installed.
-func containersWithoutPackages(containers []model.Container) int {
+// containersWithoutPackages counts containers whose software could not be
+// named by either route.
+//
+// Both have to be checked, and checking only the first said the wrong thing
+// out loud: the targeted probe records what it found on the service, while the
+// whole-database read lifts its packages straight into the inventory and
+// leaves the service empty. A Windows run that had just read 235 packages out
+// of seven containers reported container-packages-not-readable for every one
+// of them.
+func containersWithoutPackages(containers []model.Container, components []model.Component) int {
+	fromContainer := make(map[string]bool, len(containers))
+	for _, c := range components {
+		if id := c.Attributes["container_id"]; id != "" {
+			fromContainer[id] = true
+		}
+	}
+
 	var n int
 	for _, c := range containers {
+		if fromContainer[c.ID] {
+			continue
+		}
 		named := false
 		for _, s := range c.Services {
 			if len(s.Components) > 0 {

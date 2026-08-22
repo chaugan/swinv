@@ -96,3 +96,23 @@ func TestImagePURLIsALocator(t *testing.T) {
 		t.Errorf("imagePURL with no reference = %q", got)
 	}
 }
+
+// A container the targeted probe already described, but where it named
+// nothing, must still get its package list read. Without this a *running*
+// container came out with no software at all -- its listening executable was
+// unpacked into the image, which says nothing about the other forty packages
+// -- while a stopped one got the lot. Six of seventeen on a real host.
+func TestNamedReportsWhetherAnythingWasTied(t *testing.T) {
+	if named(model.Container{ID: "a"}) {
+		t.Error("a container with no services was reported as named")
+	}
+	if named(model.Container{Services: []model.Service{{Executable: "/usr/local/bin/node"}}}) {
+		t.Error("a service with no components was reported as named")
+	}
+	if !named(model.Container{Services: []model.Service{
+		{Executable: "/usr/local/bin/node"},
+		{Components: []string{"pkg:apk/alpine/nginx@1"}},
+	}}) {
+		t.Error("a container with a named service was reported as unnamed")
+	}
+}
