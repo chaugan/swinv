@@ -66,6 +66,23 @@ func WriteCycloneDX(w io.Writer, r *model.Report) error {
 		}
 	}
 
+	// The distribution, as a component of type "operating-system".
+	//
+	// Not decoration, and not a duplicate of the host metadata: Syft's
+	// CycloneDX decoder -- which is what Grype uses to read
+	// `grype sbom:report.cdx.json`, a recipe this project documents -- takes
+	// the Linux release *only* from a components[] entry of this type. Ours
+	// described the machine as metadata.component of type "device", which that
+	// decoder does not look at, so every deb and rpm arrived with no distro.
+	// Without a distro Grype cannot use the distribution matchers and falls
+	// back to CPE matching against NVD, comparing a backported version against
+	// upstream's numbering -- the same failure that produced 442 false
+	// findings on one host and that Component.OwnedBy exists to prevent, this
+	// time caused by the output format rather than the catalog.
+	if os := cdxOSComponent(r.Host); os != nil {
+		components = append(components, *os)
+	}
+
 	bom := cyclonedx.NewBOM()
 	bom.Metadata = &cyclonedx.Metadata{
 		Timestamp:  formatScannedAt(r.Scan.StartedAt),
@@ -280,6 +297,33 @@ func cdxTools(t model.Tool) *cyclonedx.ToolsChoice {
 		})
 	}
 	return &cyclonedx.ToolsChoice{Components: &tools}
+}
+
+// cdxOSComponent renders the distribution the way every other SBOM producer
+// does, so that an SBOM consumer finds it where it looks for it.
+//
+// The property names are Syft's ("syft:distro:id" and friends) rather than
+// swinv's own namespace, deliberately: they are what Syft's decoder reads, and
+// a namespaced-but-unread property would be correct and useless.
+func cdxOSComponent(h model.Host) *cyclonedx.Component {
+	if h.OSID == "" {
+		return nil
+	}
+	out := &cyclonedx.Component{
+		BOMRef:      "swinv:distro:" + h.OSID + "@" + h.OSVersionID,
+		Type:        cyclonedx.ComponentTypeOS,
+		Name:        h.OSID,
+		Version:     h.OSVersionID,
+		Description: h.OSPrettyName,
+	}
+	var props []cyclonedx.Property
+	props = appendProp(props, "syft:distro:id", h.OSID)
+	props = appendProp(props, "syft:distro:versionID", h.OSVersionID)
+	props = appendProp(props, "syft:distro:prettyName", h.OSPrettyName)
+	if len(props) > 0 {
+		out.Properties = &props
+	}
+	return out
 }
 
 // cdxHostComponent maps the scanned machine onto the metadata component. Every

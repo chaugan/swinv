@@ -72,6 +72,7 @@ func TestAttributeUnmanagedSoftware(t *testing.T) {
 func TestAttributeDoesNotMatchContainerPathsAgainstTheHost(t *testing.T) {
 	s := svc("/usr/sbin/nginx", 8443)
 	s.Process.Container = "9d5a98d0dc04"
+	s.Process.Isolated = true
 
 	got := Attribute([]Service{s}, inventory(), 0)[0]
 	if len(got.Components) != 0 {
@@ -81,6 +82,27 @@ func TestAttributeDoesNotMatchContainerPathsAgainstTheHost(t *testing.T) {
 		t.Errorf("confidence = %q, want medium", got.Confidence)
 	}
 	if !containsSubstring(got.Evidence, "container's filesystem") {
+		t.Errorf("evidence does not explain the refusal: %v", got.Evidence)
+	}
+}
+
+// The bug this guard exists for. Under the cgroupfs driver a container's
+// cgroup carries no runtime prefix and no ".scope", so no container id is
+// recognised -- and before the mount namespace was consulted, the container's
+// /usr/sbin/nginx was matched against the *host's* nginx package and reported
+// with the highest confidence. Wrong package, wrong version, stated firmly.
+func TestAttributeRefusesAnIsolatedProcessWithNoContainerID(t *testing.T) {
+	s := svc("/usr/sbin/nginx", 8443)
+	s.Process.Isolated = true // no Container: the cgroup layout was not recognised
+
+	got := Attribute([]Service{s}, inventory(), 0)[0]
+	if len(got.Components) != 0 {
+		t.Errorf("an isolated process was attributed to a host package: %v", got.Components)
+	}
+	if got.Confidence != model.ConfidenceMedium {
+		t.Errorf("confidence = %q, want medium", got.Confidence)
+	}
+	if !containsSubstring(got.Evidence, "another mount namespace") {
 		t.Errorf("evidence does not explain the refusal: %v", got.Evidence)
 	}
 }
@@ -171,6 +193,7 @@ func TestAttributeFallsBackToLocationsWhenTheDatabaseIsSilent(t *testing.T) {
 func TestExePathsSkipsWhatCannotBeJoined(t *testing.T) {
 	contained := svc("/usr/sbin/nginx", 8443)
 	contained.Process.Container = "9d5a98d0dc04"
+	contained.Process.Isolated = true
 	activated := svc("/usr/lib/systemd/systemd", 22)
 	activated.SocketActivated = true
 

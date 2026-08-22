@@ -355,8 +355,16 @@ func TestWriteCycloneDX(t *testing.T) {
 	if doc.Metadata.Timestamp != "2024-03-07T03:05:06Z" {
 		t.Errorf("metadata.timestamp = %q, want the scan start in UTC", doc.Metadata.Timestamp)
 	}
-	if len(doc.Components) != len(r.Components) {
-		t.Fatalf("component count = %d, want %d", len(doc.Components), len(r.Components))
+	// Inventory components, plus the operating-system component the SBOM
+	// decoders read the distro from.
+	var libs int
+	for _, c := range doc.Components {
+		if c.Type != "operating-system" {
+			libs++
+		}
+	}
+	if libs != len(r.Components) {
+		t.Fatalf("component count = %d, want %d", libs, len(r.Components))
 	}
 
 	var sawInvd bool
@@ -427,8 +435,11 @@ func TestWriteCycloneDXEmptyReport(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("CycloneDX output for an empty report is not valid JSON: %v", err)
 	}
-	if len(doc.Components) != 0 {
-		t.Errorf("component count = %d, want 0", len(doc.Components))
+	// The operating-system component stands even when nothing was catalogued:
+	// a consumer must be able to tell an empty inventory of Ubuntu 26.04 from
+	// an empty inventory of nothing in particular.
+	if len(doc.Components) != 1 {
+		t.Errorf("component count = %d, want 1 (the distro)", len(doc.Components))
 	}
 }
 

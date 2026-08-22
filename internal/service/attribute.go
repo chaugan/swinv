@@ -90,15 +90,23 @@ func attributeOne(s Service, fileOwners map[string][]string, owners map[string][
 		out.Evidence = append(out.Evidence, "runs in container "+s.Process.Container)
 	}
 
-	// A containerised process's executable path belongs to the container's
-	// mount namespace, so matching it against host components would attribute
-	// the container's service to whatever the host has at the same path. That
-	// is a wrong answer, not a missing one.
-	if s.Process.Container != "" {
+	// An isolated process's executable path belongs to another mount namespace,
+	// so matching it against host components would attribute that workload's
+	// service to whatever this host happens to have at the same path. A wrong
+	// answer, not a missing one.
+	//
+	// Keyed on the mount namespace rather than on having recognised a container
+	// id, because the id depends on knowing every runtime's cgroup layout and
+	// the guard must not depend on that. See Process.Isolated.
+	if s.Process.Isolated {
 		out.Confidence = model.ConfidenceMedium
+		where := "another mount namespace"
+		if s.Process.Container != "" {
+			where = "the container's filesystem"
+		}
 		out.Evidence = append(out.Evidence,
-			"not matched against installed software: the path belongs to the "+
-				"container's filesystem, not this host's")
+			"not matched against installed software: the path belongs to "+
+				where+", not this host's")
 		return out
 	}
 

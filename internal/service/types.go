@@ -34,6 +34,21 @@ type Process struct {
 
 	// User is the numeric uid the process runs as.
 	User string
+
+	// Isolated is true when the process does not share init's mount namespace,
+	// so Exe names a file in some other filesystem than this host's.
+	//
+	// This is the guard that does not depend on recognising anything. Deciding
+	// isolation from the cgroup means keeping up with every runtime's layout,
+	// and the first version of that list only covered the systemd cgroup
+	// driver -- so a container under the cgroupfs driver looked like a host
+	// process and had its executable matched against the host's package
+	// databases, yielding the wrong package at the wrong version with the
+	// highest confidence. Comparing /proc/<pid>/ns/mnt against /proc/1/ns/mnt
+	// is one readlink, is true by construction, and also catches
+	// systemd-nspawn, RootDirectory=/RootImage= units, and snap confinement,
+	// none of which are containers in the cgroup sense.
+	Isolated bool
 }
 
 // Service is one process and everything it is listening on.
@@ -74,8 +89,8 @@ func Collect(ctx context.Context, procRoot string) (*Result, error) {
 // ExePaths returns the distinct executable paths of the collected services, in
 // sorted order, for use as an ownership probe against the package databases.
 //
-// Containerised processes are left out. Their executable path is a path in the
-// container's mount namespace, so asking the host's package databases about it
+// Processes in another mount namespace are left out. Their executable path is
+// a path in that namespace, so asking the host's package databases about it
 // invites exactly the false match the attribution refuses to make.
 func (r *Result) ExePaths() []string {
 	if r == nil {
@@ -84,7 +99,7 @@ func (r *Result) ExePaths() []string {
 	seen := make(map[string]bool, len(r.Services))
 	var out []string
 	for _, s := range r.Services {
-		if s.Process.Exe == "" || s.Process.Container != "" || s.SocketActivated {
+		if s.Process.Exe == "" || s.Process.Isolated || s.SocketActivated {
 			continue
 		}
 		if seen[s.Process.Exe] {

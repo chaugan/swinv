@@ -35,7 +35,29 @@ func readProcess(procRoot string, pid int) Process {
 	if raw, err := os.ReadFile(filepath.Join(dir, "status")); err == nil {
 		p.User = uidFromStatus(raw)
 	}
+	p.Isolated = isolatedFrom(procRoot, dir)
 	return p
+}
+
+// isolatedFrom reports whether the process is in a different mount namespace
+// than init, and therefore whether its Exe path describes this host.
+//
+// An unreadable link is reported as not isolated. Reading another process's
+// namespace links needs root, and an unprivileged scan cannot attribute
+// sockets to other users' processes in the first place -- so the only
+// processes reaching this without an answer are the scan's own, which are on
+// the host by definition. Defaulting the other way would drop the attribution
+// for every service on an unprivileged run that did resolve.
+func isolatedFrom(procRoot, dir string) bool {
+	self, err := os.Readlink(filepath.Join(dir, "ns", "mnt"))
+	if err != nil || self == "" {
+		return false
+	}
+	init, err := os.Readlink(filepath.Join(procRoot, "1", "ns", "mnt"))
+	if err != nil || init == "" {
+		return false
+	}
+	return self != init
 }
 
 // uidFromStatus reads the real uid from /proc/<pid>/status, whose Uid line is
