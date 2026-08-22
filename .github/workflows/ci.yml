@@ -261,7 +261,7 @@ jobs:
 
           # The exposure sidecar and its column contract.
           exposure_csv="$(ls /tmp/svc-ctr/*-exposure.csv | head -1)"
-          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,address,port,protocol,family,bind_scope,wildcard_covers_ipv4,pid,executable,unit,user,container,os_component,backend_address,backend_port,backend_container,backend_executable,backend_via,image_ref,image_manifest_digest,components,confidence,evidence,ran_as_root,firewall_examined,exposure_blind_spots'
+          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,address,port,protocol,family,bind_scope,wildcard_covers_ipv4,pid,executable,unit,user,container,os_component,processes,backend_address,backend_port,backend_container,backend_executable,backend_via,image_ref,image_manifest_digest,components,confidence,evidence,ran_as_root,firewall_examined,exposure_blind_spots'
           got="$(head -1 "$exposure_csv")"
           test "$got" = "$want" || { echo "FAIL: exposure CSV header drifted"; echo "got:  $got"; echo "want: $want"; exit 1; }
 

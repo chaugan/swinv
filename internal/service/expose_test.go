@@ -258,3 +258,66 @@ func TestExposeDoesNotDoubleCountAnUnownedSocket(t *testing.T) {
 		t.Errorf("got %d rows for one socket", len(got))
 	}
 }
+
+// A browser opens twenty sockets on 0.0.0.0:5353 for mDNS. As exposure that is
+// one open port, and reporting twenty identical rows for it buried the rest of
+// the list on a real Windows host.
+func TestExposeFoldsManySocketsOnOneEndpoint(t *testing.T) {
+	var eps []Endpoint
+	for i := 0; i < 20; i++ {
+		// No inode: iphlpapi supplies none, which is why the fold cannot be
+		// keyed on a socket identifier.
+		eps = append(eps, Endpoint{Protocol: UDP, Address: "0.0.0.0", Port: 5353})
+	}
+	r := &Result{Services: []Service{hostService(900, `C:\Program Files\Brave\brave.exe`, eps...)}}
+	attributed := []model.Service{{PID: 900, Components: []string{"Brave@151.1"}, Confidence: model.ConfidenceHigh}}
+
+	got := Expose(r, attributed, nil)
+	if len(got) != 1 {
+		t.Fatalf("got %d rows for one endpoint, want 1", len(got))
+	}
+	if got[0].Processes != 20 {
+		t.Errorf("processes = %d, want 20", got[0].Processes)
+	}
+	if len(got[0].Components) != 1 {
+		t.Errorf("components = %v", got[0].Components)
+	}
+}
+
+// Two different programs really can share a UDP port. Folding must keep both
+// identities rather than discard one, or it loses a finding.
+func TestExposeFoldKeepsBothIdentities(t *testing.T) {
+	e := Endpoint{Protocol: UDP, Address: "0.0.0.0", Port: 5353}
+	r := &Result{Services: []Service{
+		hostService(1, "/usr/bin/a", e),
+		hostService(2, "/usr/bin/b", e),
+	}}
+	attributed := []model.Service{
+		{PID: 1, Components: []string{"pkg:deb/a@1"}, Confidence: model.ConfidenceHigh},
+		{PID: 2, Components: []string{"pkg:deb/b@1"}, Confidence: model.ConfidenceHigh},
+	}
+
+	got := Expose(r, attributed, nil)
+	if len(got) != 1 {
+		t.Fatalf("got %d rows", len(got))
+	}
+	if len(got[0].Components) != 2 {
+		t.Errorf("components = %v, want both", got[0].Components)
+	}
+}
+
+// An endpoint is the operating system's only if everything holding it is.
+func TestExposeFoldClearsOSComponentWhenSomethingElseSharesThePort(t *testing.T) {
+	e := Endpoint{Protocol: UDP, Address: "0.0.0.0", Port: 5353}
+	r := &Result{Services: []Service{
+		hostService(4, "System", e),
+		hostService(900, "/opt/app", e),
+	}}
+	attributed := []model.Service{
+		{PID: 4, OSComponent: true, Confidence: model.ConfidenceMedium},
+		{PID: 900, Confidence: model.ConfidenceMedium},
+	}
+	if got := Expose(r, attributed, nil); got[0].OSComponent {
+		t.Error("an endpoint shared with a non-OS process was called the operating system's")
+	}
+}

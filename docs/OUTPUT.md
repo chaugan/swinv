@@ -516,11 +516,13 @@ row sat in this array next to an address, a reader would conclude the opposite.
 So those rows are not here at all — they are in [`containers`](#containers) —
 and a consumer reading only this array cannot get it wrong.
 
-One row per **socket**, not per process, because that is the unit of the
-question: a process bound to four sockets can be four different answers, three
-on loopback and one on the world. A socket held by two processes — `init` and
-the daemon it socket-activated — is still one row, and the one kept is the row
-that names the daemon.
+One row per **bound endpoint**, not per process and not per socket handle,
+because that is the unit of the question: a process bound to four addresses can
+be four different answers, three on loopback and one on the world, while twenty
+handles on the same address and port are one open port. A socket held by two
+processes — `init` and the daemon it socket-activated — is one row too, and the
+one kept is the row that names the daemon. Where two genuinely different
+programs share a UDP port, both identities are kept.
 
 | Field | Meaning |
 |---|---|
@@ -531,6 +533,7 @@ that names the daemon.
 | `pid`, `executable`, `unit`, `user` | The process holding the socket. All are absent when the holder could not be identified — the socket is still reported, because "something is listening on 443 and I could not see what" is the statement this section exists to make. |
 | `container` | Set when the *holding* process is containerised — a `--network=host` container or a `hostNetwork` pod. |
 | `os_component` | The listener is part of the operating system itself. Set on Windows for anything under `%SystemRoot%`, which swinv represents by the installed servicing updates rather than file by file. **Filter it out before treating `medium` as "unmanaged software"**, or every Windows host contributes several dozen false entries. Never set on Linux, where the OS's own binaries are package-owned like any other. |
+| `processes` | How many sockets were found bound to this endpoint, when more than one was. A browser opens twenty on `0.0.0.0:5353` for mDNS; as exposure that is one open port, so the rows are folded and this records how many were folded. |
 | `backend` | Where a forwarded port leads. See below. |
 | `image` | The container image behind a forwarded port. **A locator, not an identity** — see [`containers`](#containers). |
 | `components` | The software behind this endpoint, by PURL. For a forwarded port this is the package **inside the container**, never the forwarding process's own. |
@@ -934,10 +937,10 @@ web-01-latest-exposure.csv
 unit of work for a system whose job is the network edge: "is this port a
 problem" is a question about a port, not about a process.
 
-**31 columns:**
+**32 columns:**
 
 ```
-hostname,machine_id,os_id,os_version_id,architecture,scanned_at,address,port,protocol,family,bind_scope,wildcard_covers_ipv4,pid,executable,unit,user,container,os_component,backend_address,backend_port,backend_container,backend_executable,backend_via,image_ref,image_manifest_digest,components,confidence,evidence,ran_as_root,firewall_examined,exposure_blind_spots
+hostname,machine_id,os_id,os_version_id,architecture,scanned_at,address,port,protocol,family,bind_scope,wildcard_covers_ipv4,pid,executable,unit,user,container,os_component,processes,backend_address,backend_port,backend_container,backend_executable,backend_via,image_ref,image_manifest_digest,components,confidence,evidence,ran_as_root,firewall_examined,exposure_blind_spots
 ```
 
 The last three repeat the scan-level qualifiers on **every row**, deliberately.

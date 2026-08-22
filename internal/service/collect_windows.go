@@ -19,6 +19,14 @@ var (
 	procGetExtendedUDP = iphlpapi.NewProc("GetExtendedUdpTable")
 )
 
+// The kernel process. It holds the ports served by kernel-mode drivers --
+// SMB via srv2.sys, NetBIOS -- and no handle can be opened to it, so its
+// executable is never readable and has to be named rather than resolved.
+const (
+	systemProcessPID  = 4
+	systemProcessName = "System"
+)
+
 // Address families and table classes, from winsock2.h and iphlpapi.h.
 const (
 	afINET  = 2
@@ -76,7 +84,15 @@ func collect(ctx context.Context, _ string) (*Result, error) {
 		if !ok {
 			exe, err := processImage(s.PID)
 			if err != nil {
-				unreadable++
+				// The kernel's own process cannot be opened at all, and it is
+				// what serves SMB and NetBIOS. Reporting 445 and 139 as
+				// software nobody could identify, on every Windows host, is
+				// both wrong and the noisiest possible way to be wrong.
+				if s.PID == systemProcessPID {
+					exe = systemProcessName
+				} else {
+					unreadable++
+				}
 			}
 			svc = &Service{
 				Process:     Process{PID: s.PID, Exe: exe},

@@ -796,6 +796,12 @@ type Exposure struct {
 	// See Service.OSComponent.
 	OSComponent bool `json:"os_component,omitempty"`
 
+	// Processes is how many sockets were found bound to this endpoint, when
+	// more than one was. A browser opens twenty on 0.0.0.0:5353 for mDNS, and
+	// as exposure that is one open port -- reporting twenty rows for it buried
+	// the rest of the list on a real host.
+	Processes int `json:"processes,omitempty"`
+
 	// Container is set when the *listening* process is itself containerised,
 	// which on the host network namespace means a --network=host container or
 	// a hostNetwork pod.

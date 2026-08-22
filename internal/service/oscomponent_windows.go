@@ -21,6 +21,10 @@ func IsOSComponent(exe string) bool {
 	if exe == "" {
 		return false
 	}
+	// The kernel process, which serves SMB and NetBIOS and has no image path.
+	if exe == systemProcessName {
+		return true
+	}
 	root := os.Getenv("SystemRoot")
 	if root == "" {
 		root = `C:\Windows`

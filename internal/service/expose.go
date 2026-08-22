@@ -31,24 +31,24 @@ func Expose(r *Result, attributed []model.Service, containers []model.Container)
 		}
 	}
 
-	// One row per socket, not per (socket, holder). A socket-activated port is
-	// held by init *and* by the daemon init started, and reporting it twice
-	// would double every count built on this -- while leaving a reader to
-	// guess which of two rows for port 22 to believe.
+	// One row per bound endpoint, not per socket handle.
+	//
+	// Two things collapse here. A socket-activated port is held by init *and*
+	// by the daemon init started, and reporting it twice would leave a reader
+	// guessing which of two rows for port 22 to believe. And a process may
+	// hold many sockets on the same address and port -- Brave opens twenty on
+	// 0.0.0.0:5353 for mDNS -- which as *exposure* is one open port, and which
+	// produced twenty identical rows on a real Windows host.
+	//
+	// Keyed on the endpoint rather than on a socket identifier because there
+	// is no portable one: /proc gives an inode, iphlpapi gives nothing.
 	var out []model.Exposure
-	byInode := make(map[uint64]int, len(r.Services))
+	at := make(map[endpointKey]int, len(r.Services))
 	for _, s := range r.Services {
 		runtime, forwards := IsForwarder(s.Process.Exe)
 		for _, e := range s.Endpoints {
 			row := exposeOne(s, e, byPID[s.Process.PID], runtime, forwards, r, containers)
-			if at, seen := byInode[e.Inode]; seen && e.Inode != 0 {
-				if better(row, out[at]) {
-					out[at] = row
-				}
-				continue
-			}
-			byInode[e.Inode] = len(out)
-			out = append(out, row)
+			mergeRow(&out, at, row)
 		}
 	}
 
@@ -58,9 +58,6 @@ func Expose(r *Result, attributed []model.Service, containers []model.Container)
 	// whole section is built to avoid, and which a privileged WSL2 run hit
 	// while reporting twelve listening sockets and zero exposure rows.
 	for _, e := range r.Unowned {
-		if _, seen := byInode[e.Inode]; seen && e.Inode != 0 {
-			continue
-		}
 		row := model.Exposure{
 			Address:    e.Address,
 			Port:       e.Port,
@@ -78,8 +75,7 @@ func Expose(r *Result, attributed []model.Service, containers []model.Container)
 		if row.BindScope == model.BindWildcard && row.Family == "ipv6" {
 			row.WildcardCoversIPv4 = true
 		}
-		byInode[e.Inode] = len(out)
-		out = append(out, row)
+		mergeRow(&out, at, row)
 	}
 
 	sort.Slice(out, func(i, j int) bool {
@@ -243,6 +239,43 @@ func withBackend(out model.Exposure, r *Result, containers []model.Container,
 		out.Confidence = model.ConfidenceLow
 	}
 	return out
+}
+
+// endpointKey identifies a bound endpoint: what a consumer asking "is this
+// port a problem" is asking about.
+type endpointKey struct {
+	address  string
+	port     uint16
+	protocol string
+}
+
+// mergeRow adds a row, folding it into an existing one for the same endpoint.
+//
+// Folding keeps rather than discards: the more informative row wins, but any
+// software the other row named is carried across, because two processes really
+// can share a UDP port and dropping one of their identities would lose a
+// finding rather than a duplicate.
+func mergeRow(out *[]model.Exposure, at map[endpointKey]int, row model.Exposure) {
+	key := endpointKey{row.Address, row.Port, row.Protocol}
+	i, seen := at[key]
+	if !seen {
+		at[key] = len(*out)
+		row.Processes = 1
+		*out = append(*out, row)
+		return
+	}
+
+	existing := (*out)[i]
+	merged := existing
+	if better(row, existing) {
+		merged = row
+	}
+	merged.Processes = existing.Processes + 1
+	merged.Components = model.SortedSet(append(append([]string(nil),
+		existing.Components...), row.Components...))
+	// An endpoint is only the operating system's if everything holding it is.
+	merged.OSComponent = existing.OSComponent && row.OSComponent
+	(*out)[i] = merged
 }
 
 // better reports whether a is the more informative row for the same socket.
