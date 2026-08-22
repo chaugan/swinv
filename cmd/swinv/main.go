@@ -353,7 +353,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// before the delta, so that a --delta-only report still carries the
 	// services block: "what changed" is most interesting about the things
 	// serving traffic.
-	attributeServices(cfg, report, listeners, result.FileOwners, logf)
+	attributeServices(ctx, cfg, report, listeners, result.FileOwners, logf)
 
 	// --- delta against a previous report ----------------------------------
 	if baseline != nil {

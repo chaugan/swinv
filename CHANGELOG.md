@@ -7,6 +7,41 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Added
+
+- **Stopped containers are inventoried, on both platforms.** The question is
+  what software on this machine has a network endpoint, and a stopped container
+  that declares one is software that will serve on it the moment it is started
+   — its packages carry the same advisories either way. It gets no exposure
+  row, because nothing is listening.
+
+  This is reached through the container runtime's archive endpoint, which
+  returns a file from a container's filesystem whether or not it is running.
+  That is also the only route into any container from Windows, so the same
+  mechanism closes the `container-packages-not-readable` gap there. Measured on
+  the development host: 17 containers instead of 10, and 570 packages from five
+  stopped ones — real `pkg:deb/ubuntu/openssl@1.1.1f-1ubuntu2.23` rows a matcher
+  can use.
+
+  Where `/proc/<pid>/root` already answered, it wins: naming the package behind
+  a specific listening executable beats listing the two hundred packages that
+  share its filesystem. The two are distinguished by
+  `attributes.scan_scope`.
+
+- **`Container.state` and `Container.declared_endpoints`.** The declared ports
+  are what the image's `EXPOSE` or the run's `-p` says it serves on — a
+  declaration, never an observation, and for a stopped container the only
+  network fact available. Containers with no endpoint at all, declared or
+  observed, are skipped: a build container with no ports is not part of this
+  machine's attack surface.
+
+- **A reachable runtime that reports nothing now says so.** "No containers" had
+  two causes producing identical output, and a Windows run reported zero on a
+  machine with eight stopped containers with nothing to distinguish that from a
+  broken pipe.
+
 ## [0.4.1] — 2026-08-22
 
 Everything in this release came out of one afternoon of running 0.4.0 on a

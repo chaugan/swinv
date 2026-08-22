@@ -632,6 +632,20 @@ the container host itself.
 machine only if something published it, and that fact lives in `exposure`,
 cross-linked from `published_as`.
 
+`state` is the runtime's own word — `running`, `exited`, `created`. **Stopped
+containers are included, and contribute no exposure rows**: they serve nothing,
+but they are software present on the machine, an image with a known CVE does
+not stop having it because the container is down, and it will be up again.
+
+`declared_endpoints` are the ports the image (`EXPOSE`) or the run
+configuration (`-p`) says the container serves on. **A declaration, never an
+observation** — for a stopped container it is the only network fact available.
+What is actually reachable on this host is in `exposure` and nowhere else.
+
+Containers with no network endpoint at all, declared or observed, are left out.
+A build container with no ports is not part of this machine's attack surface,
+and reading its filesystem would cost without answering anything.
+
 `os_id` and `os_version_id` come from the container's *own* `/etc/os-release`.
 This is not decoration: a container is a different operating system from its
 host — one on the development machine is RHEL 8.10 on an Ubuntu 26.04 server —
@@ -644,10 +658,26 @@ identity nine times in every downstream count.
 
 #### How container services get a usable identity
 
-The `components` PURL comes from the **container's own package database**, read
-through `/proc/<pid>/root` and probed only for the executables that are
+The `components` PURL comes from the **container's own package database**, by
+one of two routes with different precision.
+
+**Through `/proc/<pid>/root`**, probed only for the executables that are
 actually listening — the same discipline the host join uses, one namespace
-over. `dpkg`, `apk` and `rpm` are all read.
+over. Precise, needs no daemon, and gives the package behind a *specific*
+listening process. Linux, running containers only.
+
+**Through the container runtime's archive endpoint**, which returns a file
+from a container's filesystem whether or not it is running. This is the only
+route for a stopped container, and the only route for any container on
+Windows, where a Docker Desktop container is a Linux process inside a virtual
+machine that no Windows API reaches. It gives the container's *whole* package
+list rather than the owner of one executable, because there is no process to
+ask about — a weaker statement, and marked as such by
+`attributes.scan_scope = "container-package-database"` on each component.
+
+`dpkg`, `apk` and `rpm` are read by both routes. Where the first route already
+answered, the second leaves it alone: naming the package behind a listening
+executable beats listing the two hundred packages that share its filesystem.
 
 An empty `components` is the interesting case, not a failure: it is software
 that was unpacked into the image rather than installed by its package manager,
@@ -670,10 +700,16 @@ Each package found this way is also added to the main `components` array with
 `root: "container:<short-id>"`, so that CVE tooling reading `components[]` and
 nothing else — which is most of it, `grype sbom:` included — sees them at all.
 
-Every such row carries `attributes.scan_scope = "listening-executables-only"`.
-**These rows are not a container inventory.** Only the packages owning a
-listening executable were probed; cataloguing whole container filesystems costs
-a full walk each, and swinv is not a container scanner.
+Every such row carries an `attributes.scan_scope` saying how it was found:
+
+| `scan_scope` | Meaning |
+|---|---|
+| `listening-executables-only` | Only the packages owning a listening executable were probed. **Not a container inventory** — a precise answer to a narrow question. |
+| `container-package-database` | The container's whole package database, read through the runtime. A complete list of what that container contains, with no claim about which of it is serving. |
+
+Each also carries `container_id`, `container_name`, `container_state` and the
+image reference and digest, so a consumer can tell a package in a running
+container from one in a stopped image.
 
 ### `scan.exposure_blind_spots`
 

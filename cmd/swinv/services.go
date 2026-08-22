@@ -58,7 +58,7 @@ func listenSnapshot(ctx context.Context, cfg *config, meta *model.ScanMeta, logf
 
 // attributeServices joins the snapshot to the finished inventory and files the
 // answer on the report.
-func attributeServices(cfg *config, report *model.Report, snapshot *service.Result, fileOwners map[string][]string, logf func(string, ...any)) {
+func attributeServices(ctx context.Context, cfg *config, report *model.Report, snapshot *service.Result, fileOwners map[string][]string, logf func(string, ...any)) {
 	if snapshot == nil {
 		return
 	}
@@ -78,8 +78,26 @@ func attributeServices(cfg *config, report *model.Report, snapshot *service.Resu
 	// software inside the container behind it, so that has to be resolved
 	// first, and publishing it is then recorded back onto the container's own
 	// service.
+	var runtimeComponents []model.Component
 	if !cfg.noContainers {
+		// The /proc route first: it names the package behind a specific
+		// listening executable, which is stronger than the whole package list
+		// of the filesystem that executable sits in. Linux only, and running
+		// containers only.
 		report.Containers = service.EnrichContainers("", snapshot.Containers, cfg.noServiceCommand)
+
+		// Then the runtime, which covers what /proc cannot reach: stopped
+		// containers anywhere, and every container on Windows. It fills in
+		// what the first pass missed and leaves what it found alone.
+		var status service.RuntimeStatus
+		report.Containers, runtimeComponents, status = service.RuntimeContainers(
+			ctx, report.Containers, cfg.noServiceCommand)
+		if w := status.Warning(); w != "" {
+			report.Scan.AddWarning(w)
+		}
+		if status.Err != nil && cfg.verbose {
+			logf("no container runtime answered: %v", status.Err)
+		}
 	}
 	report.Exposure = service.Expose(snapshot, services, report.Containers)
 
@@ -90,9 +108,10 @@ func attributeServices(cfg *config, report *model.Report, snapshot *service.Resu
 	// pointing at bom-refs no component has. Each carries the scope it was
 	// found at, because only the packages owning a listening executable were
 	// probed and these rows are not the container's inventory.
-	if extra := service.ContainerComponents(report.Containers); len(extra) > 0 {
+	extra := append(service.ContainerComponents(report.Containers), runtimeComponents...)
+	if len(extra) > 0 {
 		report.Components = model.Normalize(append(report.Components, extra...))
-		logf("services: %d package(s) from inside containers added to the inventory", len(extra))
+		logf("containers: %d package(s) from inside containers added to the inventory", len(extra))
 	}
 
 	// Named in the document, not only in the docs. An ingest pipeline drops

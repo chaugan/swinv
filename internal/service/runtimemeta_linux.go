@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -146,53 +145,6 @@ func runtimeOf(bundleRoot string) string {
 	default:
 		return "runc"
 	}
-}
-
-// imagePURL renders the pkg:oci form.
-//
-// A locator, not an identity. No vulnerability matcher resolves it: Grype has
-// no oci matcher, OSV and OSS Index have no OCI coordinates, and
-// Dependency-Track ingests it, finds nothing, and shows the component as
-// clean. It is emitted so a consumer can join to an image scan performed
-// elsewhere, and it never appears in a Components list.
-func imagePURL(ref, manifestDigest string) string {
-	if ref == "" {
-		return ""
-	}
-	repo, tag := splitImageRef(ref)
-	name := strings.ToLower(path.Base(repo))
-	if name == "" {
-		return ""
-	}
-	out := "pkg:oci/" + name
-	if manifestDigest != "" {
-		// The spec percent-encodes the colon in the version.
-		out += "@" + strings.Replace(manifestDigest, ":", "%3A", 1)
-	}
-	var qualifiers []string
-	if repo != "" {
-		qualifiers = append(qualifiers, "repository_url="+repo)
-	}
-	if tag != "" {
-		qualifiers = append(qualifiers, "tag="+tag)
-	}
-	if len(qualifiers) > 0 {
-		out += "?" + strings.Join(qualifiers, "&")
-	}
-	return out
-}
-
-// splitImageRef separates an image reference into its repository and tag,
-// leaving a registry host with a port intact.
-func splitImageRef(ref string) (repo, tag string) {
-	repo = ref
-	if i := strings.LastIndex(ref, ":"); i > strings.LastIndex(ref, "/") {
-		repo, tag = ref[:i], ref[i+1:]
-	}
-	if i := strings.Index(repo, "@"); i >= 0 {
-		repo = repo[:i]
-	}
-	return strings.ToLower(repo), tag
 }
 
 // readCapped reads a file, refusing anything implausibly large or irregular.

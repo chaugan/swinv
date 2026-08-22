@@ -741,6 +741,23 @@ type Container struct {
 	Name    string `json:"name,omitempty"`
 	Runtime string `json:"runtime,omitempty"`
 
+	// State is the runtime's own word: "running", "exited", "created".
+	//
+	// A stopped container serves nothing, so it contributes no exposure. It is
+	// still software present on the machine, which is a different claim and
+	// worth making: an image with a known CVE does not stop having it because
+	// the container is down, and it will be up again.
+	State string `json:"state,omitempty"`
+
+	// DeclaredEndpoints are the ports the image or the run configuration says
+	// this container serves on, as "8080/tcp".
+	//
+	// A declaration, never an observation. For a stopped container it is the
+	// only network fact available, and a consumer must not read it as an open
+	// port -- what is actually reachable on this host is in Report.Exposure
+	// and nowhere else.
+	DeclaredEndpoints []string `json:"declared_endpoints,omitempty"`
+
 	Image *Image `json:"image,omitempty"`
 
 	// OSID and OSVersionID come from the container's own /etc/os-release, read

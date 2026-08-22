@@ -22,7 +22,7 @@ func TestLiveEngine(t *testing.T) {
 	}
 	t.Logf("endpoint: %s", c.Endpoint())
 
-	containers, err := c.Containers(ctx)
+	containers, err := c.Containers(ctx, true)
 	if err != nil {
 		t.Fatalf("Containers: %v", err)
 	}
