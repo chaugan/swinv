@@ -104,12 +104,12 @@ is the work, and it is what the rest of this document is about.
 ## Quickstart
 
 ```sh
-sudo dpkg -i swinv_0.5.2-1_amd64.deb   # or: sudo rpm -i swinv-0.5.2-1.x86_64.rpm
+sudo dpkg -i swinv_0.6.0-1_amd64.deb   # or: sudo rpm -i swinv-0.6.0-1.x86_64.rpm
 swinv --out /tmp/inv                   # scan /, write JSON + CSV
 ```
 
 No package? The binary is static and has no dependencies, so
-`install -m0755 swinv-v0.5.2-linux-amd64 /usr/bin/swinv` is equally fine, as is
+`install -m0755 swinv-v0.6.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
 That writes timestamped files plus `-latest` symlinks — and, run as root with
