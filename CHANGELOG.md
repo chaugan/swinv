@@ -7,7 +7,7 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
-## [Unreleased]
+## [0.5.2] — 2026-08-22
 
 ### Fixed
 
@@ -16,6 +16,15 @@ schema and cataloger coverage may still change between releases. See
   dropped whatever the probe had found — which is the more precisely
   identified half of the two, the packages tied to a specific listening
   executable.
+
+### Changed
+
+- **The README says what the collector is for.** The comparison table
+  explained, for each of four tools, why swinv differs; it never said what
+  swinv does that none of them do. The chain — an open port, through the
+  forwarder, into the container, to the package inside it — is now the second
+  thing in the document and has its own section, with rows added for image
+  scanners and agent inventory now that containers are in scope.
 
 ## [0.5.1] — 2026-08-22
 
@@ -695,7 +704,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/chaugan/swinv/releases/tag/v0.5.2
 [0.5.1]: https://github.com/chaugan/swinv/releases/tag/v0.5.1
 [0.5.0]: https://github.com/chaugan/swinv/releases/tag/v0.5.0
 [0.4.1]: https://github.com/chaugan/swinv/releases/tag/v0.4.1
