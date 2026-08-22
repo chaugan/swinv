@@ -462,7 +462,11 @@ registry entry naming its own executable looks like.
 ### `exposure`
 
 Schema 1.7. One entry per listening socket **in the host network namespace**,
-and nothing else. Linux only.
+and nothing else.
+
+On Linux this comes from `/proc`; on Windows from `iphlpapi`'s
+`GetExtendedTcpTable`/`GetExtendedUdpTable`, which return the tables with an
+owning pid already attached.
 
 ```jsonc
 "exposure": [
@@ -505,7 +509,7 @@ that names the daemon.
 | `family` | `ipv4` or `ipv6`, taken from the table the socket was read from — Go renders an IPv4-mapped address as a dotted quad, so the text of `address` is not reliable for this. |
 | `bind_scope` | `wildcard`, `loopback`, `link_local`, or `specific`. See below. |
 | `wildcard_covers_ipv4` | A `::` bind on a kernel with `bindv6only` off accepts IPv4 too. Without this a consumer counting IPv4 exposure by family undercounts. |
-| `pid`, `executable`, `unit`, `user` | The process holding the socket. |
+| `pid`, `executable`, `unit`, `user` | The process holding the socket. All are absent when the holder could not be identified — the socket is still reported, because "something is listening on 443 and I could not see what" is the statement this section exists to make. |
 | `container` | Set when the *holding* process is containerised — a `--network=host` container or a `hostNetwork` pod. |
 | `backend` | Where a forwarded port leads. See below. |
 | `image` | The container image behind a forwarded port. **A locator, not an identity** — see [`containers`](#containers). |
@@ -557,7 +561,30 @@ default netavark — see the blind spots below.
 ### `containers`
 
 Schema 1.7. One entry per containerised workload, and what each is listening on
-**inside its own network namespace**. Linux only, and root-only in practice.
+**inside its own network namespace**. Root-only in practice.
+
+The two platforms reach this differently, and they reach different depths.
+
+On **Linux** the container's processes are visible on the host, so swinv reads
+the container's own package database through `/proc/<pid>/root` and names the
+software. No daemon is involved.
+
+On **Windows** none of that is possible. A Docker Desktop container is a Linux
+process inside a WSL2 virtual machine: it has no entry in the Windows process
+table, its sockets live in a namespace inside that VM, and no Windows API
+reaches either. So swinv asks the local Docker engine over its named pipe —
+the one place it talks to a daemon, taken because the alternative is a wrong
+answer rather than a missing one. It is still true that no network activity
+occurs: a named pipe is kernel IPC with no address and no route.
+
+The engine gives the container, the image, the entrypoint and the exact
+published port mappings — better than anything derivable from a forwarding
+process's command line, and used in preference to it on any platform where a
+runtime supplies them. What it cannot give is the packages inside the
+container, so those services are reported at `medium` with the workload and
+image named, and `container-packages-not-readable` appears in the blind spots.
+To get package identity for a container on a Windows host, run swinv inside
+the container host itself.
 
 ```jsonc
 "containers": [
@@ -648,6 +675,7 @@ ingest pipeline.
 | `process-owners-not-readable-unprivileged` | The scan was not root, so most sockets could not be attributed and container namespaces could not be enumerated. |
 | `kubernetes-node-nodeport-not-observable` | Kubelet state is present. A node reporting six endpoints is not a small attack surface, it is a partially observed one. |
 | `docker-userland-proxy-disabled` | Read from `/etc/docker/daemon.json`. Every published port on this machine is a netfilter rule that this scan cannot see. |
+| `container-packages-not-readable` | Containers are running and were identified, but their filesystems could not be read, so the packages inside them are unknown. Normal on Windows, where the container's filesystem is inside a virtual machine. The image is reported, and an image reference is not something a vulnerability matcher resolves. |
 
 swinv does **not** parse iptables, nftables or IPVS. Doing so would mean
 netlink or shelling out, would still miss eBPF-based implementations, and —

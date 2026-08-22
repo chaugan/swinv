@@ -608,8 +608,8 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--offline` | false | Perform no network activity at all (skips the FQDN lookup) |
 | `--perm OCTAL` | `0644` | Permission bits for the reports; the directory derives from it |
 | `--skip-nested-rootfs` | false | Drop packages that came from a nested root filesystem (see Known limitations) |
-| `--no-services` | false | Linux: do not report what is listening |
-| `--no-containers` | false | Linux: do not look inside containers for what they run |
+| `--no-services` | false | Do not report what is listening |
+| `--no-containers` | false | Do not identify containers or what they run |
 | `--no-service-command` | false | Linux: keep the services block, drop the command lines |
 | `--since PATH` | — | Diff against a previous report |
 | `--hash` | false | Record a SHA-256 per component |

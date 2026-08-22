@@ -314,14 +314,28 @@ does not own, which needs root; unprivileged, the ports are still reported and
 the processes behind them mostly are not.
 Default: services are collected.
 .It Fl -no-containers
-Do not look inside containers.
+Do not identify containers or what they run.
+On Linux
 .Nm
-otherwise reads each container's own package database through
+reads each container's own package database through
 .Pa /proc/<pid>/root
 to name the software behind a published port, which is the only identity a
 vulnerability matcher can use for a containerised service \(em an image
-reference is not one. Disabling it keeps the host services and the exposure
-list and loses that identity.
+reference is not one.
+.Pp
+On Windows a container is a Linux process inside a virtual machine that no
+Windows API reaches, so
+.Nm
+asks the local Docker engine over its named pipe instead. That names the
+container, the image and the published port mappings, but not the packages
+inside; the report records
+.Ql container-packages-not-readable
+in its blind spots. This is the only daemon
+.Nm
+talks to, and it is local IPC, not network activity.
+.Pp
+Disabling it keeps the host services and the exposure list and loses the
+container identities.
 Default: containers are inspected.
 .It Fl -no-service-command
 Omit each service's command line from the report, keeping everything else.

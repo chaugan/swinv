@@ -55,6 +55,16 @@ machine it runs on.
   refuses anything that is not a regular file, and only fixed paths are opened
   — no part of a path comes from the container. `--no-containers` disables it,
   at the cost of not being able to name any containerised software.
+- **It talks to one daemon, and only one.** On Windows, identifying what is
+  behind a published container port requires the local Docker engine's named
+  pipe, because a Docker Desktop container is a Linux process inside a virtual
+  machine that no Windows API reaches. `swinv` connects to
+  `\\.\pipe\docker_engine` (and the Unix socket equivalent elsewhere), reads
+  the container list, and does nothing else — no create, no exec, no attach.
+  This is local kernel IPC, not network activity: there is no address and no
+  route, and nothing leaves the machine. `--no-containers` disables it. Note
+  that reaching the engine implies membership of `docker-users` or equivalent,
+  which is itself a privileged position on the host.
 - **The exposure list is not a reachability claim.** `swinv` reads no firewall,
   no NAT table and no cloud security group. `bind_scope` describes the bind and
   nothing more, `scan.firewall_examined` is emitted as a constant `false`, and

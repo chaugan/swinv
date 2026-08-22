@@ -7,6 +7,48 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Added
+
+- **Windows reports what is listening**, from `iphlpapi` rather than `/proc`.
+  `GetExtendedTcpTable` and `GetExtendedUdpTable` return the socket tables with
+  an owning pid already attached, so `services[]` and `exposure[]` now exist on
+  Windows. The row layouts are parsed by pure functions with tests, because a
+  wrong field offset would otherwise show up only on Windows and only as ports
+  that look absurd.
+- **Containers on Windows are read from the local Docker engine.** A Docker
+  Desktop container is a Linux process inside a WSL2 virtual machine: no entry
+  in the Windows process table, sockets in a namespace inside the VM, and no
+  Windows API that reaches either. Without asking the engine, a published port
+  resolves to Docker's own proxy — the non-answer this design exists to avoid.
+  This is a deliberate exception to the no-daemon-APIs rule, taken because the
+  alternative on Windows is a wrong answer rather than a missing one, and it is
+  still true that swinv performs no network activity: a named pipe is kernel
+  IPC with no address and no route.
+
+  The engine states its port mappings itself, which is better than parsing them
+  out of a forwarding process's argv, so a runtime-supplied mapping now takes
+  precedence over that path everywhere.
+
+  What the engine cannot give is the packages inside the container, so those
+  services are reported at `medium` with the workload and image named, and
+  `container-packages-not-readable` joins the blind spots.
+
+### Fixed
+
+- **Sockets with no identifiable process vanished from `exposure[]`.** They
+  were counted and then dropped, so a privileged run inside WSL2 reported
+  twelve listening sockets and zero exposure rows — a machine described as
+  having nothing exposed on the strength of not having been able to look. They
+  are now reported without a process against them, which is the statement the
+  section exists to make.
+- **The unattributed-sockets warning blamed the wrong thing.** It said an
+  unprivileged scan sees only its own sockets, which was printed verbatim to a
+  user running under `sudo`. There are two causes and the message now names
+  both: unreadable open files, or a holder outside this PID namespace — the
+  latter being exactly what happens under WSL2.
+
 ## [0.3.0] — 2026-08-22
 
 What is exposed at the network edge, and what runs inside the containers.
