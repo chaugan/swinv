@@ -48,6 +48,12 @@ func componentFor(c model.Container, purl string) (model.Component, bool) {
 	if c.Name != "" {
 		attributes["container_name"] = c.Name
 	}
+	// The same key the runtime route sets. Without it a consumer filtering on
+	// container_state silently drops whatever the targeted probe found, which
+	// is the *more* precisely identified half of the two.
+	if c.State != "" {
+		attributes["container_state"] = c.State
+	}
 	if c.Image != nil {
 		if c.Image.Ref != "" {
 			attributes["container_image"] = c.Image.Ref

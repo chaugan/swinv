@@ -8,8 +8,9 @@ import (
 
 func TestContainerComponents(t *testing.T) {
 	got := ContainerComponents([]model.Container{{
-		ID:   "9d5a98d0dc04ca4435668f83ff17cb7225536f2ca81d15aaaaaaaaaaaaaaaaaa",
-		Name: "notprem",
+		ID:    "9d5a98d0dc04ca4435668f83ff17cb7225536f2ca81d15aaaaaaaaaaaaaaaaaa",
+		Name:  "notprem",
+		State: "running",
 		Image: &model.Image{
 			Ref:            "nginxinc/nginx-unprivileged:1.27-alpine",
 			ManifestDigest: "sha256:abc",
@@ -39,6 +40,11 @@ func TestContainerComponents(t *testing.T) {
 	}
 	if c.Attributes["container_image"] != "nginxinc/nginx-unprivileged:1.27-alpine" {
 		t.Errorf("container_image = %q", c.Attributes["container_image"])
+	}
+	// The same key the runtime route sets, or a consumer filtering on it drops
+	// the more precisely identified half of the two.
+	if c.Attributes["container_state"] != "running" {
+		t.Errorf("container_state = %q", c.Attributes["container_state"])
 	}
 }
 
