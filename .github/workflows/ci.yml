@@ -216,7 +216,14 @@ jobs:
           echo "--- services ---"
           jq -r '.services[] | "\(.confidence)\t\((.endpoints // [])|join(","))\t\((.components // [])|join(","))"' "$report"
 
-          test "$(jq -r .schema_version "$report")" = "1.8"
+          # Read the expected version from the source rather than pinning it
+          # here, which has now broken the build twice on a schema bump. This
+          # still catches the thing it is for: a report that emits no
+          # schema_version, or one that disagrees with the constant.
+          want_schema="$(grep -oP 'SchemaVersion = "\K[0-9.]+' internal/model/model.go)"
+          test -n "$want_schema"
+          test "$(jq -r .schema_version "$report")" = "$want_schema" \
+            || { echo "FAIL: schema_version is '$(jq -r .schema_version "$report")', source says '$want_schema'" >&2; exit 1; }
 
           # The listener we started, attributed to the deb that installed nc.
           owner="$(jq -r '.services[] | select((.endpoints // [])|join(",")|test("39999")) | (.components // [])[0]' "$report" | head -1)"
