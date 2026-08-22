@@ -122,8 +122,8 @@ func TestSummariseExposureOmitsTheOSClauseWhenThereIsNone(t *testing.T) {
 
 func TestSummariseServices(t *testing.T) {
 	got := summariseServices([]model.Service{
-		{Confidence: model.ConfidenceHigh},
-		{Confidence: model.ConfidenceHigh},
+		{Confidence: model.ConfidenceHigh, Components: []string{"pkg:deb/a@1"}},
+		{Confidence: model.ConfidenceHigh, Components: []string{"pkg:deb/b@1"}},
 		{Confidence: model.ConfidenceMedium},
 		{Confidence: model.ConfidenceLow},
 	})
@@ -136,9 +136,24 @@ func TestSummariseServices(t *testing.T) {
 // On Windows most of what listens is the operating system, and counting it as
 // software nobody installed would put fifty false entries in front of an
 // operator every run -- which is what a first Windows run did.
+// A service named only by the directory it was installed under is still a
+// service that was named. Counting it as "nothing installed" reported zero
+// attributed on a Windows host whose exposure list had identified forty-nine
+// of the same endpoints -- the same data, two answers.
+func TestSummariseServicesCountsWeaklyNamedSoftwareAsNamed(t *testing.T) {
+	got := summariseServices([]model.Service{
+		{Confidence: model.ConfidenceMedium, Components: []string{"7-Zip 24.08 (x64)@24.08"}},
+		{Confidence: model.ConfidenceMedium},
+	})
+	want := "1 attributed to installed software, 1 running software nothing installed, 0 unidentified"
+	if got != want {
+		t.Errorf("summariseServices =\n%q\nwant\n%q", got, want)
+	}
+}
+
 func TestSummariseServicesNamesOSComponentsSeparately(t *testing.T) {
 	got := summariseServices([]model.Service{
-		{Confidence: model.ConfidenceHigh},
+		{Confidence: model.ConfidenceHigh, Components: []string{"pkg:deb/a@1"}},
 		{Confidence: model.ConfidenceMedium, OSComponent: true},
 		{Confidence: model.ConfidenceMedium, OSComponent: true},
 		{Confidence: model.ConfidenceMedium},

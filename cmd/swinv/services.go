@@ -175,17 +175,22 @@ func summariseServices(services []model.Service) string {
 	var high, medium, low, osComponents int
 	for _, s := range services {
 		switch {
-		case s.Confidence == model.ConfidenceHigh:
+		// Whether software was named, not how firmly. The install-directory
+		// join on Windows produces a medium-confidence service that *does*
+		// name its product, and counting that as "nothing installed" reported
+		// zero attributed on a host where the exposure list had identified
+		// forty-nine of the same endpoints.
+		case len(s.Components) > 0:
 			high++
 		case s.OSComponent:
 			// Counted apart from "nothing installed": an operating-system
 			// binary is not software running outside package management, and
 			// on Windows it is most of what listens.
 			osComponents++
-		case s.Confidence == model.ConfidenceMedium:
-			medium++
-		default:
+		case s.Confidence == model.ConfidenceLow:
 			low++
+		default:
+			medium++
 		}
 	}
 	out := fmt.Sprintf("%d attributed to installed software, %d running software nothing installed",
