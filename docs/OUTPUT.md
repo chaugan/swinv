@@ -11,11 +11,29 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.7`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.8`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.7"
+"schema_version": "1.8"
 ```
+
+**1.7 → 1.8** brought the network edge to Windows:
+
+| Addition | Appears in |
+|---|---|
+| `Service.os_component`, `Exposure.os_component` | JSON, services CSV column 20, exposure CSV column 18 |
+
+`services[]`, `exposure[]` and `containers[]` now exist on Windows too — from
+`iphlpapi` for the sockets and from the local Docker engine for the containers,
+since a Docker Desktop container is a Linux process inside a virtual machine
+that no Windows API reaches.
+
+`os_component` came with them, and it is the field to know about: on Windows
+most of what listens is the operating system, and `medium` would otherwise
+describe `svchost.exe` as software running outside package management. **Filter
+it out before treating `medium` as "unmanaged software"**, or every Windows
+host contributes several dozen false entries. It is never set on Linux, where
+the OS's own binaries are package-owned like any other.
 
 **1.6 → 1.7** added the network edge:
 

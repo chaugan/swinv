@@ -172,19 +172,28 @@ func summariseExposure(exposure []model.Exposure, containers []model.Container) 
 // inventory alone cannot produce: software serving traffic that nothing
 // installed accounts for.
 func summariseServices(services []model.Service) string {
-	var high, medium, low int
+	var high, medium, low, osComponents int
 	for _, s := range services {
-		switch s.Confidence {
-		case model.ConfidenceHigh:
+		switch {
+		case s.Confidence == model.ConfidenceHigh:
 			high++
-		case model.ConfidenceMedium:
+		case s.OSComponent:
+			// Counted apart from "nothing installed": an operating-system
+			// binary is not software running outside package management, and
+			// on Windows it is most of what listens.
+			osComponents++
+		case s.Confidence == model.ConfidenceMedium:
 			medium++
 		default:
 			low++
 		}
 	}
-	return fmt.Sprintf("%d attributed to installed software, %d running software nothing installed, %d unidentified",
-		high, medium, low)
+	out := fmt.Sprintf("%d attributed to installed software, %d running software nothing installed",
+		high, medium)
+	if osComponents > 0 {
+		out += fmt.Sprintf(", %d part of the operating system", osComponents)
+	}
+	return out + fmt.Sprintf(", %d unidentified", low)
 }
 
 // scanningLiveHost reports whether --root addresses the machine swinv is

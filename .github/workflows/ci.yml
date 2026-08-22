@@ -135,7 +135,7 @@ jobs:
           echo "--- services ---"
           jq -r '.services[] | "\(.confidence)\t\((.endpoints // [])|join(","))\t\((.components // [])|join(","))"' "$report"
 
-          test "$(jq -r .schema_version "$report")" = "1.7"
+          test "$(jq -r .schema_version "$report")" = "1.8"
 
           # The listener we started, attributed to the deb that installed nc.
           owner="$(jq -r '.services[] | select((.endpoints // [])|join(",")|test("39999")) | (.components // [])[0]' "$report" | head -1)"

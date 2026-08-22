@@ -132,3 +132,20 @@ func TestSummariseServices(t *testing.T) {
 		t.Errorf("summariseServices = %q, want %q", got, want)
 	}
 }
+
+// On Windows most of what listens is the operating system, and counting it as
+// software nobody installed would put fifty false entries in front of an
+// operator every run -- which is what a first Windows run did.
+func TestSummariseServicesNamesOSComponentsSeparately(t *testing.T) {
+	got := summariseServices([]model.Service{
+		{Confidence: model.ConfidenceHigh},
+		{Confidence: model.ConfidenceMedium, OSComponent: true},
+		{Confidence: model.ConfidenceMedium, OSComponent: true},
+		{Confidence: model.ConfidenceMedium},
+	})
+	want := "1 attributed to installed software, 1 running software nothing installed, " +
+		"2 part of the operating system, 0 unidentified"
+	if got != want {
+		t.Errorf("summariseServices =\n%q\nwant\n%q", got, want)
+	}
+}

@@ -16,10 +16,10 @@ software it can find — OS packages on Linux, the registry on Windows, language
 packages on both, and loose binaries that no package manager ever installed —
 then writes the result to local JSON and CSV files.
 
-On Linux it also records **what is actually listening and what is exposed at
-the network edge** — including the software running inside Docker and
-Kubernetes containers, identified from each container's own package database.
-That is the question an inventory of packages cannot answer on its own.
+It also records **what is actually listening and what is exposed at the
+network edge**, on Linux and Windows both — including the software running
+inside Docker and Kubernetes containers. That is the question an inventory of
+packages cannot answer on its own.
 
 There is no server, no daemon and no database, and **no inventory data ever
 leaves the machine**. Collecting the files afterwards is deliberately your job:
@@ -39,12 +39,12 @@ in-process with no subprocess overhead.
 ## Quickstart
 
 ```sh
-sudo dpkg -i swinv_0.3.0-1_amd64.deb   # or: sudo rpm -i swinv-0.3.0-1.x86_64.rpm
+sudo dpkg -i swinv_0.4.0-1_amd64.deb   # or: sudo rpm -i swinv-0.4.0-1.x86_64.rpm
 swinv --out /tmp/inv                   # scan /, write JSON + CSV
 ```
 
 No package? The binary is static and has no dependencies, so
-`install -m0755 swinv-v0.3.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
+`install -m0755 swinv-v0.4.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
 That writes dated files plus `-latest` symlinks:
@@ -88,7 +88,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 ```jsonc
 {
-  "schema_version": "1.7",
+  "schema_version": "1.8",
   "tool": { "name": "swinv", "version": "dev", "syft_version": "v1.51.0" },
   "host": {
     "hostname": "web-01",

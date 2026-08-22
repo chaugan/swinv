@@ -17,7 +17,7 @@ import (
 // 1.1 added Component.SHA256 (--hash) and Report.Delta (--since). Both are
 // additive and omitted when unused, so a 1.0 consumer still parses a 1.1
 // document.
-const SchemaVersion = "1.7"
+const SchemaVersion = "1.8"
 
 // Report is the top-level document written as JSON.
 type Report struct {

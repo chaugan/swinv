@@ -7,7 +7,9 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
-## [Unreleased]
+## [0.4.0] — 2026-08-22
+
+The network edge on Windows, and containers read from the Docker engine.
 
 ### Added
 
@@ -584,12 +586,13 @@ First public release.
 While `swinv` is `v0.x`, the CLI surface, the output schema and cataloger
 coverage may change in any release; breaking changes are called out here.
 
-The output document carries its own `schema_version`, currently `1.7`,
+The output document carries its own `schema_version`, currently `1.8`,
 independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/chaugan/swinv/releases/tag/v0.4.0
 [0.3.0]: https://github.com/chaugan/swinv/releases/tag/v0.3.0
 [0.2.3]: https://github.com/chaugan/swinv/releases/tag/v0.2.3
 [0.2.2]: https://github.com/chaugan/swinv/releases/tag/v0.2.2
