@@ -242,7 +242,15 @@ jobs:
             The daily timer is shipped but **not** enabled on install. Turn it on with
             `systemctl enable --now swinv.timer`.
 
-            ## Windows (experimental)
+            Run it as root to also get the `services`, `containers` and `exposure`
+            sections: what is listening, what is running inside each container, and
+            which of it is reachable at this machine's addresses.
+
+            ```sh
+            sudo swinv --out /var/lib/swinv
+            ```
+
+            ## Windows
 
             `swinv-${{ steps.version.outputs.version }}-windows-amd64.exe` is a
             standalone binary — no installer, nothing to register.
@@ -251,14 +259,15 @@ jobs:
             .\swinv.exe --out C:\inventory
             ```
 
-            That reads the uninstall registry: fast, no elevation, no file opened.
-            Add `--full-scan` from an Administrator prompt to also enumerate
-            executables on disk and read their versions; the first such run is slow
-            and later ones are not.
+            That reads the uninstall registry, Store/MSIX packages and installed
+            servicing updates: fast, no elevation, no file opened. Add `--full-scan`
+            from an Administrator prompt to also enumerate executables on disk and
+            read their versions, plus Python and npm packages; the first such run is
+            slow and later ones are not.
 
-            **Treat this as experimental.** Operating-system components and Store
-            apps are not inventoried, and per-user software is visible only for the
+            Two limits worth knowing: operating-system components are not
+            inventoried file by file, and per-user software is visible only for the
             account running the scan. The report says so in its warnings. See
-            [docs/WINDOWS.md](https://github.com/chaugan/swinv/blob/v${{ steps.version.outputs.pkgversion }}/docs/WINDOWS.md).
+            [docs/WINDOWS.md](https://github.com/chaugan/swinv/blob/${{ steps.version.outputs.version }}/docs/WINDOWS.md).
 
             Verify downloads against `SHA256SUMS`.
