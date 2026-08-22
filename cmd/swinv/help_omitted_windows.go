@@ -14,6 +14,6 @@ func helpOmittedFlags() []string {
 	return []string{
 		"root", "include-home", "no-snap", "no-flatpak",
 		"no-auto-exclude-mounts", "skip-nested-rootfs", "require-host-id",
-		"no-services", "no-service-command",
+		"no-services", "no-service-command", "no-containers",
 	}
 }

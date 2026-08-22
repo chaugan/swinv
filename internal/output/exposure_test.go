@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -130,5 +131,85 @@ func TestExposureCSVCarriesEveryField(t *testing.T) {
 		if !columns[want] {
 			t.Errorf("model.Exposure.%s has no %q column, so the exposure CSV silently omits it", name, want)
 		}
+	}
+}
+
+// CycloneDX has one services array, so the zone is what keeps a container's
+// listener from reading as a host one. trustZone is used rather than
+// x-trust-boundary, which is a boolean about consumer relationships and would
+// produce wrong conclusions in tools this project does not control.
+func TestCycloneDXTrustZones(t *testing.T) {
+	r := exposureReport()
+	r.Services = []model.Service{
+		{Endpoints: []string{"0.0.0.0:22/tcp"}, Unit: "ssh.service", Confidence: model.ConfidenceHigh},
+		{Endpoints: []string{"127.0.0.1:5432/tcp"}, Unit: "postgresql.service", Confidence: model.ConfidenceHigh},
+	}
+	r.Containers = []model.Container{{
+		ID:   "9d5a98d0dc04ca4435668f83ff17cb7225536f2ca81d15aa",
+		Name: "notprem",
+		Services: []model.Service{{
+			Endpoints: []string{"0.0.0.0:8080/tcp"}, Executable: "/usr/sbin/nginx",
+			Processes: 9, PublishedAs: []string{"0.0.0.0:80/tcp"},
+			Confidence: model.ConfidenceHigh,
+		}},
+	}}
+
+	var buf bytes.Buffer
+	if err := WriteCycloneDX(&buf, r); err != nil {
+		t.Fatalf("WriteCycloneDX: %v", err)
+	}
+	var doc struct {
+		Services []struct {
+			Name       string                         `json:"name"`
+			Group      string                         `json:"group"`
+			TrustZone  string                         `json:"trustZone"`
+			Properties []struct{ Name, Value string } `json:"properties"`
+		} `json:"services"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(doc.Services) != 3 {
+		t.Fatalf("got %d services, want 3", len(doc.Services))
+	}
+
+	zones := map[string]string{}
+	groups := map[string]string{}
+	for _, s := range doc.Services {
+		zones[s.Name] = s.TrustZone
+		groups[s.Name] = s.Group
+	}
+	if zones["ssh.service"] != "host-network" {
+		t.Errorf("ssh trustZone = %q", zones["ssh.service"])
+	}
+	if zones["postgresql.service"] != "host-loopback" {
+		t.Errorf("postgres trustZone = %q", zones["postgresql.service"])
+	}
+	if zones["nginx"] != "container-network" {
+		t.Errorf("container service trustZone = %q", zones["nginx"])
+	}
+	if groups["nginx"] != "notprem" {
+		t.Errorf("container service group = %q", groups["nginx"])
+	}
+
+	// x-trust-boundary must stay unset: it means something else.
+	if bytes.Contains(buf.Bytes(), []byte("x-trust-boundary")) {
+		t.Error("x-trust-boundary was set; it is a claim about consumer relationships, not bind addresses")
+	}
+
+	props := map[string]string{}
+	for _, s := range doc.Services {
+		if s.Name != "nginx" {
+			continue
+		}
+		for _, p := range s.Properties {
+			props[p.Name] = p.Value
+		}
+	}
+	if props["swinv:service:processes"] != "9" {
+		t.Errorf("processes property = %q", props["swinv:service:processes"])
+	}
+	if props["swinv:service:published_as"] != "0.0.0.0:80/tcp" {
+		t.Errorf("published_as property = %q", props["swinv:service:published_as"])
 	}
 }

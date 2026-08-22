@@ -78,7 +78,9 @@ func attributeServices(cfg *config, report *model.Report, snapshot *service.Resu
 	// software inside the container behind it, so that has to be resolved
 	// first, and publishing it is then recorded back onto the container's own
 	// service.
-	report.Containers = service.EnrichContainers("", snapshot.Containers, cfg.noServiceCommand)
+	if !cfg.noContainers {
+		report.Containers = service.EnrichContainers("", snapshot.Containers, cfg.noServiceCommand)
+	}
 	report.Exposure = service.Expose(snapshot, services, report.Containers)
 
 	// The packages found inside containers join the inventory. Without this

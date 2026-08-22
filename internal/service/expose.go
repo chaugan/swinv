@@ -132,6 +132,7 @@ func exposeOne(s Service, e Endpoint, attributed model.Service, runtime string, 
 	}
 	out.Backend.Container = target.ID
 
+	matched := false
 	for i := range containers {
 		if containers[i].ID != target.ID {
 			continue
@@ -148,8 +149,19 @@ func exposeOne(s Service, e Endpoint, attributed model.Service, runtime string, 
 			out.Evidence = append(out.Evidence, fmt.Sprintf(
 				"forwards to %s in container %s", svc.Executable, shortID(target.ID)))
 			svc.PublishedAs = model.SortedSet(append(svc.PublishedAs, e.String()))
+			matched = true
 		}
 		break
+	}
+	if !matched {
+		// The container is known but nothing in it was seen listening on the
+		// port the forward names. Usually the process is unreadable, or it
+		// exited between the two reads. Saying so beats an empty row, and
+		// beats picking the container's only other listener and calling it
+		// the answer.
+		out.Evidence = append(out.Evidence, fmt.Sprintf(
+			"container %s was identified, but no process in it was seen listening on port %d",
+			shortID(target.ID), forward.BackendPort))
 	}
 	if out.Confidence == "" {
 		out.Confidence = model.ConfidenceLow

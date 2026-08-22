@@ -11,6 +11,66 @@ schema and cataloger coverage may still change between releases. See
 
 ### Added
 
+- **What is exposed at the network edge, and what is running inside the
+  containers**, on Linux, and with it schema `1.7`.
+
+  `exposure[]` is one row per listening socket in the **host** network
+  namespace, and nothing else — membership is the verdict, so a consumer
+  reading only that array cannot mistake a container's `0.0.0.0` bind for a
+  host one. `bind_scope` then says how widely each is bound. Deliberately not
+  "public"/"private" and never "internet-facing": swinv reads no firewall, and
+  `scan.firewall_examined` is emitted as a constant `false` so that reaches an
+  ingest pipeline rather than only the documentation.
+
+  `containers[]` is each container and what it listens on inside its own
+  namespace, with the identity that makes this useful:
+  `pkg:apk/alpine/nginx@1.27.5-r1` from the container's own package database,
+  read through `/proc/<pid>/root`. That is a coordinate Grype and Trivy match
+  today. An image reference is not — there is no `oci` matcher anywhere in the
+  chain, and Dependency-Track will ingest one, find nothing, and show the
+  component as clean, which is indistinguishable from safe. The image digest is
+  emitted as a locator on its own field and never as an identity.
+
+  A published port follows into the container behind it, so a host endpoint
+  names the software that actually answers rather than the package that ships
+  `docker-proxy` — which was 14 of 31 services on the development host.
+
+- **`scan.exposure_blind_spots`** names, in machine-readable form, what could
+  not be observed: netfilter DNAT always, plus an unprivileged scan, a
+  Kubernetes node whose NodePorts are iptables rules, or a Docker daemon with
+  `userland-proxy` disabled. Without it those hosts produce a document
+  identical to a host with nothing exposed. swinv does not parse iptables or
+  nftables: it would not answer the reachability question even when it
+  succeeded, and trading a declared blind spot for an undeclared guess is the
+  wrong trade.
+
+- **`--no-containers`** keeps the host services and the exposure list but stops
+  swinv reading container filesystems.
+
+- **A `-exposure.csv` sidecar**, one row per host socket, repeating the
+  scan-level qualifiers on every row so a denormalised consumer can tell a
+  complete row from one produced by a scan that could not look.
+
+### Fixed
+
+- **Containerised processes were attributed to host packages.** Container
+  detection only recognised the systemd cgroup driver's `.scope` layout, so
+  under the cgroupfs driver — and on Kubernetes, and under LXC — a container's
+  process looked like a host process and had its executable matched against the
+  *host's* package databases. A container running `/usr/sbin/nginx` on a host
+  that also has nginx got the host's package, the host's version, and
+  confidence `high`. Detection is now on the shape of the cgroup path, and the
+  guard no longer depends on recognising a layout at all: a process in a
+  different mount namespace than init is never joined to host packages.
+
+- **CycloneDX output carried no distro.** Syft's decoder — which is what Grype
+  uses for `grype sbom:`, a recipe this project documents — reads the Linux
+  release only from a `components[]` entry of type `operating-system`, and
+  swinv emitted none. Every deb and rpm therefore arrived with no distro, and
+  matching fell back to comparing backported versions against upstream
+  numbering: the same failure that produced 442 false findings on one host, this
+  time caused by the output format itself.
+
 - **What is listening is now part of the inventory**, on Linux, and with it
   schema `1.6`. A new top-level `services[]` array records each listening
   socket, the process behind it, its systemd unit and container, and which

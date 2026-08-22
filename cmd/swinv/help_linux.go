@@ -41,6 +41,7 @@ func helpSections() []helpSection {
 		}},
 		{"What is listening", []helpFlag{
 			{"--no-services", "do not report listening sockets and their software"},
+			{"--no-containers", "do not look inside containers for what they run"},
 			{"--no-service-command", "omit command lines; they can carry passwords"},
 		}},
 		{"Comparing against a previous run", []helpFlag{

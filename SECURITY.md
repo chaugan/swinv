@@ -48,6 +48,20 @@ machine it runs on.
   also means reading `/proc/<pid>/fd` for processes swinv does not own, which
   needs root — unprivileged, the ports are still reported and the processes
   behind them mostly are not.
+- **It reads container filesystems.** Identifying the software behind a
+  published port means reading each container's own package database through
+  `/proc/<pid>/root`, which is root-only. That filesystem's contents are chosen
+  by whatever runs in the container, so every read there is size-capped and
+  refuses anything that is not a regular file, and only fixed paths are opened
+  — no part of a path comes from the container. `--no-containers` disables it,
+  at the cost of not being able to name any containerised software.
+- **The exposure list is not a reachability claim.** `swinv` reads no firewall,
+  no NAT table and no cloud security group. `bind_scope` describes the bind and
+  nothing more, `scan.firewall_examined` is emitted as a constant `false`, and
+  `scan.exposure_blind_spots` names what could not be observed — including
+  Kubernetes NodePort and any port published by a netfilter rule with no
+  process behind it, which are invisible by construction. **A short exposure
+  list is not evidence that little is exposed** until that array has been read.
 - **Output permissions default to permissive, and are configurable.** Reports
   are written `0644` in a `0755` directory so a collector running as another
   user can read them, which is the documented deployment model. The cost is

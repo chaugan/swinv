@@ -11,11 +11,36 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.6`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.7`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.6"
+"schema_version": "1.7"
 ```
+
+**1.6 → 1.7** added the network edge:
+
+| Addition | Appears in |
+|---|---|
+| `Report.exposure` | JSON, and a separate `-exposure.csv` file |
+| `Report.containers` | JSON, and CycloneDX `services[]` with `trustZone` |
+| `scan.firewall_examined`, `scan.exposure_blind_spots` | JSON, and repeated on every exposure CSV row |
+| `Service.processes`, `Service.published_as` | JSON, services CSV columns 18–19 |
+| Container packages in `components[]` with `root: "container:<id>"` | JSON, CSV, NDJSON, CycloneDX |
+
+See [`exposure`](#exposure) and [`containers`](#containers) below.
+
+**`services[].endpoints` did not change.** It is still an array of strings in
+the same order. Retyping it to objects would have been a silent break for the
+normal fate of a fleet inventory — an Elasticsearch mapping conflict rejects
+documents at ingest, with nothing to connect the failure to swinv — so the
+structured form lives in the new `exposure` array instead.
+
+**`services[]` did not change meaning either.** It is still the host network
+namespace and nothing else. Container listeners went into `containers[]`
+rather than being added here, because every consumer that wrote
+`select(.endpoints[] | startswith("0.0.0.0"))` reads that array as "reachable
+on this machine", and quietly adding container-internal ports would have made
+that query wrong without changing a single field name.
 
 **1.5 → 1.6** added one thing:
 
@@ -434,6 +459,204 @@ Where the package databases say nothing, a component that recorded the exact
 path as one of its own locations is used instead — which is what a Windows
 registry entry naming its own executable looks like.
 
+### `exposure`
+
+Schema 1.7. One entry per listening socket **in the host network namespace**,
+and nothing else. Linux only.
+
+```jsonc
+"exposure": [
+  {
+    "address": "0.0.0.0", "port": 80, "protocol": "tcp", "family": "ipv4",
+    "bind_scope": "wildcard",
+    "pid": 2562, "executable": "/usr/bin/docker-proxy", "unit": "docker.service",
+    "backend": {
+      "address": "172.18.0.2", "port": 80,
+      "container": "9d5a98d0dc04…", "executable": "/usr/sbin/nginx",
+      "via": "docker-proxy-argv"
+    },
+    "image": {
+      "ref": "nginxinc/nginx-unprivileged:1.27-alpine",
+      "manifest_digest": "sha256:…", "id": "sha256:…",
+      "purl": "pkg:oci/nginx-unprivileged@sha256%3A…?repository_url=…&tag=1.27-alpine"
+    },
+    "components": ["pkg:apk/alpine/nginx@1.27.5-r1?arch=x86_64&distro=alpine-3.21.3"],
+    "confidence": "high",
+    "evidence": ["socket 0.0.0.0:80/tcp held by pid 2562 in the host network namespace", "…"]
+  }
+]
+```
+
+**Membership is the verdict.** A socket bound to `0.0.0.0` inside a container's
+network namespace is not reachable at this machine's addresses, and if such a
+row sat in this array next to an address, a reader would conclude the opposite.
+So those rows are not here at all — they are in [`containers`](#containers) —
+and a consumer reading only this array cannot get it wrong.
+
+One row per **socket**, not per process, because that is the unit of the
+question: a process bound to four sockets can be four different answers, three
+on loopback and one on the world. A socket held by two processes — `init` and
+the daemon it socket-activated — is still one row, and the one kept is the row
+that names the daemon.
+
+| Field | Meaning |
+|---|---|
+| `address`, `port`, `protocol` | The bind, verbatim. `protocol` is `tcp` or `udp`. |
+| `family` | `ipv4` or `ipv6`, taken from the table the socket was read from — Go renders an IPv4-mapped address as a dotted quad, so the text of `address` is not reliable for this. |
+| `bind_scope` | `wildcard`, `loopback`, `link_local`, or `specific`. See below. |
+| `wildcard_covers_ipv4` | A `::` bind on a kernel with `bindv6only` off accepts IPv4 too. Without this a consumer counting IPv4 exposure by family undercounts. |
+| `pid`, `executable`, `unit`, `user` | The process holding the socket. |
+| `container` | Set when the *holding* process is containerised — a `--network=host` container or a `hostNetwork` pod. |
+| `backend` | Where a forwarded port leads. See below. |
+| `image` | The container image behind a forwarded port. **A locator, not an identity** — see [`containers`](#containers). |
+| `components` | The software behind this endpoint, by PURL. For a forwarded port this is the package **inside the container**, never the forwarding process's own. |
+| `confidence`, `evidence` | As for services. |
+
+#### `bind_scope` is about the bind, not about reachability
+
+| Value | Meaning |
+|---|---|
+| `wildcard` | `0.0.0.0` or `::` — every address the host has now, and every one added tomorrow by a new interface. |
+| `loopback` | `127.0.0.0/8` or `::1`. |
+| `link_local` | `169.254.0.0/16` or `fe80::/10`. |
+| `specific` | One particular address, which is kept verbatim in `address`. |
+
+There is deliberately no `public` and no `private`, and nothing anywhere in
+this document says "internet-facing". **swinv reads no firewall, no NAT table
+and no cloud security group.** It cannot tell a lab bridge from a flat
+datacentre L2 where every host reaches every address, and a `private` verdict
+would be read as "therefore safe". The address is always in the row, so a
+consumer with an actual network model can classify it; the reverse is not
+possible.
+
+`scan.firewall_examined` is emitted as a constant `false` for the same reason,
+and repeats on every row of the exposure CSV — a consumer's ingest pipeline
+never sees prose.
+
+#### `backend`: following a published port
+
+A published container port is held on the host by a forwarding process. Its own
+package is not the answer: reporting `pkg:deb/ubuntu/docker-ce` as the software
+behind port 3000 is true and useless, and it was 14 of 31 services on the
+development host. So a recognised forwarder — `docker-proxy`, `rootlessport`,
+`slirp4netns`, `pasta` — **never** contributes its own attribution, and the
+identity comes from the container behind it instead.
+
+The container is found by matching the forward's destination address against
+the addresses assigned inside each container's namespace, falling back to the
+port when exactly one container listens on it. Several containers publishing
+8080 is ordinary, so an ambiguous match resolves to *nothing* rather than to a
+coin flip presented as a finding.
+
+**`via` says how the forward was learned**, and `docker-proxy-argv` means it
+came from that process's command line. This is enrichment, never discovery:
+`docker-proxy` does not exist at all when the daemon runs with
+`"userland-proxy": false`, under rootless Docker, or under rootful Podman's
+default netavark — see the blind spots below.
+
+### `containers`
+
+Schema 1.7. One entry per containerised workload, and what each is listening on
+**inside its own network namespace**. Linux only, and root-only in practice.
+
+```jsonc
+"containers": [
+  {
+    "id": "9d5a98d0dc04…", "name": "notprem", "runtime": "docker",
+    "image": {"ref": "nginxinc/nginx-unprivileged:1.27-alpine", "manifest_digest": "sha256:…"},
+    "os_id": "alpine", "os_version_id": "3.21.3",
+    "pod": {"name": "web-7d4f", "namespace": "default", "container": "nginx"},
+    "services": [{
+      "endpoints": ["0.0.0.0:8080/tcp"],
+      "executable": "/usr/sbin/nginx",
+      "processes": 9,
+      "components": ["pkg:apk/alpine/nginx@1.27.5-r1?arch=x86_64&distro=alpine-3.21.3"],
+      "confidence": "high",
+      "published_as": ["0.0.0.0:80/tcp"]
+    }]
+  }
+]
+```
+
+**Nothing in here is a host-reachability claim.** A container port reaches this
+machine only if something published it, and that fact lives in `exposure`,
+cross-linked from `published_as`.
+
+`os_id` and `os_version_id` come from the container's *own* `/etc/os-release`.
+This is not decoration: a container is a different operating system from its
+host — one on the development machine is RHEL 8.10 on an Ubuntu 26.04 server —
+and that is what decides which advisories apply to its packages.
+
+`processes` folds a prefork server back into one service. nginx's master and
+its eight workers all hold the same inherited socket; reporting nine services
+would misstate both what is running and how much of it, and repeat the same
+identity nine times in every downstream count.
+
+#### How container services get a usable identity
+
+The `components` PURL comes from the **container's own package database**, read
+through `/proc/<pid>/root` and probed only for the executables that are
+actually listening — the same discipline the host join uses, one namespace
+over. `dpkg`, `apk` and `rpm` are all read.
+
+An empty `components` is the interesting case, not a failure: it is software
+that was unpacked into the image rather than installed by its package manager,
+which is most application containers.
+
+**The image reference is a locator, not an identity a matcher can use.** There
+is no `oci` matcher in Grype, no OCI coordinates in OSV or OSS Index, and
+Dependency-Track will ingest an image PURL, find nothing, and display the
+component as clean — which is indistinguishable from "analysed and safe". So
+`image` never appears in any `components` list. Use it to join to an image scan
+you perform elsewhere; that is what actually produces findings for an image.
+Note that `manifest_digest` is the registry manifest digest, which is what
+`repo@sha256:…` means and what an image scanner will have seen, while `id` is
+the local config digest — a different value, and confusing the two is the
+classic bug here.
+
+#### Container packages join `components[]`
+
+Each package found this way is also added to the main `components` array with
+`root: "container:<short-id>"`, so that CVE tooling reading `components[]` and
+nothing else — which is most of it, `grype sbom:` included — sees them at all.
+
+Every such row carries `attributes.scan_scope = "listening-executables-only"`.
+**These rows are not a container inventory.** Only the packages owning a
+listening executable were probed; cataloguing whole container filesystems costs
+a full walk each, and swinv is not a container scanner.
+
+### `scan.exposure_blind_spots`
+
+Schema 1.7. What this scan could not observe, in machine-readable form.
+
+```json
+"firewall_examined": false,
+"exposure_blind_spots": ["netfilter-dnat-not-read", "firewall-rules-not-read"]
+```
+
+**This is the most important field in the exposure section.** Without it, a
+host running Docker with `userland-proxy` disabled — where publishing is pure
+netfilter DNAT and no process holds a socket — produces a document identical to
+a host with nothing exposed at all. A consumer must be able to tell "looked and
+found nothing" from "could not look", and warning strings do not survive an
+ingest pipeline.
+
+| Identifier | Meaning |
+|---|---|
+| `netfilter-dnat-not-read` | Always present on Linux. A port published by a DNAT rule with no process behind it has no listening socket, and no `/proc` interface reveals one. This covers **Kubernetes NodePort** in iptables and IPVS mode, Docker with `userland-proxy` disabled, rootful Podman's default netavark, and any hand-written rule. |
+| `firewall-rules-not-read` | Always present. Nothing here reads a firewall, so no row is a statement about reachability. |
+| `process-owners-not-readable-unprivileged` | The scan was not root, so most sockets could not be attributed and container namespaces could not be enumerated. |
+| `kubernetes-node-nodeport-not-observable` | Kubelet state is present. A node reporting six endpoints is not a small attack surface, it is a partially observed one. |
+| `docker-userland-proxy-disabled` | Read from `/etc/docker/daemon.json`. Every published port on this machine is a netfilter rule that this scan cannot see. |
+
+swinv does **not** parse iptables, nftables or IPVS. Doing so would mean
+netlink or shelling out, would still miss eBPF-based implementations, and —
+decisively — would not answer the reachability question even when it succeeded,
+because that depends on chain policies, `ct state` matches, ipsets, interface
+constraints, and whatever sits in front of the NIC. Trading a declared blind
+spot for an undeclared guess is the wrong trade. For a Kubernetes fleet, the
+API server answers this correctly in one call, with service names.
+
 ---
 
 ## Identity and ordering — the guarantees consumers rely on
@@ -633,11 +856,15 @@ fourteen empty columns. A sidecar rather than a `--format` of its own, because
 an operator asking for CSV wants the whole run as CSV, and making them name a
 second format to get half of it is a trap.
 
-**17 columns, in exactly this order:**
+**19 columns, in exactly this order:**
 
 ```
-hostname,machine_id,os_id,os_version_id,architecture,scanned_at,endpoints,pid,executable,command,unit,container,user,socket_activated,components,confidence,evidence
+hostname,machine_id,os_id,os_version_id,architecture,scanned_at,endpoints,pid,executable,command,unit,container,user,socket_activated,components,confidence,evidence,processes,published_as
 ```
+
+`processes` and `published_as` were appended in schema 1.7, at the end, so a
+1.6 row stays a prefix of a 1.7 row and a consumer reading by position keeps
+working.
 
 The first six are the same host identity the component CSV repeats, for the
 same reason. `endpoints`, `components` and `evidence` are multi-valued and are
@@ -645,9 +872,34 @@ joined with `;` inside their single field. `pid` is empty rather than `0` on the
 aggregate row: `0` is a real pid and would read as a claim. The header is always
 present.
 
-`--stdout` has no sidecar — there is only one stream — so `--stdout --format
+### The exposure sidecar
+
+Schema 1.7. A third file, written alongside the other two whenever `--format`
+includes `csv` and exposure was collected:
+
+```
+web-01-20240309-exposure.csv
+web-01-latest-exposure.csv
+```
+
+**One row per listening socket in the host network namespace**, which is the
+unit of work for a system whose job is the network edge: "is this port a
+problem" is a question about a port, not about a process.
+
+**30 columns:**
+
+```
+hostname,machine_id,os_id,os_version_id,architecture,scanned_at,address,port,protocol,family,bind_scope,wildcard_covers_ipv4,pid,executable,unit,user,container,backend_address,backend_port,backend_container,backend_executable,backend_via,image_ref,image_manifest_digest,components,confidence,evidence,ran_as_root,firewall_examined,exposure_blind_spots
+```
+
+The last three repeat the scan-level qualifiers on **every row**, deliberately.
+A denormalised consumer never sees the `scan` block, and without them it cannot
+tell a complete row from one produced by a scan that could not look. A natural
+key for deduplicating across scans is `machine_id + address + port + protocol`.
+
+`--stdout` has no sidecars — there is only one stream — so `--stdout --format
 csv` gives the components alone. Use `--stdout --format json` if you want the
-services block on a pipe.
+services, containers or exposure blocks on a pipe.
 
 The file is written whenever services were collected at all, even when nothing
 was listening — a header with no rows says "we looked and found nothing", which
@@ -741,6 +993,9 @@ identity (the PURL when there is one, otherwise `type:name@version`, with a
 | `components[].evidence.occurrences` | One entry per `location` |
 | `components[].properties` | `swinv:component:type`, `:language`, `:found_by`, and any extra `:cpe` values |
 | `services[]` | Each entry of the `services` block, with `bom-ref: swinv:service:<unit or executable basename>`, the schema's own `endpoints` field, and everything else as `swinv:service:*` properties — `confidence`, `executable`, `command`, `unit`, `container`, `user`, `pid`, `socket_activated`, and one `:evidence` property per line of the evidence trail |
+| `services[].trustZone` | `host-network`, `host-loopback`, or `container-network`. Used rather than `x-trust-boundary`, which is a boolean about whether *using* a service crosses a boundary — a different claim that other tools read that way. |
+| `services[].group` | The container name, for a service inside one. |
+| `components[]` of type `operating-system` | The distribution, with `syft:distro:*` properties. This is where SBOM consumers look for it: Syft's decoder, which Grype uses for `grype sbom:`, reads the Linux release only from a component of this type. Without it every deb and rpm arrives with no distro and matching falls back to comparing backported versions against upstream numbering. |
 | `dependencies[]` | One edge per service that was attributed, `dependsOn` the `bom-ref`s of the components behind it. This is the edge worth having: it answers "is anything internet-facing running the component this advisory is about" without a join |
 
 Custom property names are namespaced with `swinv:` as CycloneDX asks. Note that

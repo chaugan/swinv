@@ -451,6 +451,7 @@ loses context and loses nothing else.
 |---|---|---|
 | 1 | ~~Linux socket → PID → exe → component, with cgroup unit labelling and container resolution~~ **Done** | The spine. Cheap, no dependencies, and immediately surfaces unmanaged serving software |
 | 2 | ~~`services[]` schema, CycloneDX services, `services.csv`, confidence and evidence model~~ **Done** | Proves the shape before more collectors depend on it |
+| 2.5 | ~~Network exposure: host-namespace socket list, bind scope, publish indirection, container identity from the container's own package database, blind spots as data~~ **Done** | The question the whole design was for: what is reachable, and what software is behind it |
 | 3 | IIS vertical slice: `applicationHost.config`, `InetStp`, app pool → `w3wp` | The motivating case. Early, because the generic pipeline is weakest here and waiting would demo badly |
 | 4 | Interpreted and JVM: launcher classification, deployment-root scanning | The largest coverage gain and the most work |
 | 5 | Drift detection, scoped and filtered | Valuable, independent, and safe to defer |
@@ -530,6 +531,48 @@ attributed to `systemd`.
 
 The summary line leads with the high count but the middle number is the one to
 read, and the wording says so: *"running software nothing installed"*.
+
+## Measured: the network edge
+
+The same host, as root. 44 host-namespace sockets, 10 containers.
+
+```
+exposure: 44   containers: 10
+0.0.0.0:80   -> container 9d5a98d0dc04 /usr/sbin/nginx
+                pkg:apk/alpine/nginx@1.27.5-r1?arch=x86_64&distro=alpine-3.21.3   high
+0.0.0.0:3000 -> container 2864a9b3fa8c /usr/local/bin/node                        medium
+```
+
+Container operating systems read from each container's own `/etc/os-release`:
+`rhel-8.10`, `alpine-3.21.3`, `alpine-3.24.1`, `debian-12`, `debian-13`,
+`wolfi-20230201`, `ubuntu-26.04` — seven distributions on one Ubuntu 26.04
+host, each with its own advisory stream.
+
+Four things this measurement settled.
+
+**The image is not an identity.** Every reviewer said so independently, and the
+mechanism is checkable: Grype dispatches matchers by ecosystem and has no `oci`
+matcher; OSV and OSS Index carry no OCI coordinates; Dependency-Track ingests
+the PURL, finds nothing, and renders the component clean — indistinguishable
+from analysed-and-safe. The identity comes from the container's own package
+database instead, which was already reachable through `/proc/<pid>/root`.
+
+**Cataloguing the container was not affordable.** A full Syft walk of one
+container rootfs on this host ran past ten minutes without finishing. Probing
+the four executables that are actually listening takes milliseconds, and it is
+the same discipline the host join already uses.
+
+**docker-proxy is a configuration, not a mechanism.** It does not exist with
+`"userland-proxy": false`, under rootless Docker, or under rootful Podman's
+default netavark — and in those configurations publishing is pure netfilter
+DNAT with no process and no socket. Discovery is therefore the host namespace's
+socket table; the proxy's argv only rewrites a destination when that process
+happens to be the one holding the socket.
+
+**A blind spot has to be data.** Without `scan.exposure_blind_spots`, a host
+with `userland-proxy` disabled and a host with nothing published produce
+byte-identical exposure sections. Prose in `warnings[]` does not survive an
+ingest pipeline; a machine-readable array does.
 
 ## Rejected alternatives
 

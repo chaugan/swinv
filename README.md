@@ -16,9 +16,10 @@ software it can find — OS packages on Linux, the registry on Windows, language
 packages on both, and loose binaries that no package manager ever installed —
 then writes the result to local JSON and CSV files.
 
-On Linux it also records **what is actually listening**, and which of that
-software no package manager installed. That is the question an inventory of
-packages cannot answer on its own.
+On Linux it also records **what is actually listening and what is exposed at
+the network edge** — including the software running inside Docker and
+Kubernetes containers, identified from each container's own package database.
+That is the question an inventory of packages cannot answer on its own.
 
 There is no server, no daemon and no database, and **no inventory data ever
 leaves the machine**. Collecting the files afterwards is deliberately your job:
@@ -87,7 +88,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 ```jsonc
 {
-  "schema_version": "1.6",
+  "schema_version": "1.7",
   "tool": { "name": "swinv", "version": "dev", "syft_version": "v1.51.0" },
   "host": {
     "hostname": "web-01",
@@ -234,6 +235,43 @@ processes behind them mostly are not — which is stated, not hidden.
 It all comes from `/proc`: no `ss`, no `netstat`, no `lsof`, no D-Bus.
 `--no-services` skips it; `--no-service-command` keeps it but drops the command
 lines, which is where secrets end up.
+
+#### What is exposed, and what is inside the containers
+
+The same run records the network edge: one row per listening socket in the
+**host** network namespace, with the software behind it — following a published
+port into the container that answers it.
+
+```jsonc
+{
+  "address": "0.0.0.0", "port": 80, "protocol": "tcp",
+  "bind_scope": "wildcard",
+  "executable": "/usr/bin/docker-proxy",
+  "backend": {"container": "9d5a98d0dc04", "executable": "/usr/sbin/nginx"},
+  "image": {"ref": "nginxinc/nginx-unprivileged:1.27-alpine", "manifest_digest": "sha256:…"},
+  "components": ["pkg:apk/alpine/nginx@1.27.5-r1?arch=x86_64&distro=alpine-3.21.3"],
+  "confidence": "high"
+}
+```
+
+That PURL is the point. It comes from the **container's own package database**,
+read through `/proc/<pid>/root` — an Alpine container on an Ubuntu host — and
+it is a coordinate Grype and Trivy match today. An image reference is not:
+there is no `oci` matcher anywhere in the chain, so an image PURL alone yields
+a component that gets reported clean because nothing ever looked at it. swinv
+emits the image digest as a *locator*, on its own field, never as an identity.
+
+`containers[]` lists every container and what it runs, published or not, with
+its own OS: `rhel-8.10`, `alpine-3.21.3`, `wolfi-20230201` — each a different
+operating system from the host, deciding which advisories apply.
+
+**`bind_scope` is about the bind, not about reachability.** swinv reads no
+firewall, no NAT table and no security group, so there is no "public" and
+nothing says "internet-facing". And because a port published by a netfilter
+rule has no listening socket at all — Kubernetes NodePort, Docker with
+`userland-proxy` disabled, Podman's default netavark — every report carries
+`scan.exposure_blind_spots` naming what it could not see. **A short exposure
+list means nothing until you have read that array.**
 
 **[Why this exists and how it is built →](docs/SERVER-ROLES.md)**
 
@@ -571,6 +609,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--perm OCTAL` | `0644` | Permission bits for the reports; the directory derives from it |
 | `--skip-nested-rootfs` | false | Drop packages that came from a nested root filesystem (see Known limitations) |
 | `--no-services` | false | Linux: do not report what is listening |
+| `--no-containers` | false | Linux: do not look inside containers for what they run |
 | `--no-service-command` | false | Linux: keep the services block, drop the command lines |
 | `--since PATH` | — | Diff against a previous report |
 | `--hash` | false | Record a SHA-256 per component |

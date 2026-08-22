@@ -30,6 +30,7 @@
 .Op Fl -catalogers Ar expr
 .Op Fl -no-file-ownership
 .Op Fl -no-services
+.Op Fl -no-containers
 .Op Fl -no-service-command
 .Op Fl -usn-probe
 .Op Fl -volumes Ar spec
@@ -312,6 +313,16 @@ for processes
 does not own, which needs root; unprivileged, the ports are still reported and
 the processes behind them mostly are not.
 Default: services are collected.
+.It Fl -no-containers
+Do not look inside containers.
+.Nm
+otherwise reads each container's own package database through
+.Pa /proc/<pid>/root
+to name the software behind a published port, which is the only identity a
+vulnerability matcher can use for a containerised service \(em an image
+reference is not one. Disabling it keeps the host services and the exposure
+list and loses that identity.
+Default: containers are inspected.
 .It Fl -no-service-command
 Omit each service's command line from the report, keeping everything else.
 A command line is often the only identification available for an interpreted
@@ -441,6 +452,18 @@ listing what is bound. World-readable, so the endpoints are always found.
 .It Pa /proc/<pid>/fd
 Attributes a listening socket to the process holding it. Readable only by the
 process owner, so an unprivileged scan attributes only its own.
+.It Pa /proc/<pid>/ns/net
+Groups processes by network namespace, anchored on init's. This is what
+separates a socket reachable at this machine's addresses from one reachable
+only inside a container.
+.It Pa /proc/<pid>/root
+The filesystem of a containerised process, read to identify the software it
+runs from that container's own package database.
+.It Pa /etc/docker/daemon.json
+Read only for
+.Ql userland-proxy ,
+whose absence would otherwise make a host publishing many ports look like one
+publishing none.
 .It Pa /sys/class/dmi/id
 Hardware vendor, product name, and — for root only — serial and UUID.
 .El
@@ -467,6 +490,27 @@ Produce a CycloneDX document for a downstream vulnerability scanner:
 swinv --format cyclonedx-json --out /var/lib/swinv
 grype sbom:/var/lib/swinv/$(hostname -s)-latest.cdx.json
 .Ed
+.Pp
+List what is exposed at the network edge, with the software behind each port:
+.Bd -literal -offset indent
+sudo swinv --out /var/lib/swinv
+jq -r '.exposure[] | select(.bind_scope != "loopback")
+       | [.address, .port, (.components // ["?"] | join(","))] | @tsv' \e
+   /var/lib/swinv/*-latest.json
+.Ed
+.Pp
+.Nm
+reads no firewall, no NAT table and no security group, so
+.Ql bind_scope
+describes the bind and never reachability. A port published by a netfilter
+rule with no process behind it \(em Kubernetes
+.Ql NodePort ,
+Docker with
+.Ql userland-proxy
+disabled, rootful Podman's default netavark \(em has no listening socket and
+is invisible here. Every report names what it could not see in
+.Ql scan.exposure_blind_spots ,
+and a short exposure list means nothing until that has been read.
 .Pp
 Ask what is listening and what installed it, which needs root:
 .Bd -literal -offset indent

@@ -135,7 +135,7 @@ jobs:
           echo "--- services ---"
           jq -r '.services[] | "\(.confidence)\t\((.endpoints // [])|join(","))\t\((.components // [])|join(","))"' "$report"
 
-          test "$(jq -r .schema_version "$report")" = "1.6"
+          test "$(jq -r .schema_version "$report")" = "1.7"
 
           # The listener we started, attributed to the deb that installed nc.
           owner="$(jq -r '.services[] | select((.endpoints // [])|join(",")|test("39999")) | (.components // [])[0]' "$report" | head -1)"
@@ -154,9 +154,19 @@ jobs:
           jq -e '.services[] | select((.endpoints // [])|join(",")|test("39999"))
                  | select(.confidence == "high") | select((.evidence|length) > 0)' "$report" >/dev/null
 
+          # Syft's decoder -- what `grype sbom:` uses -- reads the distro only
+          # from a components[] entry of type "operating-system". Without it
+          # every deb and rpm arrives with no distro and matching falls back to
+          # comparing backported versions against upstream numbering.
+          run /tmp/svc-cdx --format cyclonedx-json
+          cdx="$(ls /tmp/svc-cdx/*.cdx.json | head -1)"
+          jq -e '.components[] | select(.type == "operating-system")
+                 | select(.properties | map(select(.name == "syft:distro:id")) | length == 1)' "$cdx" >/dev/null \
+            || { echo "FAIL: CycloneDX carries no operating-system component" >&2; exit 1; }
+
           # The sidecar, with the documented column contract.
           sidecar="$(ls /tmp/svc/*-services.csv | head -1)"
-          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,endpoints,pid,executable,command,unit,container,user,socket_activated,components,confidence,evidence'
+          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,endpoints,pid,executable,command,unit,container,user,socket_activated,components,confidence,evidence,processes,published_as'
           got="$(head -1 "$sidecar")"
           test "$got" = "$want" || { echo "FAIL: services CSV header drifted"; echo "got:  $got"; echo "want: $want"; exit 1; }
           test "$(wc -l < "$sidecar")" -gt 1
@@ -175,6 +185,94 @@ jobs:
           test -z "$(ls /tmp/svc-off/*-services.csv 2>/dev/null || true)"
 
           echo "OK: services collected, attributed, and both opt-outs honoured"
+
+          # --- the network edge ---------------------------------------------
+          test "$(jq -r .scan.firewall_examined "$report")" = "false"
+          jq -e '.scan.exposure_blind_spots | index("netfilter-dnat-not-read")' "$report" >/dev/null
+          jq -e '.scan.exposure_blind_spots | index("firewall-rules-not-read")' "$report" >/dev/null
+
+          echo "--- exposure ---"
+          jq -r '.exposure[] | [.bind_scope, "\(.address):\(.port)/\(.protocol)", .confidence] | @tsv' "$report"
+
+          # The listener we started is bound to loopback and must say so. A
+          # scope of "wildcard" here would be a materially different finding
+          # about the same socket.
+          scope="$(jq -r '.exposure[] | select(.port == 39999) | .bind_scope' "$report" | head -1)"
+          test "$scope" = "loopback" || { echo "FAIL: 127.0.0.1:39999 bind_scope = '$scope'" >&2; exit 1; }
+
+          # Every exposure row must carry a bind_scope, and none may claim a
+          # vocabulary that implies reachability.
+          test "$(jq '[.exposure[] | select(.bind_scope == null)] | length' "$report")" = "0"
+          if jq -e '[.exposure[] | select(.bind_scope == "public" or .bind_scope == "private")] | length > 0' "$report" >/dev/null; then
+            echo "FAIL: a bind_scope claimed reachability swinv cannot observe" >&2
+            exit 1
+          fi
+
+          # A container's listener must never reach the host exposure list.
+          # 8080, not 80: the unprivileged image serves there, and publishing
+          # a port nothing listens on would test the failure path instead.
+          docker run -d --rm --name swinv-ci-nginx --network bridge -p 127.0.0.1:38080:8080 \
+            nginxinc/nginx-unprivileged:1.27-alpine >/dev/null
+          # Also one that publishes nothing, whose ports must stay out of exposure[].
+          docker run -d --rm --name swinv-ci-private nginxinc/nginx-unprivileged:1.27-alpine >/dev/null
+          sleep 5
+
+          run /tmp/svc-ctr
+          ctr="$(ls /tmp/svc-ctr/*.json | head -1)"
+
+          echo "--- containers ---"
+          jq -r '.containers[] | [.id[0:12], (.name // "-"), "\(.os_id)-\(.os_version_id)", (.image.ref // "-")] | @tsv' "$ctr"
+          echo "--- container services ---"
+          jq -r '.containers[] | .id[0:12] as $i | .services[] | [$i, .executable, .confidence, ((.components // ["-"]) | join(","))] | @tsv' "$ctr"
+
+          # The identity that makes this useful: the container's own package
+          # database, not the image reference, which no matcher resolves.
+          owner="$(jq -r '.containers[] | .services[] | select(.executable | test("nginx")) | (.components // [])[0]' "$ctr" | head -1)"
+          case "$owner" in
+            pkg:apk/alpine/nginx@*) echo "OK: containerised nginx -> $owner" ;;
+            *) echo "FAIL: containerised nginx attributed to '$owner'," >&2
+               echo "      want the apk from the container's own database." >&2
+               exit 1 ;;
+          esac
+
+          # The published port resolves through the forwarder to that package,
+          # and never to the package that ships docker-proxy.
+          jq -e '.exposure[] | select(.port == 38080)
+                 | select((.components // [])[0] | startswith("pkg:apk/alpine/nginx"))' "$ctr" >/dev/null \
+            || { echo "FAIL: published port 38080 did not resolve to the container's nginx" >&2
+                 jq '.exposure[] | select(.port == 38080)' "$ctr" >&2; exit 1; }
+          if jq -e '.exposure[] | select(.port == 38080) | select((.components // []) | map(test("docker-ce")) | any)' "$ctr" >/dev/null; then
+            echo "FAIL: a published port was attributed to the package that ships docker-proxy" >&2
+            exit 1
+          fi
+
+          # The unpublished container listens on 8080 inside its own namespace.
+          # That must appear under containers[] and never in exposure[].
+          jq -e '.containers[] | .services[] | select((.endpoints // []) | map(test(":8080/")) | any)' "$ctr" >/dev/null
+          if jq -e '[.exposure[] | select(.port == 8080)] | length > 0' "$ctr" >/dev/null; then
+            echo "FAIL: a container-namespace listener appeared in the host exposure list" >&2
+            exit 1
+          fi
+
+          # Container packages join the inventory, marked with the scope they
+          # were found at, so CVE tooling reading components[] sees them.
+          jq -e '.components[] | select(.root | startswith("container:"))
+                 | select(.attributes.scan_scope == "listening-executables-only")' "$ctr" >/dev/null
+
+          # The exposure sidecar and its column contract.
+          exposure_csv="$(ls /tmp/svc-ctr/*-exposure.csv | head -1)"
+          want='hostname,machine_id,os_id,os_version_id,architecture,scanned_at,address,port,protocol,family,bind_scope,wildcard_covers_ipv4,pid,executable,unit,user,container,backend_address,backend_port,backend_container,backend_executable,backend_via,image_ref,image_manifest_digest,components,confidence,evidence,ran_as_root,firewall_examined,exposure_blind_spots'
+          got="$(head -1 "$exposure_csv")"
+          test "$got" = "$want" || { echo "FAIL: exposure CSV header drifted"; echo "got:  $got"; echo "want: $want"; exit 1; }
+
+          # --no-containers keeps the exposure list and drops the identities.
+          run /tmp/svc-noctr --no-containers
+          noctr="$(ls /tmp/svc-noctr/*.json | head -1)"
+          test "$(jq -r '.containers // "absent"' "$noctr")" = "absent"
+          test "$(jq '.exposure | length' "$noctr")" -gt 0
+
+          docker rm -f swinv-ci-nginx swinv-ci-private >/dev/null 2>&1 || true
+          echo "OK: exposure classified, containers identified, blind spots declared"
 
       - name: Upload binary
         uses: actions/upload-artifact@v7

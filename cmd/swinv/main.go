@@ -109,6 +109,7 @@ type config struct {
 	noFileOwnership  bool
 	noServices       bool
 	noServiceCommand bool
+	noContainers     bool
 	parallelism      int
 	fast             bool
 	stacksAfter      time.Duration

@@ -98,6 +98,7 @@ and any symlinks quarantined by the preflight — is always recorded in
 | Flag | Default | Meaning |
 |---|---|---|
 | `--no-services` | `false` | Do not report what is listening on the network |
+| `--no-containers` | `false` | Do not look inside containers for what they run |
 | `--no-service-command` | `false` | Omit each service's command line from the report |
 
 Linux only; the collector is built on `/proc`. On Windows both flags parse and
@@ -117,6 +118,11 @@ Two reasons to turn something off:
   [SECURITY.md](../SECURITY.md).
 - **`--no-services`** skips the section entirely, including reading
   `/proc/<pid>/fd`.
+- **`--no-containers`** keeps the host services and the exposure list but stops
+  swinv reading each container's filesystem through `/proc/<pid>/root`. The
+  cost is the identity of everything behind a published port: without it a
+  container's software cannot be named, because the answer comes from that
+  container's own package database.
 
 Unprivileged, this degrades rather than fails: `/proc/net` is world-readable so
 the ports are still reported, but attributing a socket to a process needs to
@@ -581,6 +587,34 @@ content digests for change detection:
 ```sh
 swinv --include-home --exclude './opt/build/**' --hash --out /var/lib/swinv
 ```
+
+What is exposed at the network edge, with the software behind each port —
+including software running inside containers:
+
+```sh
+sudo swinv --out /var/lib/swinv --format json,csv
+jq -r '.exposure[] | select(.bind_scope != "loopback")
+       | [.bind_scope, "\(.address):\(.port)/\(.protocol)", (.components|join(","))]
+       | @tsv' /var/lib/swinv/*-latest.json
+```
+
+Everything a container is running, whether or not it is published:
+
+```sh
+jq -r '.containers[] | .name as $n | .os_id as $os | .services[]
+       | "\($n)\t\($os)\t\(.executable)\t\((.components // ["-"])|join(","))"' \
+   /var/lib/swinv/*-latest.json
+```
+
+Before trusting a small exposure list, read what the scan could not see:
+
+```sh
+jq -r '.scan.exposure_blind_spots[]' /var/lib/swinv/*-latest.json
+```
+
+On a Kubernetes node, or a host with `userland-proxy` disabled, that list is
+the difference between "nothing is exposed" and "the exposure could not be
+observed".
 
 What is listening, and what installed it — the reason to run this as root:
 

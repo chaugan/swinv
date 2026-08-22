@@ -92,7 +92,7 @@ func WriteCycloneDX(w io.Writer, r *model.Report) error {
 	}
 	bom.Components = &components
 
-	if services, deps := cdxServices(r.Services, byIdentity); len(services) > 0 {
+	if services, deps := cdxServices(allServices(r), byIdentity); len(services) > 0 {
 		bom.Services = &services
 		if len(deps) > 0 {
 			bom.Dependencies = &deps
@@ -402,6 +402,69 @@ func cdxScanProperties(r *model.Report) *[]cyclonedx.Property {
 	return &props
 }
 
+// cdxService pairs a service with the trust zone it listens in.
+type cdxService struct {
+	service model.Service
+	zone    string
+	group   string
+}
+
+// Trust zones, as CycloneDX's own "trustZone" field.
+//
+// Deliberately not x-trust-boundary: that is a boolean about whether *using* a
+// service crosses a boundary, which other tools read that way, and overloading
+// it to mean "bound to a non-loopback address" would produce wrong conclusions
+// in software this project does not control. trustZone is a name, which is
+// what these are.
+const (
+	zoneHostNetwork      = "host-network"
+	zoneHostLoopback     = "host-loopback"
+	zoneContainerNetwork = "container-network"
+)
+
+// allServices flattens the host services and every container's services into
+// one list, each tagged with the zone it listens in.
+//
+// The zone is what keeps the two apart in a format that has one services
+// array. A container's 0.0.0.0 bind is not reachable at this machine's
+// addresses, and a consumer reading this document must not have to infer that
+// from a group name.
+func allServices(r *model.Report) []cdxService {
+	out := make([]cdxService, 0, len(r.Services))
+	for _, s := range r.Services {
+		out = append(out, cdxService{service: s, zone: hostZone(s)})
+	}
+	for _, c := range r.Containers {
+		group := c.Name
+		if group == "" {
+			group = shortContainerID(c.ID)
+		}
+		for _, s := range c.Services {
+			out = append(out, cdxService{service: s, zone: zoneContainerNetwork, group: group})
+		}
+	}
+	return out
+}
+
+// hostZone reports whether a host service is bound beyond loopback. The
+// exposure array carries the per-socket verdict; this is the rollup the
+// services array can express.
+func hostZone(s model.Service) string {
+	for _, e := range s.Endpoints {
+		if !strings.HasPrefix(e, "127.") && !strings.HasPrefix(e, "[::1]") {
+			return zoneHostNetwork
+		}
+	}
+	return zoneHostLoopback
+}
+
+func shortContainerID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
+}
+
 // cdxServices maps the report's services onto CycloneDX services, and returns
 // the dependency edges linking each one to the components that implement it.
 //
@@ -416,7 +479,7 @@ func cdxScanProperties(r *model.Report) *[]cyclonedx.Property {
 // carries no endpoints and no name of its own; it is still emitted, because a
 // document that quietly omits "and there were 38 more I could not see" is
 // making a stronger claim than the scan supports.
-func cdxServices(in []model.Service, byIdentity map[string]string) ([]cyclonedx.Service, []cyclonedx.Dependency) {
+func cdxServices(in []cdxService, byIdentity map[string]string) ([]cyclonedx.Service, []cyclonedx.Dependency) {
 	if len(in) == 0 {
 		return nil, nil
 	}
@@ -425,11 +488,14 @@ func cdxServices(in []model.Service, byIdentity map[string]string) ([]cyclonedx.
 	deps := make([]cyclonedx.Dependency, 0, len(in))
 	refs := make(map[string]int, len(in))
 
-	for _, s := range in {
+	for _, entry := range in {
+		s := entry.service
 		ref := uniqueRef(serviceRef(s), refs)
 		out := cyclonedx.Service{
-			BOMRef: ref,
-			Name:   serviceName(s),
+			BOMRef:    ref,
+			Name:      serviceName(s),
+			Group:     entry.group,
+			TrustZone: entry.zone,
 		}
 		if len(s.Endpoints) > 0 {
 			endpoints := append([]string(nil), s.Endpoints...)
@@ -448,6 +514,12 @@ func cdxServices(in []model.Service, byIdentity map[string]string) ([]cyclonedx.
 		}
 		if s.SocketActivated {
 			props = appendProp(props, propServicePrefix+"socket_activated", "true")
+		}
+		if s.Processes > 1 {
+			props = appendProp(props, propServicePrefix+"processes", strconv.Itoa(s.Processes))
+		}
+		for _, p := range s.PublishedAs {
+			props = appendProp(props, propServicePrefix+"published_as", p)
 		}
 		// Duplicate property names are permitted, so the evidence trail is one
 		// property per line rather than a joined blob.
