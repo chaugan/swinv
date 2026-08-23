@@ -1023,11 +1023,40 @@ Worth knowing before you roll this out fleet-wide:
 
 ## Performance
 
-On a large developer workstation (~1M files, including a 156k-file source
-checkout under `/opt`), a default full scan takes around 5 minutes and peaks near
-2.3 GB RSS, producing ~14,000 components. A fleet server with a couple of
+Two real machines, scanned two minutes apart on the same day, everything
+enabled:
+
+| | Windows 11 laptop | Ubuntu 26.04 server |
+|---|---|---|
+| components | 7,978 | 15,562 |
+| exposure rows | 160 | 60 |
+| containers | 7 (all stopped) | 16 (12 running) |
+| NDJSON | 7.3 MiB | 14.8 MiB |
+
+A default Linux scan of `/` takes around 6 minutes and peaks near 2.3 GB RSS;
+`--include-home` took the same host to 23,489 components and 10 minutes, almost
+all of it `~/go/pkg/mod` and `node_modules`. A fleet server with a couple of
 thousand packages and no source trees is a very different shape — measure your
 own before drawing conclusions.
+
+**Windows is two different tools.** The default registry read finished in
+**126 ms** for 502 products. The first `--full-scan` on the same laptop took
+**851 s**; later ones take seconds. That gap is Defender inspecting every file
+swinv opens, and its scan cache, not anything swinv does differently the
+second time.
+
+**The heartbeat is where the fleet arithmetic changes.** Components are 99%+
+of the stream on both machines, so an unchanged scan collapses to almost
+nothing while still reporting what is listening:
+
+| | full scan | unchanged, with `--heartbeat` |
+|---|---|---|
+| Windows | 7.3 MiB | **48.9 KiB** (99.35% smaller) |
+| Linux | 14.8 MiB | **33.7 KiB** (99.78% smaller) |
+
+The remainder is the exposure and container records, which are deliberately
+still sent: a port opening is exactly the kind of change that happens while
+installed software does not.
 
 The one flag most worth setting is `--max-memory`. On that host
 `--max-memory 1536MiB` used **30% less memory and ran 13% faster** than the

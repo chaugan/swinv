@@ -1,5 +1,68 @@
 # Performance and tuning
 
+## Two machines, everything enabled
+
+Measured two minutes apart on 2026-08-23, with `--heartbeat` and
+`--ndjson-include all`, on the release build.
+
+| | Windows 11 laptop | Ubuntu 26.04 server |
+|---|---|---|
+| scan | `--full-scan` | default, `/` |
+| components | 7,978 | 15,562 |
+| exposure rows | 160 | 60 |
+| containers | 7, all stopped | 16, 12 running |
+| NDJSON | 7.3 MiB | 14.8 MiB |
+| components' share of the stream | 99.3% | 99.8% |
+
+The two machines are different shapes for a reason worth knowing. The Windows
+laptop has fewer components but **more** open ports, most of them the operating
+system — 110 of 162 endpoints on an earlier run carried `os_component`. The
+Linux server has twice the components and a third of the ports, because its
+software is packaged rather than shipped as loose executables.
+
+### What an unchanged scan costs
+
+Components are over 99% of the stream on both, which is the entire argument for
+`--heartbeat`:
+
+| | full | unchanged | reduction |
+|---|---|---|---|
+| Windows | 7.3 MiB | 48.9 KiB | 99.35% |
+| Linux | 14.8 MiB | 33.7 KiB | 99.78% |
+
+What survives is the heartbeat plus the exposure and container records. Those
+are sent on every scan on purpose: a port opening or a container starting is
+exactly the kind of change that happens while the installed software does not,
+so suppressing them would make the heartbeat hide the fastest-moving facts in
+the report.
+
+Verified on a larger host, 23,493 components: **23,494 NDJSON lines became 1**,
+while the JSON document stayed complete at 24 MB. Only NDJSON is affected.
+
+### Windows is two different tools
+
+| Run | Time | Components |
+|---|---|---|
+| default, registry only | **126 ms** | 502 |
+| first `--full-scan` | **851 s** | 7,749 |
+| later `--full-scan` | seconds | 7,749 |
+
+The gap between the first full scan and every subsequent one is Defender
+inspecting each file swinv opens, and then its scan cache — not anything swinv
+does differently. This is why the Windows collector reads the registry, the
+package repository and the component store by default and opens no file at all:
+the fast path is the useful one, and `--full-scan` is opt-in.
+
+### Reading containers
+
+Probing a container's package database costs a handful of file reads through
+`/proc/<pid>/root` or the runtime's archive endpoint. Cataloguing a container
+filesystem properly does not: a full Syft walk of one container rootfs on the
+development host **ran past ten minutes without finishing**, which is why swinv
+probes the listening executable rather than walking the tree. On a 17-container
+host the whole container section added 1,281 packages and no measurable time.
+
+
 How `swinv` spends time and memory, which knobs actually move the needle, and
 how to measure the answer on your own host.
 
