@@ -57,6 +57,18 @@ Detection comes from [Syft](https://github.com/anchore/syft), imported as a
 library, which gives roughly 40 package ecosystems and a binary classifier
 in-process with no subprocess overhead.
 
+## Contents
+
+**Start here** &nbsp; [What it reads](#what-it-reads) · [Quickstart](#quickstart) · [Install](#install)
+
+**Using it** &nbsp; [Everyday flags](#everyday-flags) · [Output file naming](#output-file-naming) · [What is skipped by default](#what-is-skipped-by-default) · [Change detection](#change-detection) · [Vulnerability scanning](#vulnerability-scanning)
+
+**Platforms** &nbsp; [Windows](#windows) · [Platform testing status](#platform-testing-status)
+
+**Running it** &nbsp; [Security and privacy](#security-and-privacy) · [Performance](#performance) · [Known limitations](#known-limitations)
+
+**The project** &nbsp; [Why not just use…?](#why-not-just-use) · [Architecture](#architecture) · [Building](#building) · [Licensing](#licensing) · [Documentation](#documentation) · [Non-goals](#non-goals)
+
 ## What it reads
 
 Every box is a source `swinv` reads directly. Nothing is inferred, nothing is
