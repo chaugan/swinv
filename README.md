@@ -68,17 +68,26 @@ fetched over a network, and nothing is left running afterwards.
 ├─────────────────────────────────────┼─────────────────────────────────────┤
 │ dpkg · rpm · apk · pacman · alpm    │ uninstall registry   HKLM · HKU     │
 │ ~40 language ecosystems             │ Store and MSIX packages             │
-│   python npm go java gem cargo      │ component store   servicing state   │
+│   python npm go java gem cargo      │ component store  servicing state    │
 │ loose ELF binaries                  │ NTFS master file table              │
-│ package file lists                  │   --full-scan, opens no file        │
-│ /proc/net/{tcp,tcp6,udp,udp6}       │ PE VERSIONINFO  + py/npm manifests  │
-│ /proc/<pid>/{fd,exe,cgroup,ns}      │ iphlpapi   sockets with owning pid  │
+│ package file lists  owns an exe     │   --full-scan, opens no file        │
+│ /proc/net/{tcp,tcp6,udp,udp6}       │ PE VERSIONINFO + py/npm manifests   │
+│ /proc/<pid>/{fd,exe,cgroup,status}  │ iphlpapi  sockets with owning pid   │
+│ /proc/<pid>/ns/{net,mnt}            │ QueryFullProcessImageName           │
+│ /proc/self/mountinfo                │                                     │
 ├─────────────────────────────────────┼─────────────────────────────────────┤
 │ CONTAINERS   running + stopped      │ MACHINE IDENTITY                    │
 ├─────────────────────────────────────┼─────────────────────────────────────┤
-│ its own dpkg / apk / rpm database   │ machine-id · os-release · kernel    │
-│ its own os-release                  │ DMI vendor · product · serial       │
-│ runtime API   image · ports         │ IPs · MACs · virtualisation         │
+│ /proc/<pid>/root  its filesystem    │ machine-id · hostname · boot-id     │
+│ its own dpkg / apk / rpm database   │ kernel · os-release · DMI serial    │
+│ its own os-release  another OS      │ IPs · MACs · virtualisation         │
+│ runtime API  image · digest · ports │ Windows: CurrentVersion registry    │
+│ OCI bundle  pod name · namespace    │   MachineGuid · build · UBR         │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│ BLIND SPOTS                         │ checked, then declared              │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│ /etc/docker/daemon.json             │ /var/lib/kubelet  is this a node    │
+│   is userland-proxy disabled        │   NodePort has no socket to find    │
 └─────────────────────────────────────┴─────────────────────────────────────┘
                                       │
                                       ▼
@@ -93,11 +102,12 @@ fetched over a network, and nothing is left running afterwards.
 │ services[]     what is listening, and what installed it                   │
 │ exposure[]     one row per open port on this host                         │
 │ containers[]   each container, its OS and its software                    │
+│ scan           what was skipped, and what could not be seen               │
 ├───────────────────────────────────────────────────────────────────────────┤
 │ written as     JSON · CSV · NDJSON · CycloneDX                            │
 │                + services and exposure CSV sidecars                       │
-│                NDJSON also streams heartbeat, exposure and container      │
-│                records, for a forwarder                                   │
+│ streamed as    heartbeat · exposure · container records                   │
+│                for a log forwarder, on request                            │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -105,6 +115,13 @@ The two kinds of source answer different questions and neither knows the
 other. A package database is authoritative about what it installed; a
 listening socket is authoritative about what is bound right now. Joining them
 is the work, and it is what the rest of this document is about.
+
+The bottom row is the one most inventory tools leave out. A port published by
+a netfilter rule has no socket to find, so a host running Kubernetes NodePort
+or Docker with `userland-proxy` disabled would otherwise produce a report
+identical to one with nothing exposed at all. `swinv` checks for both and says
+so in `scan.exposure_blind_spots`, because "looked and found nothing" and
+"could not look" are different answers.
 
 ---
 
