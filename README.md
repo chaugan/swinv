@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="docs/assets/logo.png" width="132"
+       alt="An open port wired inward through three nested boundaries: host, container, package">
+</p>
+
 # `swinv`
 
 [![CI](https://github.com/chaugan/swinv/actions/workflows/ci.yml/badge.svg)](https://github.com/chaugan/swinv/actions/workflows/ci.yml)
