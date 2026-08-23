@@ -20,6 +20,37 @@ system — 110 of 162 endpoints on an earlier run carried `os_component`. The
 Linux server has twice the components and a third of the ports, because its
 software is packaged rather than shipped as loose executables.
 
+### How long it takes
+
+Every figure below is at default scheduling priority — `nice 10` with idle I/O
+on Linux, background priority mode on Windows. None used `--fast`.
+
+| Scan | Runs | Median | Range | Components |
+|---|---|---|---|---|
+| Linux `/` | 3 | 5m50s | 5m16s – 6m18s | ~14,400 |
+| Linux `/` with `--include-home` | 4 | 9m51s | 9m28s – 9m57s | ~23,500 |
+| Windows, registry only | — | 126 ms | — | 502 |
+| Windows `--full-scan` | 4 | 14m11s | 2m26s – 15m35s | ~7,900 |
+
+Linux repeats land within a minute of each other, so the median is a number
+you can plan a timer around. `--include-home` costs roughly four extra minutes
+for 9,000 more components, nearly all of them build caches.
+
+Windows `--full-scan` does not repeat: four runs on one laptop with
+near-identical component counts spread **6.4×**, from 2m26s to 15m35s. The
+variable is Defender — every file swinv opens is inspected, and how much of
+that is already in its scan cache decides the run. The first full scan on a
+machine is the worst case, and there is nothing swinv can do about it beyond
+opening as few files as possible, which is what the default already does.
+
+Two consequences worth planning around:
+
+- **Schedule the registry-only scan on Windows**, not the full one. It is
+  three orders of magnitude cheaper and covers installed applications, Store
+  packages and servicing state.
+- **`--timeout` needs headroom on Windows.** A limit tuned to a warm-cache run
+  will kill a cold-cache one.
+
 ### What an unchanged scan costs
 
 Components are over 99% of the stream on both, which is the entire argument for

@@ -1033,17 +1033,36 @@ enabled:
 | containers | 7 (all stopped) | 16 (12 running) |
 | NDJSON | 7.3 MiB | 14.8 MiB |
 
-A default Linux scan of `/` takes around 6 minutes and peaks near 2.3 GB RSS;
-`--include-home` took the same host to 23,489 components and 10 minutes, almost
-all of it `~/go/pkg/mod` and `node_modules`. A fleet server with a couple of
-thousand packages and no source trees is a very different shape — measure your
-own before drawing conclusions.
+### How long it takes
 
-**Windows is two different tools.** The default registry read finished in
-**126 ms** for 502 products. The first `--full-scan` on the same laptop took
-**851 s**; later ones take seconds. That gap is Defender inspecting every file
-swinv opens, and its scan cache, not anything swinv does differently the
-second time.
+At default scheduling priority — `nice 10` with idle I/O, **not** `--fast` —
+across repeated runs on those two machines:
+
+| Scan | Runs | Median | Range | Components |
+|---|---|---|---|---|
+| Linux `/` | 3 | **5m50s** | 5m16s – 6m18s | ~14,400 |
+| Linux `/` with `--include-home` | 4 | **9m51s** | 9m28s – 9m57s | ~23,500 |
+| Windows, registry only | — | **126 ms** | — | 502 |
+| Windows `--full-scan` | 4 | 14m11s | **2m26s – 15m35s** | ~7,900 |
+
+Linux is predictable: repeat runs land within a minute of each other, and
+peak RSS is near 2.3 GB. `--include-home` costs about four extra minutes and
+9,000 components, almost all of it `~/go/pkg/mod` and `node_modules` — build
+caches rather than installed software, which is why home is excluded by
+default.
+
+**Windows `--full-scan` is not predictable, and the spread is the finding.**
+Four runs on one laptop, same machine, near-identical component counts, and a
+**6.4× spread** between fastest and slowest. That is Defender inspecting every
+file swinv opens and the state of its scan cache — not anything swinv does
+differently. Which is exactly why the Windows default reads the registry, the
+package repository and the component store and opens **no file at all**: the
+126 ms path is the one you can schedule hourly, and `--full-scan` is opt-in for
+when you want the executables on disk as well.
+
+A fleet server with a couple of thousand packages and no source trees is a
+very different shape from either — measure your own before drawing
+conclusions.
 
 **The heartbeat is where the fleet arithmetic changes.** Components are 99%+
 of the stream on both machines, so an unchanged scan collapses to almost
