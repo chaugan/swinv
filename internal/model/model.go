@@ -28,6 +28,14 @@ type Report struct {
 	Delta         *Delta      `json:"delta,omitempty"`
 	Components    []Component `json:"components"`
 
+	// NDJSONInclude names the extra record types the NDJSON stream should
+	// carry beyond components, from --ndjson-include.
+	//
+	// It rides on the report because the writers take nothing but a report,
+	// and it is a statement about this run rather than about the machine --
+	// which is why it never appears in any output document.
+	NDJSONInclude []string `json:"-"`
+
 	// Services are what is listening on this machine, and which installed
 	// software is behind it.
 	//

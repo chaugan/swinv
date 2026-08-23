@@ -1017,10 +1017,86 @@ fields, using the same `snake_case` names and the same order as the CSV columns,
 so a single line is self-describing when it arrives at a log pipeline with no
 surrounding context.
 
-**NDJSON carries components only.** Services are not represented: every line in
-this format is one component, and mixing two record shapes into one stream would
-break every consumer that reads it positionally today. Use JSON, the services
-CSV, or CycloneDX for the `services` block.
+**NDJSON carries components by default**, and can be asked for more. Every line
+was one component before schema 1.9, so every extra record type is opt-in via
+`--ndjson-include` and carries a `record_type` a consumer can skip. A line with
+no `record_type` is a component.
+
+| `--ndjson-include` | Emits | `record_type` |
+|---|---|---|
+| `exposure` | one record per open port **per package behind it** | `exposure` |
+| `containers` | one record per container, running or stopped | `container` |
+| `all` | both | |
+
+Services are still not represented; `exposure` carries the same facts in the
+shape a stream consumer wants. Use JSON, the services CSV, or CycloneDX for the
+`services` block itself.
+
+#### `exposure` records
+
+```json
+{"record_type":"exposure","hostname":"web01","scanned_at":"2026-08-23T06:18:41Z",
+ "address":"0.0.0.0","port":22,"protocol":"tcp","family":"ipv4","bind_scope":"wildcard",
+ "purl":"pkg:deb/ubuntu/openssh-server@1%3A10.2p1-2ubuntu3.5?arch=amd64&distro=ubuntu-26.04",
+ "executable":"/usr/sbin/sshd","unit":"ssh.service","user":"0","processes":2,
+ "confidence":"high"}
+```
+
+**Denormalised on purpose**: a port served by three packages produces three
+records, so a vulnerability finding joins on the package alone without the
+consumer unpacking an array.
+
+**A port with nothing attributed still gets a record**, with no `purl`. A port
+answering with no package behind it is a gap in what can be seen, not a port
+that is safe, and dropping it here would hide it completely.
+
+A published container port carries `container_id` and `container_name`, and its
+`executable` is the process **inside** the container rather than the forwarder.
+`os_component` marks a listener that is part of the operating system, which on
+Windows is most of them — filter it before treating an unattributed port as
+interesting.
+
+#### `container` records
+
+One per container, **including stopped ones**: a stopped container is one
+`docker start` from a running one, so its vulnerabilities are latent rather
+than absent. A consumer can rank them last; it cannot invent them.
+
+```json
+{"record_type":"container","hostname":"web01","scanned_at":"2026-08-23T06:18:41Z",
+ "container_id":"2fa4c621fb08…","container_name":"argilla-elasticsearch-1",
+ "runtime":"docker","state":"exited",
+ "image_ref":"docker.elastic.co/elasticsearch/elasticsearch:8.17.0",
+ "image_digest":"sha256:2f6025…","image_purl":"pkg:oci/elasticsearch@sha256%3A2f6025…",
+ "os_id":"ubuntu","os_version_id":"20.04",
+ "declared_endpoints":["9200/tcp","9300/tcp"],
+ "declared_endpoints_text":"9200/tcp;9300/tcp","n_declared_endpoints":2,
+ "endpoints":["9200/tcp","9300/tcp"],"endpoints_text":"9200/tcp;9300/tcp","n_endpoints":2}
+```
+
+`os_id` and `os_version_id` are the container's own, which is what its packages
+must be matched against — a Debian 12 container on an Ubuntu host is Debian.
+
+#### Two shapes chosen for streaming consumers
+
+**No field is ever `null`; absent fields are omitted.** Splunk indexes a JSON
+`null` as the four-character *string* `"null"`, so `"unit": null` would give
+every listener on the host a systemd unit named `null`, and `coalesce(unit,
+executable)` could not tell the difference.
+
+**Arrays come with a flattened twin.** Splunk's JSON extraction renames an
+array field with a `{}` suffix, so a search asking for `endpoints` silently
+gets nothing — which once reported a whole fleet as publishing no ports. Every
+array field therefore also has `_text` (`;`-joined) and `n_` (count) forms.
+
+#### With `--heartbeat`
+
+Exposure and container records are **still emitted on an unchanged scan**. The
+heartbeat suppresses the components, which are the volume; what is listening
+can change while the installed software does not — a port opened, a container
+started — so suppressing those too would make the heartbeat hide the
+fastest-moving facts in the report. Both sections are a few dozen records
+against many thousands of components.
 
 ### The heartbeat
 

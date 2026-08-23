@@ -42,10 +42,10 @@ func helpSections() []helpSection {
 			{"--no-service-command", "omit command lines; they can carry passwords"},
 		}},
 		{"Comparing against a previous run", []helpFlag{
+			{"--ndjson-include LIST", "NDJSON also carries: exposure, containers, all"},
 			{"--heartbeat", "a digest per scan, components only on change"},
 			{"--force-full, --full-interval", "send in full anyway, or at least this often"},
-			{"--since PATH", "diff against an earlier swinv JSON report"},
-			{"--delta-only", "with --since, emit only what changed"},
+			{"--since, --delta-only", "diff an earlier report; or only what changed"},
 			{"--hash", "record a SHA-256 per component"},
 		}},
 		{"Resources", []helpFlag{

@@ -91,6 +91,8 @@ fetched over a network, and nothing is left running afterwards.
 ├───────────────────────────────────────────────────────────────────────────┤
 │ written as     JSON · CSV · NDJSON · CycloneDX                            │
 │                + services and exposure CSV sidecars                       │
+│                NDJSON also streams heartbeat, exposure and container      │
+│                records, for a forwarder                                   │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -104,12 +106,12 @@ is the work, and it is what the rest of this document is about.
 ## Quickstart
 
 ```sh
-sudo dpkg -i swinv_0.6.0-1_amd64.deb   # or: sudo rpm -i swinv-0.6.0-1.x86_64.rpm
+sudo dpkg -i swinv_0.6.1-1_amd64.deb   # or: sudo rpm -i swinv-0.6.1-1.x86_64.rpm
 swinv --out /tmp/inv                   # scan /, write JSON + CSV
 ```
 
 No package? The binary is static and has no dependencies, so
-`install -m0755 swinv-v0.6.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
+`install -m0755 swinv-v0.6.1-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
 That writes timestamped files plus `-latest` symlinks — and, run as root with
@@ -423,6 +425,38 @@ rule has no listening socket at all — Kubernetes NodePort, Docker with
 list means nothing until you have read that array.**
 
 **[Why this exists and how it is built →](docs/SERVER-ROLES.md)**
+
+#### Shipping it to a fleet
+
+The NDJSON stream is the one shape built for a log forwarder, and two flags
+make it usable at fleet scale.
+
+```sh
+swinv --out /var/lib/swinv --format ndjson --heartbeat --ndjson-include all
+```
+
+**`--heartbeat`** puts a one-line digest of the inventory at the head of the
+stream and omits the component records when that digest matches the last scan.
+Every scan otherwise restates the whole inventory — correct, since a package
+that disappears is genuinely gone rather than merely unmentioned, and expensive:
+5,000 hosts averaging 14,000 components scanned hourly is over a billion records
+a day, nearly all identical to the day before. Measured on a 23,493-component
+host: **23,494 lines became 1**, while the JSON stayed complete at 24 MB.
+
+It is never a delta. When anything changes the whole list is sent again, because
+a delta cannot express a removal — and "this package is no longer installed" is
+the fact that decides whether a vulnerability is fixed or merely unreported.
+
+**`--ndjson-include`** adds `exposure` and `container` records, so what is
+listening reaches the stream and not only the JSON document. Both are small — 46
+and 16 records against 2,715 components on a 17-container host — so they are
+sent even on an unchanged heartbeat scan: a port opening is exactly the kind of
+change that happens while installed software does not.
+
+Every extra record carries a `record_type` an older consumer can skip, and a
+line without one is a component, so nothing that reads the stream today breaks.
+
+**[Record shapes and the streaming gotchas →](docs/OUTPUT.md#the-heartbeat)**
 
 **[Full schema, NDJSON, CycloneDX and SQL loading →](docs/OUTPUT.md)**
 
@@ -841,6 +875,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--no-service-command` | false | Linux: keep the services block, drop the command lines |
 | `--since PATH` | — | Diff against a previous report |
 | `--heartbeat` | false | NDJSON: a digest every scan, components only when they change |
+| `--ndjson-include LIST` | — | NDJSON also carries `exposure`, `containers`, or `all` |
 | `--hash` | false | Record a SHA-256 per component |
 | `--fast` | false | Scan at normal priority and full parallelism (see below) |
 | `--max-memory SIZE` | — | Soft memory limit, e.g. `1536MiB` |

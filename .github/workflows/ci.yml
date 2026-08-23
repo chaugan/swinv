@@ -105,6 +105,51 @@ jobs:
           ./bin/swinv --version
           ./bin/swinv --help 2>&1 | head -40 || true
 
+      - name: Assert the NDJSON stream can carry exposure and containers
+        run: |
+          set -euo pipefail
+          out="$(mktemp -d)"
+          sudo ./bin/swinv --out "$out" --catalogers os --fast --timeout 6m \
+            --format ndjson --quiet --ndjson-include all \
+            --exclude './usr/local/**' --exclude './usr/share/**' \
+            --exclude './opt/**' --exclude './snap/**' --exclude './mnt/**' \
+            --exclude './var/cache/**' --exclude './var/lib/docker/**'
+          f="$(ls "$out"/*.ndjson | grep -v latest | head -1)"
+
+          echo "--- record types ---"
+          jq -r '.record_type // "component"' "$f" | sort | uniq -c
+
+          test "$(jq -r 'select(.record_type == "exposure")' "$f" | wc -l)" -gt 0 \
+            || { echo "FAIL: no exposure records" >&2; exit 1; }
+
+          # Every exposure record must carry the fields a consumer ranks on.
+          jq -e 'select(.record_type == "exposure")
+                 | select(.hostname and .scanned_at and .address and .port and .protocol and .bind_scope)' "$f" >/dev/null
+
+          # A JSON null is indexed by Splunk as the string "null", so an absent
+          # unit would become a systemd unit named "null" on every listener.
+          if grep -q ':null' "$f"; then
+            echo "FAIL: a record emitted a JSON null" >&2
+            grep -m 3 ':null' "$f" >&2
+            exit 1
+          fi
+
+          # Off by default: a consumer reading every line as a component
+          # predates all of this.
+          plain="$(mktemp -d)"
+          sudo ./bin/swinv --out "$plain" --root testdata/rootfs --format ndjson --quiet
+          if grep -q record_type "$plain"/*.ndjson; then
+            echo "FAIL: extra records appeared without --ndjson-include" >&2; exit 1
+          fi
+
+          # A typo is a usage error, not a silent omission.
+          if ./bin/swinv --ndjson-include exposures --out "$plain" >/dev/null 2>&1; then
+            echo "FAIL: an unknown --ndjson-include value was accepted" >&2; exit 1
+          fi
+
+          sudo rm -rf "$out" "$plain"
+          echo "OK: NDJSON carries exposure and container records on request"
+
       - name: Assert the heartbeat sends components only on change
         run: |
           set -euo pipefail

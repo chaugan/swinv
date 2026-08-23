@@ -123,11 +123,21 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 			return fmt.Errorf("output: writing ndjson heartbeat: %w", err)
 		}
 		if r.Scan.InventoryUnchanged {
-			// The heartbeat is the whole message. n_components still states
-			// how many there are, so a consumer can tell a quiet host from an
-			// empty one.
+			// The heartbeat replaces the *components*, which are the volume.
+			// Exposure and container records are a few dozen per scan and say
+			// what is listening right now, which is exactly the thing that can
+			// change while the installed software does not -- a port opened,
+			// a container started. Suppressing them would make the heartbeat
+			// hide the fastest-moving facts in the report.
+			if err := writeExtraRecords(enc, r, scannedAt); err != nil {
+				return err
+			}
 			return nil
 		}
+	}
+
+	if err := writeExtraRecords(enc, r, scannedAt); err != nil {
+		return err
 	}
 
 	for _, c := range r.Components {
@@ -161,4 +171,38 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 		}
 	}
 	return nil
+}
+
+// writeExtraRecords emits the non-component record types this run was asked
+// for.
+func writeExtraRecords(enc *json.Encoder, r *model.Report, scannedAt string) error {
+	if includes(r, recordExposure) {
+		for _, line := range exposureLines(r, scannedAt) {
+			if err := enc.Encode(line); err != nil {
+				return fmt.Errorf("output: writing ndjson exposure record: %w", err)
+			}
+		}
+	}
+	if includes(r, recordContainer) {
+		for _, line := range containerLines(r, scannedAt) {
+			if err := enc.Encode(line); err != nil {
+				return fmt.Errorf("output: writing ndjson container record: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+// includes reports whether a record type was asked for.
+//
+// Off by default, and deliberately: a consumer reading every line as a
+// component predates all of this, and a record it does not recognise would
+// arrive as a component with no name and no version.
+func includes(r *model.Report, recordType string) bool {
+	for _, want := range r.NDJSONInclude {
+		if want == recordType {
+			return true
+		}
+	}
+	return false
 }

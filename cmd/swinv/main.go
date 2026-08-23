@@ -106,6 +106,7 @@ type config struct {
 	since            string
 	deltaOnly        bool
 	heartbeat        bool
+	ndjsonInclude    string
 	forceFull        bool
 	fullInterval     time.Duration
 	catalogers       string
@@ -341,6 +342,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	report := &model.Report{
 		SchemaVersion: model.SchemaVersion,
+		NDJSONInclude: parseNDJSONInclude(cfg.ndjsonInclude),
 		Tool: model.Tool{
 			Name:        "swinv",
 			Version:     resolveVersion(),

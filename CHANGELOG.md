@@ -7,6 +7,48 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [0.6.1] — 2026-08-23
+
+### Added
+
+- **`--ndjson-include`**, closing
+  [#8](https://github.com/chaugan/swinv/issues/8). The NDJSON stream can now
+  carry `exposure` and `container` records alongside components. Both sections
+  were already collected and written to the JSON document and the CSV sidecars,
+  but not to the one output shape a log forwarder monitors — so the format built
+  for streaming was the one dropping them.
+
+  `exposure` is denormalised to one record per (port, package), so a
+  vulnerability finding joins on the package without the consumer unpacking an
+  array. **A port with nothing attributed still produces a record**, with no
+  `purl`: a port answering with no package behind it is a gap in what can be
+  seen, not a port that is safe. A published container port carries the
+  container's id and name, and its `executable` is the process inside the
+  container rather than the forwarder.
+
+  `container` is one record per container, **including stopped ones** — a
+  stopped container is one `docker start` from a running one, so its
+  vulnerabilities are latent rather than absent — carrying the container's own
+  `os_id` and `os_version_id`, which is what its packages must be matched
+  against.
+
+  Off by default: every NDJSON line was a component before this, so each extra
+  record carries a `record_type` an older consumer can skip, and a line without
+  one is a component.
+
+  Both are emitted **even on an unchanged `--heartbeat` scan**. The heartbeat
+  suppresses the components, which are the volume; a port opening is exactly
+  the kind of change that happens while installed software does not. On a
+  17-container host that is 46 exposure and 16 container records against 2,715
+  components.
+
+  Two shapes chosen for streaming consumers rather than for elegance: **no
+  field is ever `null`** — Splunk indexes a JSON null as the four-character
+  string `"null"`, which would give every listener a systemd unit named `null`
+  — and **every array has a `_text` and `n_` twin**, because Splunk renames an
+  array field with a `{}` suffix and a search for `endpoints` otherwise
+  silently returns nothing.
+
 ## [0.6.0] — 2026-08-22
 
 An inventory heartbeat, so a fleet stops re-sending what has not changed.
@@ -745,7 +787,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/chaugan/swinv/releases/tag/v0.6.1
 [0.6.0]: https://github.com/chaugan/swinv/releases/tag/v0.6.0
 [0.5.2]: https://github.com/chaugan/swinv/releases/tag/v0.5.2
 [0.5.1]: https://github.com/chaugan/swinv/releases/tag/v0.5.1

@@ -141,11 +141,39 @@ See [docs/SERVER-ROLES.md](SERVER-ROLES.md) for the design, and
 | Flag | Default | Meaning |
 |---|---|---|
 | `--hash` | `false` | Record a SHA-256 of each component's primary file |
+| `--ndjson-include LIST` | *(none)* | NDJSON also carries `exposure`, `containers`, or `all` |
 | `--heartbeat` | `false` | NDJSON: a digest every scan, components only when it changes |
 | `--force-full` | `false` | With `--heartbeat`, send the components anyway |
 | `--full-interval DUR` | `24h` | With `--heartbeat`, send in full at least this often (`0` = never force one) |
 | `--since PATH` | *(none)* | Compare against a previous swinv JSON report and emit a delta |
 | `--delta-only` | `false` | With `--since`, emit only the changed components |
+
+### `--ndjson-include`
+
+NDJSON carries one component per line. `exposure[]` and `containers[]` are in
+the JSON document and the CSV sidecars, but not in the one output shape built
+for streaming — so a forwarder tailing the `.ndjson` sees neither.
+
+```sh
+swinv --out /var/lib/swinv --format ndjson --ndjson-include exposure,containers
+```
+
+Off by default because every line was a component before this existed. Each
+extra record carries a `record_type` an older consumer can skip; a line without
+one is a component.
+
+`exposure` is denormalised to one record per (port, package), so a finding
+joins on the package without unpacking an array — and a port with nothing
+attributed still produces a record, because that is a gap in what can be seen
+rather than a port that is safe. `containers` includes stopped ones, whose
+vulnerabilities are latent rather than absent.
+
+Both are small — on a 17-container host, 46 exposure and 16 container records
+against 2,715 components — so they are emitted even on an unchanged
+`--heartbeat` scan. What is listening changes while installed software does
+not.
+
+See [docs/OUTPUT.md](OUTPUT.md#the-heartbeat) for the record shapes.
 
 ### `--heartbeat`
 
@@ -681,10 +709,18 @@ lines that carry secrets:
 swinv --no-service-command --out /var/lib/swinv --perm 0640
 ```
 
+Everything a streaming consumer needs — components, what is listening, and the
+containers — in one file:
+
+```sh
+swinv --out /var/lib/swinv --format ndjson --ndjson-include all
+```
+
 Hourly scans into a log pipeline, sending components only when they change:
 
 ```sh
-swinv --out /var/lib/swinv --format ndjson --heartbeat --output-mode overwrite
+swinv --out /var/lib/swinv --format ndjson --heartbeat --ndjson-include all \
+      --output-mode overwrite
 ```
 
 Just the diff, for a change feed rather than an inventory (remember the

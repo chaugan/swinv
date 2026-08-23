@@ -93,6 +93,9 @@ func parseFlags(args []string, stdout, stderr io.Writer) (*config, int, error) {
 		}
 		cfg.maxMemoryBytes = n
 	}
+	if _, err := validateNDJSONInclude(cfg.ndjsonInclude); err != nil {
+		return nil, exitUsage, err
+	}
 	if cfg.fullInterval < 0 {
 		return nil, exitUsage, fmt.Errorf("--full-interval must not be negative, got %s", cfg.fullInterval)
 	}
@@ -180,6 +183,7 @@ func registerFlags(fs *flag.FlagSet, cfg *config) {
 	fs.BoolVar(&cfg.hash, "hash", false, "record a SHA-256 of each component's primary file; useful for change detection and integrity, at the cost of reading every such file")
 	fs.StringVar(&cfg.since, "since", "", "path to a previous swinv JSON report; adds a delta of added/removed/changed components")
 	fs.BoolVar(&cfg.deltaOnly, "delta-only", false, "with --since, emit only the changed components instead of the full inventory")
+	fs.StringVar(&cfg.ndjsonInclude, "ndjson-include", "", "comma-separated extra record types for the NDJSON stream: exposure, containers, or all. Off by default, because a consumer that reads every line as a component predates them")
 	fs.BoolVar(&cfg.heartbeat, "heartbeat", false, "in NDJSON, emit a one-line digest of the inventory every scan and the component records only when that digest changes; the other formats are unaffected")
 	fs.BoolVar(&cfg.forceFull, "force-full", false, "with --heartbeat, send the full component list even if the inventory is unchanged")
 	fs.DurationVar(&cfg.fullInterval, "full-interval", 24*time.Hour, "with --heartbeat, send the full component list at least this often however unchanged it looks, so a missed change cannot hide indefinitely (0 = never force one)")

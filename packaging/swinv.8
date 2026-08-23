@@ -27,6 +27,7 @@
 .Op Fl -hash
 .Op Fl -since Ar path
 .Op Fl -delta-only
+.Op Fl -ndjson-include Ar list
 .Op Fl -heartbeat
 .Op Fl -force-full
 .Op Fl -full-interval Ar duration
@@ -284,6 +285,29 @@ in the
 field.
 Requires
 .Fl -since .
+.It Fl -ndjson-include Ar list
+Carry more than components in the NDJSON stream:
+.Ql exposure ,
+.Ql containers ,
+or
+.Ql all .
+.Pp
+NDJSON is one component per line, so
+.Ql exposure
+and
+.Ql containers
+\(em which the JSON document and the CSV sidecars both carry \(em are missing
+from the one output shape built for streaming. Each extra record carries a
+.Ql record_type
+an older consumer can skip; a line without one is a component. Off by default
+for that reason.
+.Pp
+.Ql exposure
+is one record per port per package behind it, so a finding joins on the package
+without unpacking an array. A port with nothing attributed still produces a
+record: that is a gap in what can be seen, not a port that is safe.
+.Ql containers
+includes stopped ones, whose vulnerabilities are latent rather than absent.
 .It Fl -heartbeat
 Emit a one-line digest of the inventory into the NDJSON stream on every scan,
 and the component records only when that digest changes.
