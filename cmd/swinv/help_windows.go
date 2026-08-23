@@ -7,13 +7,13 @@ package main
 // filesystem, and the gap between "nothing else is installed" and "nothing
 // else was looked for" is the whole completeness question on this platform --
 // so --full-scan is named in the first paragraph rather than buried in a list.
-const helpHeader = `swinv — local software inventory collector
+const helpHeader = `swinv - local software inventory collector
 
 Usage:
   swinv [flags]                 (takes no positional arguments)
 
-With no flags, swinv reads the Windows uninstall registry — the records behind
-Add/Remove Programs — and writes JSON and CSV. That takes milliseconds and
+With no flags, swinv reads the Windows uninstall registry - the records behind
+Add/Remove Programs - and writes JSON and CSV. That takes milliseconds and
 opens no files, but it sees only software that registers an uninstall entry.
 --full-scan also reads executables on disk, which takes minutes and needs an
 elevated prompt. No inventory data leaves this machine.

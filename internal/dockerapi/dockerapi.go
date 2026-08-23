@@ -5,7 +5,7 @@
 // a WSL2 virtual machine: their processes are not Windows processes, they have
 // no entry in the Windows process table, and their listening sockets live in
 // network namespaces inside that VM. No Windows API reaches them. What Windows
-// *can* see is Docker's proxy holding the published port — which is exactly
+// *can* see is Docker's proxy holding the published port - which is exactly
 // the "docker-ce owns port 3000" non-answer the Linux collector exists to
 // avoid, and on Windows it cannot be followed any other way.
 //
@@ -15,7 +15,7 @@
 //
 // Everything is best-effort. A machine with no Docker, a daemon that is not
 // running, or a user outside the docker group produces no containers and no
-// error — the inventory is not worth failing over a section that could not be
+// error - the inventory is not worth failing over a section that could not be
 // collected, and the caller records a blind spot instead.
 package dockerapi
 

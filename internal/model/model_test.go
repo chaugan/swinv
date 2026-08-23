@@ -115,7 +115,7 @@ func TestNormalizeKeyIsFullTuple(t *testing.T) {
 		{Name: "a", Version: "1", Type: "deb", PURL: "pkg:deb/a@2"},
 	}
 	if got := Normalize(variants); len(got) != len(variants) {
-		t.Errorf("len = %d, want %d — components differing in a key field were merged", len(got), len(variants))
+		t.Errorf("len = %d, want %d - components differing in a key field were merged", len(got), len(variants))
 	}
 }
 

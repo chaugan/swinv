@@ -109,8 +109,8 @@ func WriteCycloneDX(w io.Writer, r *model.Report) error {
 }
 
 // cdxComponent maps one inventory component. refs accumulates the bom-refs
-// already handed out so that two components that share a PURL — legitimate
-// when they differ only by type — still get distinct references.
+// already handed out so that two components that share a PURL - legitimate
+// when they differ only by type - still get distinct references.
 func cdxComponent(c model.Component, refs map[string]int) cyclonedx.Component {
 	out := cyclonedx.Component{
 		BOMRef:     uniqueRef(componentRef(c), refs),
@@ -376,7 +376,7 @@ func cdxHostComponent(h model.Host) *cyclonedx.Component {
 }
 
 // cdxScanProperties records how the scan was performed, including whether it
-// was complete — a consumer must be able to tell a thin inventory from a
+// was complete - a consumer must be able to tell a thin inventory from a
 // broken one without reading swinv's own JSON.
 func cdxScanProperties(r *model.Report) *[]cyclonedx.Property {
 	var props []cyclonedx.Property

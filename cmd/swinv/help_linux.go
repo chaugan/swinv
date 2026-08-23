@@ -6,13 +6,13 @@ package main
 // which is not "what is this" but "what will it do to this machine if I run
 // it and walk away". Everything else in the page is an index; this is the part
 // worth reading.
-const helpHeader = `swinv — local software inventory collector
+const helpHeader = `swinv - local software inventory collector
 
 Usage:
   swinv [flags]                 (takes no positional arguments)
 
-With no flags, swinv scans / — but not /home, and not network or virtual
-filesystems — and writes JSON and CSV into /var/lib/swinv. It runs at
+With no flags, swinv scans / - but not /home, and not network or virtual
+filesystems - and writes JSON and CSV into /var/lib/swinv. It runs at
 background priority, deliberately slower than it could be; --fast trades that
 for speed. The only network activity is a reverse-DNS lookup, which --offline
 disables. No inventory data leaves this machine.

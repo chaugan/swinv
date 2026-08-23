@@ -1,4 +1,4 @@
-# Windows support — design
+# Windows support - design
 
 > **Status: proposed. None of this is implemented.**
 >
@@ -13,7 +13,7 @@
 >
 > The distinction matters when reading the performance discussion below. A
 > `swinv.exe` that walks `C:\Program Files` today is the Linux strategy running
-> on a platform it was not designed for — it finds files by walking directories,
+> on a platform it was not designed for - it finds files by walking directories,
 > because that is where Linux keeps its truth. It is not what this document
 > proposes.
 
@@ -34,8 +34,8 @@ If all you need is Windows inventory data, use one of those.
 
 **The real answer is air-gapped environments.** Intune and SCCM require a
 management plane the host can reach. osquery works offline but its fleet story
-assumes a server. `swinv`'s model — one static binary, no daemon, no network,
-writes files that something else collects later — is exactly what an isolated
+assumes a server. `swinv`'s model - one static binary, no daemon, no network,
+writes files that something else collects later - is exactly what an isolated
 network can actually use. That is the case for building it, and if that
 requirement disappears then so does most of the justification.
 
@@ -61,7 +61,7 @@ Verified, not assumed:
 
 **Syft has no registry, MSI, Appx/MSIX or winget cataloger.** The entire
 "what is installed" half of Windows does not exist in it and has to be written.
-That is the long pole — not Go portability, not packaging.
+That is the long pole - not Go portability, not packaging.
 
 ---
 
@@ -111,7 +111,7 @@ rather than only here, because it is the obvious-looking wrong answer.
 | ARP, 32-bit on 64-bit | `HKLM\SOFTWARE\WOW6432Node\...\Uninstall` | 32-bit applications |
 | ARP, current user | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` | per-user installs |
 | ARP, other users | `HKU\<SID>\SOFTWARE\...\Uninstall` | other loaded profiles; needs elevation |
-| MSI products and patches | `msi.dll` — `MsiEnumProducts`, `MsiEnumPatches`, `MsiGetProductInfo` | MSI products, and patches, which do **not** appear under the uninstall keys |
+| MSI products and patches | `msi.dll` - `MsiEnumProducts`, `MsiEnumPatches`, `MsiGetProductInfo` | MSI products, and patches, which do **not** appear under the uninstall keys |
 | Appx / MSIX | `Windows.Management.Deployment.PackageManager` | Store and modern packaged apps. Enumerate via the API, never by walking `WindowsApps` |
 | Hotfixes | CBS: `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\Packages` | updates. `Win32_QuickFixEngineering` is an incomplete subset on modern servicing |
 
@@ -157,7 +157,7 @@ This section originally argued for an allowlist from first principles. It has
 since been measured, and the measurement is stronger than the argument.
 
 The first execution of the cross-compiled binary on a real Windows 11 machine
-scanned `C:\Program Files` and **did not finish**. Not slowly — a 5-minute
+scanned `C:\Program Files` and **did not finish**. Not slowly - a 5-minute
 deadline elapsed with no result, twice, on a 20-core laptop. A goroutine dump
 taken mid-scan named the cause exactly:
 
@@ -184,7 +184,7 @@ Three things follow, and all three were confirmed on the machine:
   second. It stalled identically, because indexing happens first and is
   unaffected by which catalogers are selected.
 - **This is not something swinv can fix from outside Syft.** The only lever
-  available is scanning fewer paths — which is what the allowlist is.
+  available is scanning fewer paths - which is what the allowlist is.
 - **`--full-scan` over a whole volume would be far worse.** If `Program Files`
   alone cannot complete in five minutes, walking `C:\` is not a slow option; it
   is not an option.
@@ -233,7 +233,7 @@ Instead, enumerate the NTFS Master File Table with the
 volume without opening a single file.
 
 **Use the ioctl, not a raw MFT parser.** `FSCTL_ENUM_USN_DATA` is a documented
-Win32 API — the OS parses the MFT for us. `DeviceIoControl` is already exposed
+Win32 API - the OS parses the MFT for us. `DeviceIoControl` is already exposed
 by `golang.org/x/sys/windows`, so this needs **no new dependency** and no
 on-disk NTFS structure parsing to keep correct across Windows versions.
 (`Velocidex/go-ntfs` is Apache-2.0 and licence-safe if raw access is ever
@@ -255,7 +255,7 @@ current binary on Windows showed that undersells it.
 
 Syft's indexer opens **every regular file** in the tree and reads roughly 3 KB
 of it, purely to determine a MIME type, before any cataloger runs. On a scan of
-`/usr` on Linux that amounted to 5.9 GB read from a 4.8 GB tree — more than the
+`/usr` on Linux that amounted to 5.9 GB read from a 4.8 GB tree - more than the
 tree itself, because most files are opened twice. On Linux the page cache
 absorbs this and it costs almost nothing. On Windows there is no equivalent
 shortcut: every `CreateFile` traverses Defender's filter driver whether the
@@ -263,7 +263,7 @@ content is cached or not.
 
 Enumerating through the USN journal returns every filename without opening
 anything, so candidates can be filtered **by extension before a single handle
-exists**. Most of a Program Files tree is not an executable — it is resources,
+exists**. Most of a Program Files tree is not an executable - it is resources,
 icons, localisation, documentation and data. Those files would never be opened
 at all, rather than being opened, sniffed, and then discarded as uninteresting.
 
@@ -279,7 +279,7 @@ hosted CI runner:
 | | |
 |---|---|
 | MFT records read | **1,301,728** |
-| elapsed | **42 s – 1 m 41 s** across runs |
+| elapsed | **42 s - 1 m 41 s** across runs |
 | directories retained for path reconstruction | 199,644 |
 | executables kept (`.exe .dll .sys .ocx .cpl .drv`) | 127,228 |
 | paths that failed to reconstruct | **0** |
@@ -290,7 +290,7 @@ files; this opens none, and only 9.8% of them are even candidates for the file
 reads that follow. The other 90.2% cost one MFT record each and are never
 touched again.
 
-For comparison, `C:\Program Files` alone — a fraction of that volume — did not
+For comparison, `C:\Program Files` alone - a fraction of that volume - did not
 finish inside ten minutes through the directory resolver.
 
 ### Measured: a real, loaded machine
@@ -407,15 +407,15 @@ executables from 50.9% to **57.8%**:
 | all 99,919 executables | 23,600 (23.6%) | 27,303 (27.3%) |
 | 46,366 third-party executables | 23,600 (50.9%) | **26,817 (57.8%)** |
 
-Every file matched by `InstallLocation` is third-party — the two figures are
-identical — which is expected: uninstall keys do not point into `\Windows`.
+Every file matched by `InstallLocation` is third-party - the two figures are
+identical - which is expected: uninstall keys do not point into `\Windows`.
 
 That still leaves 42% of third-party executables unreachable from the registry,
 which looks like a poor result for an allowlist. It is, and the reason is that
 **the allowlist was pointed the wrong way round.**
 
 An allowlist was proposed as a way to decide *what to scan*. But enumeration is
-not the expensive part — the whole volume enumerates in under five seconds and
+not the expensive part - the whole volume enumerates in under five seconds and
 opens nothing. The expensive part is **extraction**: opening a candidate binary
 to read its `VERSIONINFO`, which is where antivirus interception is paid.
 
@@ -434,10 +434,10 @@ and it works in the opposite direction:
     = needs a file opened           19,549
 ```
 
-**Extraction drops from 99,919 files to 19,549 — 80% fewer opens**, and 0.68% of
+**Extraction drops from 99,919 files to 19,549 - 80% fewer opens**, and 0.68% of
 the volume. On the same assumption that a Defender-intercepted open costs
-10–30 ms, that is the difference between roughly 17–50 minutes and roughly
-3–10 minutes.
+10-30 ms, that is the difference between roughly 17-50 minutes and roughly
+3-10 minutes.
 
 That number is an estimate, not a measurement: per-file extraction cost has not
 been measured yet and is the next thing worth measuring.
@@ -460,8 +460,8 @@ part nothing else can account for".
 
 ### Measured: the first `--full-scan` is slow, and the rest are not
 
-`--full-scan` on a real developer laptop — 2.9M MFT records, 99,920
-executables, 19,549 of them opened after attribution — took **14 minutes 21
+`--full-scan` on a real developer laptop - 2.9M MFT records, 99,920
+executables, 19,549 of them opened after attribution - took **14 minutes 21
 seconds** the first time and **1 second** the next. The same command, the same
 counts, the same 14,769 components extracted.
 
@@ -533,7 +533,7 @@ C:\Windows\WinSxS\amd64_microsoft-windows-kernel32_31bf3856ad364e35_10.0.26100.3
 
 and the `System32` path did not appear at all.
 
-Nothing is missed — the file is enumerated, once — but its reported location may
+Nothing is missed - the file is enumerated, once - but its reported location may
 not be the one an operator recognises, and a consumer asking "is there something
 at `C:\Windows\System32\X`" will get the wrong answer. Two consequences:
 
@@ -553,7 +553,7 @@ to avoid. Not worth it by default; possibly worth it for a narrow set of paths.
 `--volumes D:` scans D: and **does not scan C:**. `--volumes D:,E:` scans both
 and, again, not C:. An operator who names volumes has said which ones they want,
 and silently adding the system drive would produce a far longer scan than they
-asked for — on the machine where they were most likely trying to avoid one.
+asked for - on the machine where they were most likely trying to avoid one.
 
 Duplicates are dropped in first-mentioned order, so a volume is never enumerated
 twice and the output is deterministic. An unset flag means "use the default",
@@ -571,7 +571,7 @@ the high 16 are a sequence number, incremented whenever a record is reused. The
 root directory's reference is `0x0005000000000005`, not `5`.
 
 Code that compares or keys on the full reference finds nothing, reports every
-entry as unresolved, and raises no error — because unresolved entries are a
+entry as unresolved, and raises no error - because unresolved entries are a
 legitimate outcome on a live filesystem, just not 100% of them. Every identity
 comparison must mask to the low 48 bits first.
 
@@ -583,7 +583,7 @@ way NTFS does.
 
 **MFT enumeration gives discovery, not extraction.** Every candidate PE still
 has to be opened and its `VERSIONINFO` resource parsed to get a product and
-version. On a typical Windows install that is 50,000–100,000 files.
+version. On a typical Windows install that is 50,000-100,000 files.
 
 The bottleneck moves; it does not vanish. Discovery drops from minutes to
 seconds, extraction remains minutes. `--full-scan` is a minutes-scale
@@ -594,19 +594,19 @@ operation and should be described as one.
 On Linux, dpkg and rpm ship file manifests, which is what lets Syft's
 `ExcludeBinaryPackagesWithFileOwnershipOverlap` stop a package's own binaries
 being reported a second time as loose binaries. Registry entries have no file
-list, so that mechanism does not exist on Windows — and without a replacement,
+list, so that mechanism does not exist on Windows - and without a replacement,
 every installed product's `.exe` would appear twice.
 
 Two sources reconstruct most of it:
 
 1. **MSI components.** `MsiEnumComponents` with `MsiGetComponentPath` maps
-   components to products — the precise equivalent of a dpkg `.list`, for every
+   components to products - the precise equivalent of a dpkg `.list`, for every
    MSI-installed product.
 2. **`InstallLocation` prefix matching** for everything else. A PE under a
    product's `InstallLocation` belongs to that product.
 
-What remains unattributed after both — portable applications, stray DLLs,
-things dropped into a directory by hand — is **exactly what the full scan
+What remains unattributed after both - portable applications, stray DLLs,
+things dropped into a directory by hand - is **exactly what the full scan
 exists to surface**, and should be reported as unmanaged rather than discarded.
 
 > This is the piece to prototype first. If attribution does not hold,
@@ -659,7 +659,7 @@ check rather than `Geteuid() == 0`.
 | `model.Host` field | Windows source |
 |---|---|
 | `hostname` | `GetComputerNameEx` |
-| `machine_id` | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` — the stable fleet key |
+| `machine_id` | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` - the stable fleet key |
 | `os_id` | `"windows"` |
 | `os_version_id` | `DisplayVersion` (or `ReleaseId` on older builds) under `Windows NT\CurrentVersion` |
 | `os_pretty_name` | `ProductName` from the same key |
@@ -669,7 +669,7 @@ check rather than `Geteuid() == 0`.
 | `virtualization` | `Win32_ComputerSystem.Model` heuristics, as the DMI heuristics work today |
 | `boot_id` | no equivalent; leave empty rather than inventing one |
 
-WMI is acceptable *here* — for read-only hardware and OS facts. The objection
+WMI is acceptable *here* - for read-only hardware and OS facts. The objection
 to `Win32_Product` is specific to that class, not to WMI generally.
 
 ---
@@ -685,25 +685,25 @@ and keep their meaning.
 which discussed PURL and never mentioned CPE. The consequence was worse than the
 omission looks: with no PURL *and* no CPE a component has no identifier at all,
 so a CycloneDX document from a Windows host matches nothing in any vulnerability
-scanner — and returns a clean-looking empty result rather than an error.
+scanner - and returns a clean-looking empty result rather than an error.
 
 CPE is the right identifier here. It exists for exactly this case: commercial
 and proprietary software with no package manager behind it, identified by vendor
 and product. Several candidate forms are emitted per component rather than one,
 because publisher and product strings in the registry are written by thousands of
-unrelated installers and rarely match the NVD's spelling — "Google LLC" against
+unrelated installers and rarely match the NVD's spelling - "Google LLC" against
 `google`, "Google Chrome" against `chrome`. The failure mode is a miss rather
 than a false match, since a CPE only matches when vendor and product both hit.
 
 **`purl` stays empty for registry entries.** There is no canonical PURL type for
 an ARP row, and inventing `pkg:generic/windows/...` would create false
-confidence — a scanner would silently match nothing against it rather than
+confidence - a scanner would silently match nothing against it rather than
 reporting that it could not. Syft-derived PE and .NET components keep their real
 PURLs. Windows consumers join on `(name, type, version)`, which is what
 `ComputeDelta` already does.
 
-Windows-specific identity — `product_code`, `upgrade_code`,
-`package_family_name`, `install_scope`, the originating registry key — is worth
+Windows-specific identity - `product_code`, `upgrade_code`,
+`package_family_name`, `install_scope`, the originating registry key - is worth
 keeping but does not belong in the fixed CSV columns. Adding a general
 `attributes` map to `Component` is the smaller change, and it would serve Linux
 too.
@@ -745,10 +745,10 @@ The default posture already fits. Worth stating explicitly:
 
 | Phase | Scope | Rough effort |
 |---|---|---|
-| 1 | hostfacts, ARP from four hives, Syft on derived install roots | 2–3 weeks |
-| 2 | MSI products and patches, Appx/MSIX, CBS hotfixes, attribution | 3–4 weeks |
-| 3 | `--full-scan` via `FSCTL_ENUM_USN_DATA`, volume policy, `--accept-slow-scan` | 2–3 weeks |
-| 4 | Scheduled-task packaging, MSI or winget manifest, Windows CI | 1–2 weeks |
+| 1 | hostfacts, ARP from four hives, Syft on derived install roots | 2-3 weeks |
+| 2 | MSI products and patches, Appx/MSIX, CBS hotfixes, attribution | 3-4 weeks |
+| 3 | `--full-scan` via `FSCTL_ENUM_USN_DATA`, volume policy, `--accept-slow-scan` | 2-3 weeks |
+| 4 | Scheduled-task packaging, MSI or winget manifest, Windows CI | 1-2 weeks |
 
 Phase 1 alone ships something real and answers the question that matters: does
 the model hold on Windows at all? Everything after it is worth more once that
@@ -763,9 +763,9 @@ available, do not start.** GitHub Actions provides `windows-latest` free, so CI
 is not the obstacle; a real machine is.
 
 The evidence for this is the Linux work. Every significant defect in this
-project — a 9p mount contributing 48% of a bogus inventory, phantom packages
+project - a 9p mount contributing 48% of a bogus inventory, phantom packages
 from a nested root filesystem, Gentoo's quoted `os_id`, a documented container
-command that hung — was found by running the tool on hardware the author did
+command that hung - was found by running the tool on hardware the author did
 not have, and none were found by 110 tests, a three-model review panel, or five
 automated review passes. Windows inventory is substantially more edge cases than
 Linux, and a Windows binary that reports subtly wrong installed software is
@@ -778,7 +778,7 @@ worse than no Windows support.
 | `Win32_Product` | Triggers MSI consistency checks; can repair and mutate the machine; MSI-only |
 | Walking `C:\` by default | Slow, hydrates cloud placeholders, and without ownership data produces mostly duplicates |
 | Operator-supplied allowlist as the primary model | The registry already knows where things are installed; deriving it is more accurate and needs no maintenance |
-| A separate Windows project | Forks `model`, the writers and the delta logic — the parts most worth sharing |
+| A separate Windows project | Forks `model`, the writers and the delta logic - the parts most worth sharing |
 | `pkg:generic/windows/...` PURLs | False confidence: matches nothing, but looks like it should |
 | Raw MFT parsing | `FSCTL_ENUM_USN_DATA` does it through a documented API with no dependency and no on-disk format risk |
 | winget as a source | Re-reads ARP and Appx, and expects network access |
@@ -795,7 +795,7 @@ Composer, NuGet and the rest remain uncovered.
 This matters more than the component count suggests. Language packages are where
 most third-party vulnerabilities are, they are installed outside any package
 manager Windows knows about, and they are exactly the class the uninstall
-registry cannot see — which is the gap `--full-scan` exists to close for native
+registry cannot see - which is the gap `--full-scan` exists to close for native
 code and does not close here.
 
 ### The shape a fix should take
@@ -804,9 +804,9 @@ Not "run Syft over C:\". That is the strategy already measured as unworkable,
 for the same reason as before: Syft's indexer opens every file it sees.
 
 MFT enumeration already produces every filename on the volume without opening
-anything. Ecosystem manifests are identifiable **by name** — `METADATA` inside a
+anything. Ecosystem manifests are identifiable **by name** - `METADATA` inside a
 `*.dist-info` directory, `PKG-INFO` inside `*.egg-info`, `package.json`,
-`go.mod`, `Cargo.lock`, `*.gemspec` — so the same enumeration that finds
+`go.mod`, `Cargo.lock`, `*.gemspec` - so the same enumeration that finds
 executables can find manifests, and only those files need opening. The
 extraction filter that cut 99,920 candidates to 19,549 applies unchanged.
 
@@ -824,7 +824,7 @@ Note one thing this would gain that Linux has and Windows would not: on Linux,
 `owned_by` links a distribution-installed language package to the OS package
 that patches it. Nothing on Windows installs Python packages through a system
 package manager, so every ecosystem package found there is genuinely upstream
-and should be assessed as such — which makes the absent link correct rather
+and should be assessed as such - which makes the absent link correct rather
 than missing.
 
 ## Open questions
@@ -837,8 +837,8 @@ than missing.
 3. **Should `SystemComponent=1` entries be reported by default?** They are real
    software but hidden from Add/Remove Programs, and including them will make
    Windows counts look inflated next to what an operator sees in the UI.
-4. **Server-role detection** — deducing that IIS is serving, and which product
-   and version sits behind a listening port — is a different axis from "what is
+4. **Server-role detection** - deducing that IIS is serving, and which product
+   and version sits behind a listening port - is a different axis from "what is
    installed" and is not designed here. It now has its own document:
    [Server-role detection](SERVER-ROLES.md). Note one finding from it that bears
    on this document: IIS does not fit a socket → process → binary pipeline at
@@ -851,8 +851,8 @@ than missing.
 ## Appendix: the baseline measurement protocol
 
 The tree cross-compiles for Windows today and produces a `swinv.exe` that has
-never been executed. Running it is not a test of Windows support — there is no
-Windows support — it is the measurement that decides how much of this document
+never been executed. Running it is not a test of Windows support - there is no
+Windows support - it is the measurement that decides how much of this document
 survives contact with a real machine. Three numbers come out of it, and each one
 moves a decision:
 
@@ -864,7 +864,7 @@ moves a decision:
 
 CI publishes the binary as the `swinv-windows-amd64-experimental` artifact on
 every push to `main`. Download it from the run page under **Actions**, unzip it,
-and keep it out of `PATH` — it is an instrument, not an install.
+and keep it out of `PATH` - it is an instrument, not an install.
 
 ### Before the first run
 
@@ -874,7 +874,7 @@ disk, because none of them are obvious from the Linux behaviour.
 **Do not point it at `C:\`.** The exclusion model keys on `etc/os-release` to
 decide whether a `--root` is a whole filesystem deserving the layout exclusions.
 `C:\` has no such file, so it is treated as an arbitrary directory and gets *no
-exclusions at all* — not the mount table, not the non-local filesystem list, not
+exclusions at all* - not the mount table, not the non-local filesystem list, not
 the home-directory rule. The scan walks `System Volume Information`, `WinSxS`,
 every user profile, and the page file.
 
@@ -895,7 +895,7 @@ Use a throwaway output directory throughout:
 mkdir C:\swinv-test
 ```
 
-### T0 — does it start
+### T0 - does it start
 
 ```powershell
 .\swinv.exe --version
@@ -904,9 +904,9 @@ mkdir C:\swinv-test
 
 Expected: both work. The flag parser, the version stamp and the help text are
 platform-neutral. If `--help` is empty or the binary refuses to start, stop and
-report it — nothing else in this protocol is meaningful.
+report it - nothing else in this protocol is meaningful.
 
-### T1 — the first real scan
+### T1 - the first real scan
 
 ```powershell
 Measure-Command { .\swinv.exe --root "C:\Program Files" --out C:\swinv-test --output-mode timestamped --offline }
@@ -917,12 +917,12 @@ lookup, which on a domain-joined machine can block for seconds against a DNS
 server that is not there.
 
 Record the elapsed time and whether a file appeared. **A file appearing at all
-is itself a result** — it exercises the atomic write path end to end on NTFS,
+is itself a result** - it exercises the atomic write path end to end on NTFS,
 which is temp file, `fsync`, `MoveFileEx`, and, as of this change, no directory
 flush. If nothing was written and the error mentions syncing a directory, the
 Windows build-tag split did not take effect and that is the finding.
 
-### T2 — what it thinks the host is
+### T2 - what it thinks the host is
 
 ```powershell
 $r = Get-Content (Get-ChildItem C:\swinv-test\*.json | Select -Last 1) | ConvertFrom-Json
@@ -935,13 +935,13 @@ Expect most of `host` to be empty: `os_id`, `os_version_id`, `kernel_release`,
 `hostname` and `architecture` should survive, since they come from the Go
 runtime rather than the filesystem.
 
-The question worth answering is not *whether* it degrades — it must — but
+The question worth answering is not *whether* it degrades - it must - but
 *how*: does it degrade quietly into empty strings, or does it announce itself in
 `scan.warnings`? A report that claims a Windows host with a blank `os_id` and
 says nothing about it is a correctness bug in the existing code, not a missing
 feature, and it would be worth fixing before any Windows work starts.
 
-### T3 — what the catalogers actually found
+### T3 - what the catalogers actually found
 
 ```powershell
 $r.components.Count
@@ -953,10 +953,10 @@ $r.components | Where-Object { $_.type -eq 'dotnet' } | Select -First 10 name, v
 This is the load-bearing measurement. Syft has `binary-classifier`, `dotnet-deps`
 and `dotnet-portable-executable` catalogers, and the design assumes they produce
 real version data from PE `VERSIONINFO` and `.deps.json`. Confirm it, and check
-whether the versions look like file versions or product versions — they differ
+whether the versions look like file versions or product versions - they differ
 often enough to matter for CVE matching.
 
-### T4 — the gap against installed-software truth
+### T4 - the gap against installed-software truth
 
 This is the number that justifies the registry collector. Take the uninstall
 registry as ground truth:
@@ -979,7 +979,7 @@ $arp.Count
 > Enumerating that class triggers an MSI consistency check against every
 > installed product, which can silently reconfigure or repair software on the
 > machine. It is the obvious thing to reach for and it is the one query in this
-> protocol that can change the system it is measuring. `Get-HotFix` is safe — it
+> protocol that can change the system it is measuring. `Get-HotFix` is safe - it
 > reads `Win32_QuickFixEngineering`, which has no such behaviour.
 
 Then compare, roughly, by hand:
@@ -991,14 +991,14 @@ $arp | Where-Object { $n = $_.DisplayName; -not ($found | Where-Object { $n -lik
   Select-Object DisplayName, DisplayVersion | Format-Table
 ```
 
-The match will be fuzzy and that is fine — the output is an order of magnitude,
+The match will be fuzzy and that is fine - the output is an order of magnitude,
 not a percentage. If Syft alone accounts for most of the ARP list, the registry
 collector is an enrichment. If it accounts for a fraction, the registry
 collector *is* the product and the file scan is secondary. Everything in the
 phasing table above assumes the second, on reasoning rather than evidence; this
 is where that assumption gets checked.
 
-### T5 — the cost of breadth
+### T5 - the cost of breadth
 
 ```powershell
 Measure-Command { .\swinv.exe --root "C:\Program Files (x86)" --out C:\swinv-test --output-mode timestamped --offline }
@@ -1013,7 +1013,7 @@ if it takes long enough to be annoying, that is the answer.
 Do **not** attempt `C:\Windows\WinSxS`. It is a hard-link farm with hundreds of
 thousands of entries and no exclusion model is in place to survive it.
 
-### T6 — durability, if you want to be thorough
+### T6 - durability, if you want to be thorough
 
 ```powershell
 .\swinv.exe --root "C:\Program Files" --out C:\swinv-test --output-mode overwrite --offline
@@ -1030,5 +1030,5 @@ tests on Linux assume.
 The three numbers from T1, T3 and T4, the `scan.warnings` array from T2, and one
 `.json` file. That is enough to either confirm the phasing in this document or
 rewrite it. Nothing in this protocol validates Windows support, and a clean run
-should not be reported as though it did — the tool is finding files on an
+should not be reported as though it did - the tool is finding files on an
 operating system whose notion of installed software it does not yet model.

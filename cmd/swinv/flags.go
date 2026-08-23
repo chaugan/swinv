@@ -14,7 +14,7 @@ import (
 // parseFlags builds a config from argv.
 //
 // It returns (nil, code, nil) when the caller should exit immediately without
-// scanning — that is, for -h. A non-nil error means a usage problem.
+// scanning - that is, for -h. A non-nil error means a usage problem.
 func parseFlags(args []string, stdout, stderr io.Writer) (*config, int, error) {
 	cfg := &config{}
 	fs := flag.NewFlagSet("swinv", flag.ContinueOnError)

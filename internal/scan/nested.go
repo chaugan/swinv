@@ -12,7 +12,7 @@ import (
 // packageDBDirs are the directories a Linux package manager keeps its
 // installed-package database in. Matching on the *directory* rather than on a
 // specific filename is deliberate: the databases underneath have many names
-// and keep gaining more — dpkg has status and status.d/*, rpm has Packages,
+// and keep gaining more - dpkg has status and status.d/*, rpm has Packages,
 // Packages.db and rpmdb.sqlite, pacman has local/<pkg>/desc, portage has
 // <category>/<pkg>/CONTENTS. Anchoring on the directory catches all of them,
 // and any future sibling, without a filename list that silently goes stale.
@@ -47,7 +47,7 @@ const maxListedNestedRoots = 5
 // disk all contain their own package database, and a scan of "/" walks into it
 // and reports its contents as installed software. Worse, those components are
 // labelled with the *host's* distribution, because distro detection happens
-// once for the whole scan — so a Debian 12 package from an extracted image
+// once for the whole scan - so a Debian 12 package from an extracted image
 // appears in an Ubuntu host's inventory as though it were installed, with
 // nothing to mark it as foreign.
 //
@@ -115,7 +115,7 @@ func NestedRoots(root string, components []model.Component) []string {
 //
 // A component is kept if it *also* cites the scanned root's own database. Syft
 // can merge a genuinely installed package with a same-name entry from a nested
-// tree, and dropping that would lose real installed software — far worse than
+// tree, and dropping that would lose real installed software - far worse than
 // reporting one package too many.
 func DropNestedRootComponents(components []model.Component, roots []string) (kept []model.Component, dropped int) {
 	if len(roots) == 0 {

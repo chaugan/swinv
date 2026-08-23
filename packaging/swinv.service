@@ -1,4 +1,4 @@
-# swinv — local software inventory collector (oneshot)
+# swinv - local software inventory collector (oneshot)
 #
 # Install:
 #   install -m 0755 bin/swinv /usr/bin/swinv
@@ -45,7 +45,7 @@ WorkingDirectory=/var/lib/swinv
 #
 # DELIBERATE TRADE-OFF: swinv's entire job is to read the whole filesystem and
 # enumerate installed software. Sandboxing directives that HIDE parts of the
-# tree would silently truncate the inventory, which is worse than useless — a
+# tree would silently truncate the inventory, which is worse than useless - a
 # short report looks like a clean machine. So the following are intentionally
 # NOT set, and must not be added:
 #

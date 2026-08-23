@@ -755,8 +755,8 @@ func TestHashComponentsEmpty(t *testing.T) {
 // --- nested root filesystems ------------------------------------------------
 
 // TestDetectNestedRoots covers the most confusing thing swinv can do: walking
-// into a second root filesystem stored inside this one — an extracted image, a
-// container rootfs, a chroot, or this repository's own test fixture — and
+// into a second root filesystem stored inside this one - an extracted image, a
+// container rootfs, a chroot, or this repository's own test fixture - and
 // reporting its packages as installed, wearing the host's distribution label.
 func TestDetectNestedRoots(t *testing.T) {
 	components := []model.Component{
@@ -910,7 +910,7 @@ func TestDropNestedRootComponents(t *testing.T) {
 // TestParseMountinfoExcludesHostSharedFilesystems is the regression test for a
 // bug found on a real Fedora 44 guest under WSL2. /usr/lib/wsl is a 9p mount
 // carrying the *Windows host's* driver packages, and 9p was not in the
-// non-local list — so 477 of that host's 1,003 components (48% of the whole
+// non-local list - so 477 of that host's 1,003 components (48% of the whole
 // inventory) were ASUS, Intel and NVIDIA binaries and .NET assemblies reported
 // as installed Linux software, with nothing marking them foreign.
 //
@@ -933,7 +933,7 @@ func TestParseMountinfoExcludesHostSharedFilesystems(t *testing.T) {
 	got := ParseMountinfo(strings.NewReader(table))
 
 	for _, want := range []string{
-		"/usr/lib/wsl/drivers", // 9p — the one that actually bit
+		"/usr/lib/wsl/drivers", // 9p - the one that actually bit
 		"/usr/lib/wsl/lib",     // overlay
 		"/media/host",          // virtiofs
 		"/mnt/hgfs",            // VMware
@@ -957,7 +957,7 @@ func TestParseMountinfoExcludesHostSharedFilesystems(t *testing.T) {
 
 // TestUnquoteDistroValues is the regression test for a bug found on Gentoo,
 // whose /etc/os-release writes ID='gentoo' with single quotes. Syft's parser
-// leaves them in the value, so host.os_id arrived as 'gentoo' — five extra
+// leaves them in the value, so host.os_id arrived as 'gentoo' - five extra
 // characters in a CSV column and a fleet grouping key, making a query as
 // ordinary as WHERE os_id = 'gentoo' match nothing.
 func TestUnquoteDistroValues(t *testing.T) {

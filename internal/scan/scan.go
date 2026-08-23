@@ -31,7 +31,7 @@ import (
 	// Syft v1.51.0's RPM cataloger opens the RPM package database through
 	// database/sql and needs a registered "sqlite" driver. Without this blank
 	// import CreateSBOM does not merely skip RPM databases, it fails outright
-	// with "sqlite driver is required" — VERIFIED against v1.51.0, not
+	// with "sqlite driver is required" - VERIFIED against v1.51.0, not
 	// speculative. modernc.org/sqlite is a pure-Go driver, so registering it
 	// here keeps CGO_ENABLED=0 builds working. Do not remove this import.
 	_ "modernc.org/sqlite"
@@ -151,7 +151,7 @@ type Result struct {
 //
 // A failing cataloger never aborts the run: it is recorded in Warnings, sets
 // Incomplete, and Run still returns everything that was collected with a nil
-// error. Only two things produce a non-nil error — the source could not be
+// error. Only two things produce a non-nil error - the source could not be
 // constructed, and the context was cancelled or its deadline expired. Context
 // failures are wrapped so errors.Is(err, context.DeadlineExceeded) and
 // errors.Is(err, context.Canceled) work on the returned error, which is what
@@ -203,7 +203,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	// Syft rewrites the exclusion patterns IN PLACE, replacing the leading
 	// "./" with the absolute scan root (see directorysource.getDirectoryExclusionFunctions:
 	// `exclusions[idx] = root + exclusion`). Handing it our own slice would
-	// therefore corrupt the caller's list — the same backing array is what
+	// therefore corrupt the caller's list - the same backing array is what
 	// cmd/swinv records in ScanMeta.Excluded, so the report would show
 	// "/abs/root/proc/**" instead of the "./proc/**" the operator configured,
 	// and the recorded list would change with the scan root. Pass a copy.
@@ -241,7 +241,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 		// A cataloger failure is recorded and the run continues. Syft returns
 		// no SBOM in this case, so what survives is whatever the conversion
-		// below finds — possibly nothing — but the report is still written.
+		// below finds - possibly nothing - but the report is still written.
 		res.Incomplete = true
 		res.addWarning(fmt.Sprintf("cataloging did not complete, the inventory may be missing packages: %v", err))
 		opts.logf("cataloging failed after %s: %v", roundDuration(time.Since(started)), err)
@@ -406,8 +406,8 @@ func catalogerSelection(expr string) (cataloging.SelectionRequest, []string) {
 }
 
 // distroFrom extracts the Linux release Syft identified. Artifacts.
-// LinuxDistribution may be nil — on a tree with no os-release, or when
-// cataloging failed early — and a nil Distro is the correct answer then, so
+// LinuxDistribution may be nil - on a tree with no os-release, or when
+// cataloging failed early - and a nil Distro is the correct answer then, so
 // the caller can fall back to hostfacts.
 func distroFrom(s *sbom.SBOM) *Distro {
 	if s == nil || s.Artifacts.LinuxDistribution == nil {

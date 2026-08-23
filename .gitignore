@@ -1,5 +1,5 @@
-# Build output. Anchored to the repo root so that cmd/swinv/ — the source
-# directory, which is also called swinv — is never ignored.
+# Build output. Anchored to the repo root so that cmd/swinv/ - the source
+# directory, which is also called swinv - is never ignored.
 /bin/
 /dist/
 /swinv
@@ -20,7 +20,7 @@ coverage.txt
 *.prof
 *.pprof
 
-# Local inventory output — never commit a real host's inventory.
+# Local inventory output - never commit a real host's inventory.
 /inventory/
 /out/
 *.tmp-*

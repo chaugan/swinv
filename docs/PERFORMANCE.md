@@ -16,21 +16,21 @@ Measured two minutes apart on 2026-08-23, with `--heartbeat` and
 
 The two machines are different shapes for a reason worth knowing. The Windows
 laptop has fewer components but **more** open ports, most of them the operating
-system — 110 of 162 endpoints on an earlier run carried `os_component`. The
+system - 110 of 162 endpoints on an earlier run carried `os_component`. The
 Linux server has twice the components and a third of the ports, because its
 software is packaged rather than shipped as loose executables.
 
 ### How long it takes
 
-Every figure below is at default scheduling priority — `nice 10` with idle I/O
+Every figure below is at default scheduling priority - `nice 10` with idle I/O
 on Linux, background priority mode on Windows. None used `--fast`.
 
 | Scan | Runs | Median | Range | Components |
 |---|---|---|---|---|
-| Linux `/` | 3 | 5m50s | 5m16s – 6m18s | ~14,400 |
-| Linux `/` with `--include-home` | 4 | 9m51s | 9m28s – 9m57s | ~23,500 |
-| Windows, registry only | — | 126 ms | — | 502 |
-| Windows `--full-scan` | 4 | 14m11s | 2m26s – 15m35s | ~7,900 |
+| Linux `/` | 3 | 5m50s | 5m16s - 6m18s | ~14,400 |
+| Linux `/` with `--include-home` | 4 | 9m51s | 9m28s - 9m57s | ~23,500 |
+| Windows, registry only | - | 126 ms | - | 502 |
+| Windows `--full-scan` | 4 | 14m11s | 2m26s - 15m35s | ~7,900 |
 
 Linux repeats land within a minute of each other, so the median is a number
 you can plan a timer around. `--include-home` costs roughly four extra minutes
@@ -38,7 +38,7 @@ for 9,000 more components, nearly all of them build caches.
 
 Windows `--full-scan` does not repeat: four runs on one laptop with
 near-identical component counts spread **6.4×**, from 2m26s to 15m35s. The
-variable is Defender — every file swinv opens is inspected, and how much of
+variable is Defender - every file swinv opens is inspected, and how much of
 that is already in its scan cache decides the run. The first full scan on a
 machine is the worst case, and there is nothing swinv can do about it beyond
 opening as few files as possible, which is what the default already does.
@@ -79,7 +79,7 @@ while the JSON document stayed complete at 24 MB. Only NDJSON is affected.
 | later `--full-scan` | seconds | 7,749 |
 
 The gap between the first full scan and every subsequent one is Defender
-inspecting each file swinv opens, and then its scan cache — not anything swinv
+inspecting each file swinv opens, and then its scan cache - not anything swinv
 does differently. This is why the Windows collector reads the registry, the
 package repository and the component store by default and opens no file at all:
 the fast path is the useful one, and `--full-scan` is opt-in.
@@ -115,7 +115,7 @@ server:
 | Privilege | unprivileged (non-root) |
 
 The file count is the part that matters. This host carries a developer checkout
-in `/opt` — **156k files**, `node_modules` trees and all — on top of the usual
+in `/opt` - **156k files**, `node_modules` trees and all - on top of the usual
 `/usr` (**118k**) and `/var` (**227k**). A fleet server with ~2000 dpkg packages,
 no source trees and no vendored JavaScript is a completely different shape of
 filesystem, and the numbers here do not transfer to it.
@@ -146,7 +146,7 @@ Micro-optimising the conversion path would be a waste of effort.
 
 Wall time and peak RSS, measured with `/usr/bin/time -v` on the host described
 above. **Every row produced the same inventory: 14,190 components.** These are
-not different scans of different scope — they are the same work, tuned.
+not different scans of different scope - they are the same work, tuned.
 
 | Configuration | Wall | Peak RSS |
 |---|---|---|
@@ -173,7 +173,7 @@ Narrowing catalogers narrows parsing; the walk is unchanged, and the walk is the
 cost.
 
 Measured: **135 s** for `--catalogers os`, against 348 s for the full default
-scan — for an inventory of 1,566 components instead of 14,190, at ~1.1 GB peak
+scan - for an inventory of 1,566 components instead of 14,190, at ~1.1 GB peak
 RSS. You give up 88% of your inventory and get back 61% of your runtime.
 
 If you want OS packages only for *content* reasons, `--catalogers os` is the
@@ -187,7 +187,7 @@ silently drops deb licence coverage from **99% to 0%**.
 
 The mechanism: dpkg package metadata comes from `/var/lib/dpkg/status`, but dpkg
 *licences* are read from `/usr/share/doc/*/copyright`. Exclude `/usr` and every
-deb in the report loses its `licenses` field — with no error, no warning, and a
+deb in the report loses its `licenses` field - with no error, no warning, and a
 report that still looks complete.
 
 That trade is not worth four seconds, which is why `swinv` does not make it for
@@ -227,7 +227,7 @@ it to determine a MIME type, before any cataloger runs. Measured on a scan of
 | **read via syscalls** | **5.9 GB** |
 | fetched from disk | 0 MB |
 
-More than the whole tree, because most files are opened twice — once to sniff,
+More than the whole tree, because most files are opened twice - once to sniff,
 once by a cataloger. The `0 MB` is why nobody notices: the page cache serves it
 all, so the cost is invisible on a warm system with local storage.
 
@@ -240,7 +240,7 @@ minutes.
 ### Almost none of that reading is necessary
 
 The Windows collector's central insight is that a file a package manager already
-accounts for does not need a version extracted from it — the package database
+accounts for does not need a version extracted from it - the package database
 just said what it is. On Windows the uninstall registry accounted for 58% of
 third-party executables. On Linux the equivalent figure is far higher:
 
@@ -252,8 +252,8 @@ third-party executables. On Linux the equivalent figure is far higher:
 
 So roughly 98% of the files Syft opens, sniffs and runs binary classifiers over
 are files whose name, version and provenance `dpkg` states exactly. Syft does
-discard the resulting duplicates — that is what
-`ExcludeBinaryPackagesWithFileOwnershipOverlap` is for — but it discards them
+discard the resulting duplicates - that is what
+`ExcludeBinaryPackagesWithFileOwnershipOverlap` is for - but it discards them
 *after* doing the work.
 
 The 2.3% that no package claims is the interesting part, and it is the same
@@ -265,7 +265,7 @@ On Windows swinv owns the pipeline, so it can read metadata first and open only
 the remainder. On Linux it uses Syft as a library, and Syft's indexer opens
 everything before any cataloger runs or any exclusion is consulted. Acting on
 this would mean either an upstream change to Syft or writing a Linux collector
-that does not use it — a much larger decision than a performance tweak, and one
+that does not use it - a much larger decision than a performance tweak, and one
 that would trade away the cataloger coverage Syft provides for roughly 40
 ecosystems.
 
@@ -280,23 +280,23 @@ trading CPU for resident memory. Sizes accept both `512MiB` and `512MB`
 spellings, and both mean 1024-based units; a bare number is bytes.
 
 **It is soft by design.** If the genuinely live data exceeds the limit, `swinv`
-keeps allocating rather than failing — a truncated inventory is worse than a
+keeps allocating rather than failing - a truncated inventory is worse than a
 large one. The flag lowers peak RSS; it **cannot guarantee a ceiling**. Do not
 size a cgroup limit as though it could.
 
 The interesting result is that a moderate limit is not a trade at all:
 
-> **`--max-memory 1536MiB` beat the default on both axes** — 30% less memory
+> **`--max-memory 1536MiB` beat the default on both axes** - 30% less memory
 > *and* 13% faster (1580 MB / 304 s vs 2271 MB / 348 s).
 
 A smaller heap means less memory for the collector to scan and better cache
 locality, so the usual space-for-time trade does not appear until the limit gets
 genuinely tight. If you change exactly one thing, change this. It is not the
-default — a fixed cap is the wrong thing to bake in for unknown hardware — but
+default - a fixed cap is the wrong thing to bake in for unknown hardware - but
 `packaging/swinv.service` carries it as a commented example.
 
 Push harder and the trade does arrive. `--max-memory 768MiB --parallelism 1`
-reaches **1085 MB**, the lowest figure measured, at **615 s** — nearly double the
+reaches **1085 MB**, the lowest figure measured, at **615 s** - nearly double the
 default runtime.
 
 ## A worked example of why exclusions dominate
@@ -314,7 +314,7 @@ filesystem list, so the scan walked it:
 | After (`9p` excluded) | 526 | **5.1 s** |
 
 **A 26× speedup from one exclusion.** The 477 components that disappeared were
-never that machine's software — they were Windows binaries and .NET assemblies
+never that machine's software - they were Windows binaries and .NET assemblies
 belonging to the host. So the tree being walked was simultaneously the largest
 cost and pure noise.
 
@@ -336,8 +336,8 @@ Ordered by effect. Do the first thing before considering the second.
 
 1. **Exclusions.** Nothing else is close. Every path not walked is time not
    spent and index not allocated. Find the big trees on your host that are not
-   installed software — build outputs, data directories, artefact caches,
-   scratch space — and exclude them explicitly:
+   installed software - build outputs, data directories, artefact caches,
+   scratch space - and exclude them explicitly:
 
    ```sh
    swinv --exclude './opt/build/**' --exclude './srv/data/**'
@@ -345,7 +345,7 @@ Ordered by effect. Do the first thing before considering the second.
 
    Patterns are relative to the scan root and **must** start with `./`, `*/` or
    `**/`; anything else is a usage error (exit 2). Check the defaults below
-   before adding your own — a lot is already covered.
+   before adding your own - a lot is already covered.
 
 2. **Mount hygiene.** Confirm the automatic non-local filesystem skipping is
    doing its job (it is on by default). Walking a mounted NFS share is the
@@ -370,7 +370,7 @@ excluding `/usr` (finding 2).
 
 ### Memory-constrained host
 
-Lowest peak RSS measured — 1085 MB, at nearly double the runtime:
+Lowest peak RSS measured - 1085 MB, at nearly double the runtime:
 
 ```sh
 swinv --max-memory 768MiB --parallelism 1 --out /var/lib/swinv
@@ -391,8 +391,8 @@ rather than as an additive win.
 
 ### Attributing a regression
 
-`--verbose` prints per-stage timings to stderr — symlink preflight, source
-construction, cataloging, conversion, and hashing when `--hash` is on — which is
+`--verbose` prints per-stage timings to stderr - symlink preflight, source
+construction, cataloging, conversion, and hashing when `--hash` is on - which is
 enough to tell a slow walk from a slow parse:
 
 ```sh
@@ -405,7 +405,7 @@ This is the largest single exclusion `swinv` makes, and it is a deliberate
 decision rather than an oversight.
 
 On the test host, `/home` alone was **508,687 files and 40 GB across 86
-`node_modules` trees** — more than the entire rest of the filesystem combined.
+`node_modules` trees** - more than the entire rest of the filesystem combined.
 Adding it to a full scan does not produce a comparable run; the configuration
 was attempted and abandoned rather than measured, so no wall-time figure is
 published for it here. Home directories are also per-user, high-churn, and
@@ -435,13 +435,13 @@ missing from the inventory.
 There is a subtlety worth understanding, because it is exactly the kind of thing
 that goes wrong quietly. **Snaps are squashfs loop mounts**, and `squashfs` is in
 the non-local filesystem skip list below. Left alone, the mount rule would have
-excluded every snap on the machine — silently defeating the decision to include
+excluded every snap on the machine - silently defeating the decision to include
 them, and making `--no-snap` a no-op that changed nothing.
 
 The resolution: `squashfs` stays in the non-local set, but mount points under
 `/snap/` and `/var/lib/snapd/snap/` are **carved out** of that rule unless
-`--no-snap` was passed. A squashfs image mounted anywhere else — an ISO, an
-appliance payload — is still excluded, which is correct: that is not installed
+`--no-snap` was passed. A squashfs image mounted anywhere else - an ISO, an
+appliance payload - is still excluded, which is correct: that is not installed
 software on this host.
 
 ## The default exclusions
@@ -482,7 +482,7 @@ installed software. Syft does not do this for you.
 
 Details that matter in practice:
 
-- The root mount `/` is never excluded, whatever its type — that would exclude
+- The root mount `/` is never excluded, whatever its type - that would exclude
   the entire scan.
 - Mount points are octal-escaped by the kernel (`\040` for a space) and are
   unescaped before use.
@@ -491,8 +491,8 @@ Details that matter in practice:
   above.
 - `--no-auto-exclude-mounts` disables the whole mechanism. On a host with an NFS
   mount, expect a scan measured in hours.
-- Whatever the outcome, the complete final exclusion list — defaults, mount
-  points, your own patterns, and any symlinks quarantined by the preflight — is
+- Whatever the outcome, the complete final exclusion list - defaults, mount
+  points, your own patterns, and any symlinks quarantined by the preflight - is
   written to `scan.excluded`, and the auto-excluded mount points are summarised
   in `scan.warnings`.
 
@@ -508,7 +508,7 @@ Do this. None of the numbers above describe your fleet.
 make bench
 ```
 
-That gives you a fast, stable regression check, not a production estimate — the
+That gives you a fast, stable regression check, not a production estimate - the
 fixture is deliberately tiny. For a real figure, time a real scan:
 
 ```sh

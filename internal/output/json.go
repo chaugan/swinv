@@ -1,5 +1,5 @@
 // Package output renders a model.Report into the on-disk formats swinv
-// supports — JSON, CSV, NDJSON, and CycloneDX 1.6 JSON — and provides the
+// supports - JSON, CSV, NDJSON, and CycloneDX 1.6 JSON - and provides the
 // atomic file-replacement primitives the writers are used with.
 //
 // Two rules govern everything in this package:

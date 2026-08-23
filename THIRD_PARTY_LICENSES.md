@@ -252,7 +252,7 @@ suppress a detected copyleft one.
 | `github.com/wagoodman/go-partybus` | MIT | [link](https://github.com/wagoodman/go-partybus/blob/8ccac152c651/LICENSE) |
 | `github.com/wagoodman/go-progress` | MIT | [link](https://github.com/wagoodman/go-progress/blob/10176f79b2c0/LICENSE) |
 | `github.com/xanzy/ssh-agent` | Apache-2.0 | [link](https://github.com/xanzy/ssh-agent/blob/v0.3.3/LICENSE) |
-| `github.com/xi2/xz` | Unknown | — |
+| `github.com/xi2/xz` | Unknown | - |
 | `github.com/xo/terminfo` | MIT | [link](https://github.com/xo/terminfo/blob/abceb7e1c41e/LICENSE) |
 | `github.com/zclconf/go-cty/cty` | MIT | [link](https://github.com/zclconf/go-cty/blob/v1.16.3/LICENSE) |
 | `go.opentelemetry.io/auto/sdk` | Apache-2.0 | [link](https://github.com/open-telemetry/opentelemetry-go-instrumentation/blob/sdk/v1.2.1/sdk/LICENSE) |
@@ -289,6 +289,6 @@ suppress a detected copyleft one.
 | `gopkg.in/yaml.v3` | MIT | [link](https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE) |
 | `howett.net/plist` | BSD-2-Clause | [link](https://github.com/DHowett/go-plist.git/blob/v1.0.1/LICENSE) |
 | `modernc.org/libc` | MIT | [link](https://gitlab.com/cznic/libc/blob/v1.74.1/LICENSE-3RD-PARTY.md) |
-| `modernc.org/mathutil` | Unknown | — |
+| `modernc.org/mathutil` | Unknown | - |
 | `modernc.org/memory` | BSD-3-Clause | [link](https://gitlab.com/cznic/memory/blob/v1.11.0/LICENSE-GO) |
 | `modernc.org/sqlite` | BSD-3-Clause | [link](https://gitlab.com/cznic/sqlite/blob/v1.55.0/LICENSE) |

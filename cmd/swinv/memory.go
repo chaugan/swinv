@@ -67,7 +67,7 @@ func parseSize(s string) (int64, error) {
 // It is a SOFT limit by design: if the genuinely-live data exceeds it, the
 // process still allocates rather than failing, because returning a truncated
 // inventory would be worse than using more memory. It therefore reduces peak
-// RSS but cannot guarantee a ceiling — say so to the caller rather than imply
+// RSS but cannot guarantee a ceiling - say so to the caller rather than imply
 // a hard bound.
 func applyMemoryLimit(bytes int64) {
 	debug.SetMemoryLimit(bytes)

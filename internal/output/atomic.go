@@ -36,7 +36,7 @@ func clearStaleTemp(target string) error {
 // The sequence is: create <path>.tmp-<pid> in the same directory, let fn write
 // to it, flush, fsync the file, set its mode to perm, close it, rename it onto
 // path, and finally fsync the containing directory so the rename itself
-// survives a power loss. On any failure — including a panic inside fn — the
+// survives a power loss. On any failure - including a panic inside fn - the
 // temporary file is removed and path is left exactly as it was.
 //
 // perm is applied explicitly rather than left to the process umask, so a

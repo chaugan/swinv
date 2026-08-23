@@ -253,7 +253,7 @@ jobs:
             ## Windows
 
             `swinv-${{ steps.version.outputs.version }}-windows-amd64.exe` is a
-            standalone binary — no installer, nothing to register.
+            standalone binary - no installer, nothing to register.
 
             ```powershell
             .\swinv.exe --out C:\inventory

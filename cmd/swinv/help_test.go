@@ -78,9 +78,13 @@ func TestHelpFitsATerminal(t *testing.T) {
 
 	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
 	for i, line := range lines {
-		// Runes, not bytes: a terminal column holds a character. The em
-		// dashes in the header are three bytes each, so measuring in bytes
-		// fails a line that is exactly at the limit.
+		// Runes, not bytes: a terminal column holds a character, and a
+		// multi-byte one still occupies exactly one. The help page is
+		// currently all ASCII, so this is the cheap half of the guard --
+		// TestWrapTextCountsCharactersNotBytes is the half that actually
+		// exercises it, and it keeps an em dash on purpose for that reason.
+		// Measuring in bytes failed a line that was exactly at the limit,
+		// on Windows CI only, back when the header carried em dashes.
 		if n := utf8.RuneCountInString(line); n > helpWidth {
 			t.Errorf("line %d is %d characters, over the %d limit:\n  %s",
 				i+1, n, helpWidth, line)

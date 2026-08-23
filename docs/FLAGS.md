@@ -9,7 +9,7 @@ Part of the [swinv](../README.md) documentation.
 swinv [flags]
 ```
 
-`swinv` takes **no positional arguments** — passing one is a usage error. It
+`swinv` takes **no positional arguments** - passing one is a usage error. It
 scans the machine it runs on, enumerates installed software, and writes the
 result to local files. Nothing is sent over the network.
 
@@ -49,7 +49,7 @@ arbitrary tree (a fixture, a mounted image) whose layout `swinv` cannot assume.
 Only `--exclude` patterns you supply apply there. Host FQDN lookup is also
 skipped for a non-`/` root, so scanning a fixture stays hermetic.
 
-`--require-host-id` exits **3**, not 2 — it is a fatal runtime condition, not a
+`--require-host-id` exits **3**, not 2 - it is a fatal runtime condition, not a
 usage problem.
 
 ### Output
@@ -57,7 +57,7 @@ usage problem.
 | Flag | Default | Meaning |
 |---|---|---|
 | `--out DIR` | `/var/lib/swinv` | Output directory; created `0755` if missing, files written `0644` |
-| `--output-mode MODE` | `timestamped` | `timestamped`, `dated`, or `overwrite` — see below |
+| `--output-mode MODE` | `timestamped` | `timestamped`, `dated`, or `overwrite` - see below |
 | `--name TEMPLATE` | *(from `--output-mode`)* | Output basename; `{hostname}`, `{machine_id}`, `{date}`, `{datetime}` |
 | `--format LIST` | `json,csv` | Comma-separated: `json`, `csv`, `ndjson`, `cyclonedx-json` |
 | `--stdout` | `false` | Write to stdout instead of files; requires exactly one `--format` |
@@ -75,8 +75,8 @@ Format names map to file extensions as follows:
 Names are matched case-insensitively and surrounding whitespace is ignored;
 duplicates in the list are collapsed. An unknown name is a usage error.
 
-Every file is written atomically — temp file in the same directory, `fsync`,
-`rename`, `fsync` of the directory — so a collector can never read a
+Every file is written atomically - temp file in the same directory, `fsync`,
+`rename`, `fsync` of the directory - so a collector can never read a
 half-written inventory. The `-latest` symlinks are replaced atomically too, and
 a symlink that would collide with the output file itself is skipped rather than
 overwriting it. A failure to update a symlink is a warning on stderr, not a
@@ -89,8 +89,8 @@ failed run: it is not worth discarding a good inventory over.
 | `--exclude GLOB` | *(none)* | Additional exclusion pattern; repeatable, appended to the defaults |
 | `--no-auto-exclude-mounts` | `false` | Do not auto-exclude non-local filesystems |
 
-The final exclusion list — defaults, mount-derived exclusions, your patterns,
-and any symlinks quarantined by the preflight — is always recorded in
+The final exclusion list - defaults, mount-derived exclusions, your patterns,
+and any symlinks quarantined by the preflight - is always recorded in
 `scan.excluded`.
 
 ### Services
@@ -105,22 +105,22 @@ Both platforms. On Linux the sockets come from `/proc`; on Windows from
 `iphlpapi`, which returns the socket tables with an owning pid already
 attached.
 
-Services are collected by default because the question they answer — which of
+Services are collected by default because the question they answer - which of
 the installed software is actually serving, and which serving software nothing
-installed accounts for — is not answerable from a package list. The cost is
+installed accounts for - is not answerable from a package list. The cost is
 milliseconds against a scan that costs minutes.
 
 Two reasons to turn something off:
 
 - **`--no-service-command`** drops the `command` field and keeps everything
-  else. Command lines are where secrets end up — a `--password` on a daemon's
-  ExecStart, a connection string with credentials in it — and an inventory file
+  else. Command lines are where secrets end up - a `--password` on a daemon's
+  ExecStart, a connection string with credentials in it - and an inventory file
   is usually copied somewhere with a different audience. See
   [SECURITY.md](../SECURITY.md).
 - **`--no-services`** skips the section entirely, including reading
   `/proc/<pid>/fd`.
 - **`--no-containers`** keeps the host services and the exposure list but stops
-  swinv identifying containers at all — including its one conversation with a
+  swinv identifying containers at all - including its one conversation with a
   daemon, the local container runtime. The cost is the identity of everything
   behind a published port, and of every stopped container: the answer comes
   from the container's own package database, reached either through
@@ -152,7 +152,7 @@ See [docs/SERVER-ROLES.md](SERVER-ROLES.md) for the design, and
 
 NDJSON carries one component per line. `exposure[]` and `containers[]` are in
 the JSON document and the CSV sidecars, but not in the one output shape built
-for streaming — so a forwarder tailing the `.ndjson` sees neither.
+for streaming - so a forwarder tailing the `.ndjson` sees neither.
 
 ```sh
 swinv --out /var/lib/swinv --format ndjson --ndjson-include exposure,containers
@@ -163,13 +163,13 @@ extra record carries a `record_type` an older consumer can skip; a line without
 one is a component.
 
 `exposure` is denormalised to one record per (port, package), so a finding
-joins on the package without unpacking an array — and a port with nothing
+joins on the package without unpacking an array - and a port with nothing
 attributed still produces a record, because that is a gap in what can be seen
 rather than a port that is safe. `containers` includes stopped ones, whose
 vulnerabilities are latent rather than absent.
 
-Both are small — on a 17-container host, 46 exposure and 16 container records
-against 2,715 components — so they are emitted even on an unchanged
+Both are small - on a 17-container host, 46 exposure and 16 container records
+against 2,715 components - so they are emitted even on an unchanged
 `--heartbeat` scan. What is listening changes while installed software does
 not.
 
@@ -178,8 +178,8 @@ See [docs/OUTPUT.md](OUTPUT.md#the-heartbeat) for the record shapes.
 ### `--heartbeat`
 
 Every scan restates the whole inventory. That is the right shape for
-correctness — a package that disappears is genuinely gone rather than merely
-unmentioned — and the wrong shape for volume: 5,000 hosts averaging 14,000
+correctness - a package that disappears is genuinely gone rather than merely
+unmentioned - and the wrong shape for volume: 5,000 hosts averaging 14,000
 components scanned hourly is over a billion NDJSON records a day, nearly all
 identical to the day before.
 
@@ -200,7 +200,7 @@ that decides whether a vulnerability is fixed or merely unreported.
 
 A full list is also sent when there is no previous record for the host, when
 the state file cannot be read, on `--force-full`, and whenever
-`--full-interval` has elapsed — so a digest collision or a hand-edited state
+`--full-interval` has elapsed - so a digest collision or a hand-edited state
 file cannot hide a change indefinitely. Any doubt resolves toward sending too
 much.
 
@@ -220,22 +220,22 @@ digest is built from.
 | `--debug-stacks-after DUR` | `0` (never) | If the scan is still running after this long, write every goroutine stack to a file and carry on |
 | `--fast` | `false` | Scan at normal scheduling priority and full parallelism |
 | `--max-memory SIZE` | *(unlimited)* | Soft memory limit, e.g. `1536MiB` |
-| `--parallelism N` | `0` | Cataloger parallelism; `0` chooses automatically — see below |
+| `--parallelism N` | `0` | Cataloger parallelism; `0` chooses automatically - see below |
 | `--timeout DURATION` | `30m` | Whole-run deadline (Go duration syntax: `90s`, `10m`, `2h`) |
 
 `--parallelism` must not be negative and `--timeout` must be positive;
 either is a usage error.
 
 `--timeout` is enforced two ways, and this matters on Linux as much as on
-Windows. Syft's directory indexer takes no context parameter at all — neither
-`NewFromDirectory` nor `buildIndex` accepts one — so the filesystem walk cannot
+Windows. Syft's directory indexer takes no context parameter at all - neither
+`NewFromDirectory` nor `buildIndex` accepts one - so the filesystem walk cannot
 be cancelled on any platform. Measured on Linux: a `--timeout 3s` scan of a
 300,000-file tree took **10.8 seconds** to exit, because the walk had to finish
 first. The overrun grows with the tree, and on a network filesystem or a cold
 disk it can be far worse. Normally the deadline cancels the scan
 cooperatively and swinv exits 4. But Syft indexes the filesystem with
 `filepath.Walk`, which takes no context, so a scan wedged in indexing never
-reaches a cancellation check — a `--timeout 5m` run on a Windows host was
+reaches a cancellation check - a `--timeout 5m` run on a Windows host was
 observed still going at 5m30s. A watchdog therefore terminates the process if
 the deadline is exceeded by more than ten seconds. Reports are written by
 staging to a temp file and renaming, so a terminated run may leave a `.tmp-*`
@@ -280,11 +280,11 @@ needs the one line naming it, not sixty lines of everything else.
 
 The help page lists only flags that do something on the platform it was built
 for. The others stay registered, so `swinv --usn-probe` on Linux answers "that
-only works on Windows" rather than "flag provided but not defined" — a runbook
+only works on Windows" rather than "flag provided but not defined" - a runbook
 pasted onto the wrong platform gets an explanation instead of a parse error.
 
 On Windows, the first `--full-scan` on a machine is much slower than the ones
-after it — measured at 14m21s and then 1 second, for the same command doing
+after it - measured at 14m21s and then 1 second, for the same command doing
 identical work. Antivirus scans each executable the first time it is opened and
 caches the result, so a scheduled task pays the cost once. See
 [docs/WINDOWS.md](WINDOWS.md#measured-the-first---full-scan-is-slow-and-the-rest-are-not).
@@ -309,7 +309,7 @@ swinv: wrote goroutine dump to /var/lib/swinv/swinv-stacks-20260820T084719Z.txt 
 
 The scan is not interrupted; the dump is taken from alongside it, while the
 stacks still show what the scan is doing. Waiting for the run to fail and
-dumping afterwards would be too late — by then the deadline has unwound the
+dumping afterwards would be too late - by then the deadline has unwound the
 worker goroutines and the frame that explains the stall is gone. If the output
 directory is not writable the dump falls back to the temp directory.
 
@@ -318,7 +318,7 @@ directory is not writable the dump falls back to the temp directory.
 An inventory collector is background maintenance. It runs unattended, on a
 timer, on machines doing real work, and nobody is waiting on its result. A scan
 that finishes sooner but makes an interactive session stutter, or starves a
-database of disk, has made a bad trade — so by default swinv steps out of the
+database of disk, has made a bad trade - so by default swinv steps out of the
 way of everything else on the machine:
 
 | | Default | `--fast` |
@@ -332,7 +332,7 @@ I/O queue the process presents to the kernel, and a shallow queue is most of
 what keeps a scan from making the rest of the machine feel slow.
 
 The cost is real. Scanning `/usr` on an 8-core host took **41.6 s** by default
-and **30.6 s** with `--fast` — about 36% slower for the politeness. Use
+and **30.6 s** with `--fast` - about 36% slower for the politeness. Use
 `--fast` when a person is waiting for the answer.
 
 An explicit `--parallelism N` always wins over both modes, including a value
@@ -353,11 +353,11 @@ not currently mitigate on either platform.
 |---|---|---|
 | `--quiet` | `false` | Suppress stderr status output |
 | `--verbose` | `false` | Per-stage timing to stderr |
-| `--version` | — | Print version, commit, Syft version, OS/arch; exit 0 |
+| `--version` | - | Print version, commit, Syft version, OS/arch; exit 0 |
 
 `--quiet` and `--verbose` are mutually exclusive. `--verbose` breaks the run
-down by stage — symlink preflight, source construction, cataloging, conversion
-— so a regression is attributable:
+down by stage - symlink preflight, source construction, cataloging, conversion
+- so a regression is attributable:
 
 ```console
 $ swinv --root testdata/rootfs --out /tmp/inv --verbose
@@ -378,13 +378,13 @@ swinv: found 7 components in 1663ms
 
 | Mode | Template | Files across repeated runs |
 |---|---|---|
-| `dated` | `{hostname}-{date}` | `web-01-20240309.json` — one file per day; a second run the same day replaces it |
-| `overwrite` | `{hostname}` | `web-01.json` — one fixed file, replaced atomically every run |
-| `timestamped` | `{hostname}-{datetime}` | `web-01-20240309T140506.000Z.json` — a brand-new file every run, kept forever |
+| `dated` | `{hostname}-{date}` | `web-01-20240309.json` - one file per day; a second run the same day replaces it |
+| `overwrite` | `{hostname}` | `web-01.json` - one fixed file, replaced atomically every run |
+| `timestamped` | `{hostname}-{datetime}` | `web-01-20240309T140506.000Z.json` - a brand-new file every run, kept forever |
 
 The default changed from `dated` to `timestamped`. A report records what was
 installed at a moment, and under `dated` a second run on the same day silently
-replaced the first — so an operator investigating a change had one data point
+replaced the first - so an operator investigating a change had one data point
 where they expected two. Keeping every run costs a file per run; losing one
 costs the answer.
 
@@ -396,7 +396,7 @@ still there.
 One file is produced per requested `--format`, sharing the basename and
 differing only in extension. With `--latest-symlink` (on by default) a
 `{hostname}-latest.{ext}` symlink is pointed at the newest file of each format,
-which is what makes `timestamped` mode practical to consume — and what gives
+which is what makes `timestamped` mode practical to consume - and what gives
 `--since` a stable path to read.
 
 Placeholders available in `--name`:
@@ -424,12 +424,12 @@ convention:
 ```sh
 swinv --exclude './opt/build/**'     # a tree under the scan root
 swinv --exclude '**/*.iso'           # a file at any depth
-swinv --exclude '/opt/build/**'      # WRONG — absolute
+swinv --exclude '/opt/build/**'      # WRONG - absolute
 ```
 
 An absolute pattern matches nothing at all, and anything else is rejected
 outright when the source is constructed. `swinv` therefore validates every
-pattern — its own defaults included — before scanning, and exits **2** with a
+pattern - its own defaults included - before scanning, and exits **2** with a
 message that teaches the rule rather than letting Syft fail obscurely:
 
 ```console
@@ -445,7 +445,7 @@ them.
 One caveat: the symlink preflight (which stops a single unreadable symlink from
 aborting the entire scan) honours only `./`-anchored patterns. `*/` and `**/`
 patterns are ignored there, so those paths are still lstat-ed during the
-preflight walk. That is the safe direction to be wrong in — over-skipping would
+preflight walk. That is the safe direction to be wrong in - over-skipping would
 let through exactly the symlink the pass exists to catch, and extra lstat calls
 are cheap where a lost scan is not.
 
@@ -460,12 +460,12 @@ workers.
 **Files backing more than one component are deliberately not hashed.** Most deb
 packages cite `/var/lib/dpkg/status` as their evidence. Digesting it would give
 every package on the machine an identical hash *and* make all of them appear to
-have changed whenever any single package changed — precisely backwards for
+have changed whenever any single package changed - precisely backwards for
 change detection. Only a file that uniquely backs one component gets a digest;
 the number skipped is reported in `scan.warnings`.
 
 Also skipped, silently: files over **512 MiB**, anything that is not a regular
-file, and anything unreadable. A missing digest is never an error — a scan must
+file, and anything unreadable. A missing digest is never an error - a scan must
 not fail because one file vanished mid-run.
 
 The `sha256` CSV column exists whether or not `--hash` was passed, so the column
@@ -475,7 +475,7 @@ shape never varies with flags.
 
 `--since PATH` reads a previous `swinv` JSON report and adds a `delta` block
 listing `added`, `removed`, and `changed` components. Components are matched on
-`(name, type)` — deliberately **not** on version — so an upgraded package reads
+`(name, type)` - deliberately **not** on version - so an upgraded package reads
 as one `changed` entry rather than a removal plus an unrelated addition.
 
 By default the **full inventory is still written** alongside the delta, so the
@@ -486,7 +486,7 @@ without `--since` is a usage error.
 
 Any schema version is accepted as a baseline: the delta only needs the
 component list, and refusing an older report would break the flag exactly when
-it is most wanted — after an upgrade.
+it is most wanted - after an upgrade.
 
 **A `--delta-only` report is marked (`delta.delta_only`) and is refused as a
 future baseline**, exit 2. Diffing against a diff would report every unchanged
@@ -503,7 +503,7 @@ A baseline that is unreadable, is not JSON, or has no `schema_version` is also
 a usage error (exit 2).
 
 Comparing against **another machine's** report is permitted but recorded in
-`scan.warnings` — otherwise it silently looks as though the entire system was
+`scan.warnings` - otherwise it silently looks as though the entire system was
 replaced.
 
 ## `--max-memory`
@@ -513,7 +513,7 @@ Sets Go's **soft** memory limit for the process. Accepted forms:
 | Form | Meaning |
 |---|---|
 | `512MiB`, `2GiB`, `1TiB` | IEC units |
-| `512MB`, `2GB` | Same 1024-based multipliers — what people actually mean when sizing a process |
+| `512MB`, `2GB` | Same 1024-based multipliers - what people actually mean when sizing a process |
 | `512M`, `2G` | Bare-letter shorthand, likewise 1024-based |
 | `536870912` | A bare number is bytes |
 
@@ -523,7 +523,7 @@ value must be positive; anything else is a usage error.
 
 Soft is the operative word. As the limit is approached the garbage collector
 works proportionally harder, trading CPU for resident memory. If the genuinely
-live data exceeds the limit, `swinv` still allocates rather than failing —
+live data exceeds the limit, `swinv` still allocates rather than failing -
 a truncated inventory would be worse than a larger process. It lowers peak RSS;
 it cannot guarantee a ceiling.
 
@@ -556,7 +556,7 @@ in [docs/PERFORMANCE.md](PERFORMANCE.md).
 ## `--stdout`
 
 Writes the report to stdout instead of to files. It **requires exactly one
-`--format`** — the default `json,csv` will be rejected — because two documents
+`--format`** - the default `json,csv` will be rejected - because two documents
 interleaved on one stream are not parseable by anything.
 
 ```console
@@ -564,7 +564,7 @@ $ swinv --stdout
 swinv: --stdout requires exactly one --format, got 2
 ```
 
-All human-readable output — status lines, warnings, errors — goes to **stderr**
+All human-readable output - status lines, warnings, errors - goes to **stderr**
 in every mode, so stdout carries nothing but the report and stays safe to pipe.
 `--out`, `--latest-symlink`, and the `--output-mode` naming are all irrelevant
 under `--stdout`; `--name` is rejected outright.
@@ -596,7 +596,7 @@ Running as a non-root user is fully supported and is **not** an error. Such a
 run misses root-only paths and the DMI serial and UUID; `scan.ran_as_root` is
 `false`, a warning is recorded, and the exit code is unaffected.
 
-`swinv -h` prints usage to stderr and exits 0 — asking for help is not an error. `swinv --version` prints to
+`swinv -h` prints usage to stderr and exits 0 - asking for help is not an error. `swinv --version` prints to
 stdout and exits 0.
 
 ## Environment
@@ -615,7 +615,7 @@ One-shot inventory to a temp directory, JSON only, nothing left behind:
 swinv --out /tmp/inv --format json --output-mode overwrite
 ```
 
-OS packages only, for a smaller file (not a faster scan — see
+OS packages only, for a smaller file (not a faster scan - see
 [docs/PERFORMANCE.md](PERFORMANCE.md)):
 
 ```sh
@@ -644,7 +644,7 @@ swinv --out /var/lib/swinv \
       --since "/var/lib/swinv/*-latest.json"
 ```
 
-Memory-constrained host — the lowest peak RSS measured, at roughly twice the
+Memory-constrained host - the lowest peak RSS measured, at roughly twice the
 wall time:
 
 ```sh
@@ -658,7 +658,7 @@ content digests for change detection:
 swinv --include-home --exclude './opt/build/**' --hash --out /var/lib/swinv
 ```
 
-What is exposed at the network edge, with the software behind each port —
+What is exposed at the network edge, with the software behind each port -
 including software running inside containers:
 
 ```sh
@@ -686,7 +686,7 @@ On a Kubernetes node, or a host with `userland-proxy` disabled, that list is
 the difference between "nothing is exposed" and "the exposure could not be
 observed".
 
-What is listening, and what installed it — the reason to run this as root:
+What is listening, and what installed it - the reason to run this as root:
 
 ```sh
 sudo swinv --out /var/lib/swinv --format json,csv
@@ -709,8 +709,8 @@ lines that carry secrets:
 swinv --no-service-command --out /var/lib/swinv --perm 0640
 ```
 
-Everything a streaming consumer needs — components, what is listening, and the
-containers — in one file:
+Everything a streaming consumer needs - components, what is listening, and the
+containers - in one file:
 
 ```sh
 swinv --out /var/lib/swinv --format ndjson --ndjson-include all

@@ -10,7 +10,7 @@
 // The contract for the whole package is: a missing, empty, or unreadable
 // source yields an empty field. Collect never returns an error, never logs,
 // and never panics. Unreadable root-only DMI values (the common case when
-// swinv runs as an unprivileged user) are silently left empty — they are not
+// swinv runs as an unprivileged user) are silently left empty - they are not
 // worth a warning because they are expected.
 package hostfacts
 
@@ -67,11 +67,11 @@ const (
 //
 // It NEVER returns an error and never logs: an unreadable or missing source
 // simply yields an empty field. fsRoot is the filesystem root to read facts
-// from — "/" in normal operation, or a fixture tree in tests. An empty fsRoot
+// from - "/" in normal operation, or a fixture tree in tests. An empty fsRoot
 // is treated as "/".
 //
-// The two facts that cannot be obtained from a fixture tree — the DNS lookup
-// behind Host.FQDN and the interface enumeration behind IPv4/IPv6/MACs — are
+// The two facts that cannot be obtained from a fixture tree - the DNS lookup
+// behind Host.FQDN and the interface enumeration behind IPv4/IPv6/MACs - are
 // skipped entirely when fsRoot is not "/", which keeps tests hermetic and
 // offline.
 //
@@ -88,8 +88,8 @@ type options struct {
 // WithoutFQDN suppresses the reverse-DNS lookup used to fill Host.FQDN.
 //
 // That lookup is the only thing in swinv that talks to the network at all. It
-// sends no inventory data — just the ordinary name resolution any program does
-// — but it does reveal to the configured resolver that this host looked itself
+// sends no inventory data - just the ordinary name resolution any program does
+// - but it does reveal to the configured resolver that this host looked itself
 // up. Callers that need "nothing leaves the machine" to be literally true pass
 // this and lose only the FQDN field.
 func WithoutFQDN() Option {
@@ -367,7 +367,7 @@ var cgroupHints = []struct{ needle, name string }{
 // /sys/hypervisor/type.
 //
 // Containers are checked first: when swinv runs inside a container on a virtual
-// machine, the container is the more informative — and innermost — answer.
+// machine, the container is the more informative - and innermost - answer.
 // An empty result is a perfectly acceptable outcome and means "bare metal, or
 // could not tell".
 func detectVirtualization(root, productName, sysVendor string) string {
@@ -429,8 +429,8 @@ func detectContainer(root string) string {
 // lookupFQDN makes a bounded, best-effort attempt to find the machine's fully
 // qualified domain name. It first asks for the canonical name of the short
 // hostname and then falls back to a reverse lookup of the addresses that
-// hostname resolves to. Any failure — including a cancelled ctx or no DNS at
-// all — yields "" and is never fatal.
+// hostname resolves to. Any failure - including a cancelled ctx or no DNS at
+// all - yields "" and is never fatal.
 func lookupFQDN(ctx context.Context, host string) string {
 	if host == "" || host == "localhost" {
 		return ""
@@ -557,13 +557,13 @@ func cleanDMI(v string) string {
 }
 
 // readFile reads rel (a slash-separated path relative to root) and returns its
-// contents with surrounding whitespace trimmed. Every failure mode — the file
+// contents with surrounding whitespace trimmed. Every failure mode - the file
 // is missing, is a directory, or cannot be read because the caller is not root
-// — yields "" with no error and no log line.
+// - yields "" with no error and no log line.
 func readFile(root, rel string) string {
 	// O_NONBLOCK matters: every source this package reads is a small regular
-	// file, but if one of those paths is a FIFO — whether by accident or
-	// because someone put it there — a plain Open would block until a writer
+	// file, but if one of those paths is a FIFO - whether by accident or
+	// because someone put it there - a plain Open would block until a writer
 	// appeared and hang the whole inventory run on a cosmetic field.
 	f, err := os.OpenFile(filepath.Join(root, filepath.FromSlash(rel)),
 		os.O_RDONLY|syscall.O_NONBLOCK, 0)

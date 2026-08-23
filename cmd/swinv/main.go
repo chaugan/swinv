@@ -436,7 +436,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 //
 // It accepts any schema version: the delta only needs the component list, and
 // refusing to compare against an older report would make the flag useless
-// exactly when it is most wanted — after an upgrade.
+// exactly when it is most wanted - after an upgrade.
 func loadBaseline(path string) (*model.Report, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {

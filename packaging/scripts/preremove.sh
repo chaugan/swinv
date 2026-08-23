@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs as dpkg prerm ("remove"/"upgrade"/...) and rpm %preun (0 = remove, 1 = upgrade).
-# Stop and disable the timer only on a real removal, never on an upgrade —
+# Stop and disable the timer only on a real removal, never on an upgrade -
 # disabling on upgrade would silently switch off a working daily inventory.
 set -e
 

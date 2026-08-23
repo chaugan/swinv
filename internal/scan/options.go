@@ -46,7 +46,7 @@ var defaultExcludeDirs = []string{
 //
 // They are excluded by default because they dominate everything else: on the
 // development host /home alone held 508,687 files and 40 GB across 86
-// node_modules trees — more than the rest of the filesystem combined. With them
+// node_modules trees - more than the rest of the filesystem combined. With them
 // excluded a full scan of that host takes ~5 minutes; with them included it does
 // not finish in a comparable time. They are also per-user, high-churn, and
 // privacy-sensitive, none of which is true of the machine's own software.
@@ -95,7 +95,7 @@ const (
 // The host-shared group is the one that bites hardest, because the software it
 // exposes looks completely genuine. On a Fedora guest under WSL2, /usr/lib/wsl
 // is a 9p mount carrying the Windows host's drivers; before 9p was listed here
-// it contributed 477 of 1,003 components — 48% of the inventory — as ASUS,
+// it contributed 477 of 1,003 components - 48% of the inventory - as ASUS,
 // Intel and NVIDIA binaries and .NET assemblies reported as installed Linux
 // software. Nothing in the report marked them as foreign.
 //
@@ -262,7 +262,7 @@ func BuildExcludes(o ExcludeOptions) (patterns []string, warnings []string, err 
 // mounted image, a chroot, or the host from inside a container with
 // "-v /:/host:ro --root /host". Without it, none of the layout exclusions
 // applied to such a scan, so swinv would walk /host/proc, /host/sys and every
-// home directory on the machine. That is not a hypothetical — it is what
+// home directory on the machine. That is not a hypothetical - it is what
 // happened the first time the documented container command was run.
 func LooksLikeRootFilesystem(root string) bool {
 	root = normalizeRoot(root)
@@ -279,7 +279,7 @@ func LooksLikeRootFilesystem(root string) bool {
 
 // DefaultExcludes returns the filesystem-layout exclusions for the given scan
 // root. They describe the layout of a running Linux system, so they apply to
-// "/" and to any other tree that is itself a root filesystem — a mounted
+// "/" and to any other tree that is itself a root filesystem - a mounted
 // image, a chroot, the host bind-mounted into a container. An arbitrary
 // directory has no such layout to assume, and gets nothing.
 func DefaultExcludes(root string) []string {
@@ -464,7 +464,7 @@ func mountExcludes(root, mountinfoPath string, noSnap bool) (patterns, excluded,
 
 	for _, mountPoint := range ParseMountinfo(f) {
 		// Snaps are squashfs loop mounts, so the non-local filesystem rule
-		// would silently exclude every snap — defeating the deliberate
+		// would silently exclude every snap - defeating the deliberate
 		// decision to treat snaps as installed software and making --no-snap
 		// a no-op. Carve them out unless the operator actually asked for
 		// --no-snap, which adds ./snap/** through the normal path.

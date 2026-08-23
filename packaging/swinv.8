@@ -1,4 +1,4 @@
-.\" Manual page for swinv(8) — local software inventory collector.
+.\" Manual page for swinv(8) - local software inventory collector.
 .\" Rendered with: man ./packaging/swinv.8
 .Dd August 19, 2026
 .Dt SWINV 8
@@ -50,8 +50,8 @@
 .Sh DESCRIPTION
 .Nm
 scans the machine it runs on, enumerates every piece of installed software it
-can find — operating-system packages, language-ecosystem packages, and loose
-binaries that no package manager ever installed — and writes the result to
+can find - operating-system packages, language-ecosystem packages, and loose
+binaries that no package manager ever installed - and writes the result to
 local files.
 .Pp
 There is no server, no agent, no database, and no network transmission.
@@ -230,7 +230,7 @@ allocates rather than failing, because a truncated inventory would be worse
 than a larger one. It reduces peak memory; it does not guarantee a ceiling.
 .It Fl -skip-nested-rootfs
 Drop components whose package-database evidence comes from a second root
-filesystem stored inside the one being scanned — an extracted image, a
+filesystem stored inside the one being scanned - an extracted image, a
 container rootfs, a chroot, or a test fixture.
 Such packages are otherwise reported as installed and carry this host's
 distribution label.
@@ -296,7 +296,7 @@ NDJSON is one component per line, so
 .Ql exposure
 and
 .Ql containers
-\(em which the JSON document and the CSV sidecars both carry \(em are missing
+- which the JSON document and the CSV sidecars both carry - are missing
 from the one output shape built for streaming. Each extra record carries a
 .Ql record_type
 an older consumer can skip; a line without one is a component. Off by default
@@ -312,8 +312,8 @@ includes stopped ones, whose vulnerabilities are latent rather than absent.
 Emit a one-line digest of the inventory into the NDJSON stream on every scan,
 and the component records only when that digest changes.
 .Pp
-Every scan otherwise restates the whole inventory, which is correct \(em a
-package that disappears is genuinely gone rather than merely unmentioned \(em
+Every scan otherwise restates the whole inventory, which is correct - a
+package that disappears is genuinely gone rather than merely unmentioned -
 and expensive: five thousand hosts averaging fourteen thousand components,
 scanned hourly, is over a billion records a day, nearly all identical to the
 day before.
@@ -348,7 +348,7 @@ syntax. Empty means the default selection, which is the
 .Ql installed
 and
 .Ql directory
-tags — already correct for a live filesystem, and already covering loose
+tags - already correct for a live filesystem, and already covering loose
 binaries. Example:
 .Ql --catalogers os
 for operating-system packages only.
@@ -380,7 +380,7 @@ On Linux
 reads each container's own package database through
 .Pa /proc/<pid>/root
 to name the software behind a published port, which is the only identity a
-vulnerability matcher can use for a containerised service \(em an image
+vulnerability matcher can use for a containerised service - an image
 reference is not one.
 .Pp
 On Windows a container is a Linux process inside a virtual machine that no
@@ -401,8 +401,8 @@ Default: containers are inspected.
 Omit each service's command line from the report, keeping everything else.
 A command line is often the only identification available for an interpreted
 daemon, where the executable names the runtime and the application is named in
-the arguments. It is also where secrets end up — a password on a daemon's
-ExecStart, a connection string with credentials in it — and an inventory file
+the arguments. It is also where secrets end up - a password on a daemon's
+ExecStart, a connection string with credentials in it - and an inventory file
 is usually copied somewhere with a different audience.
 Default: command lines are recorded.
 .It Fl -usn-probe
@@ -477,7 +477,7 @@ is unreadable. Off by default, since every host fact is optional.
 .It Fl -quiet
 Suppress status output on standard error.
 .It Fl -verbose
-Print per-stage timings — source construction, cataloging, writing — to
+Print per-stage timings - source construction, cataloging, writing - to
 standard error, so a performance regression is attributable.
 .It Fl -version
 Print the
@@ -539,7 +539,7 @@ Read only for
 whose absence would otherwise make a host publishing many ports look like one
 publishing none.
 .It Pa /sys/class/dmi/id
-Hardware vendor, product name, and — for root only — serial and UUID.
+Hardware vendor, product name, and - for root only - serial and UUID.
 .El
 .Sh EXAMPLES
 Scan the running system and write JSON and CSV to the default directory:
@@ -577,11 +577,11 @@ jq -r '.exposure[] | select(.bind_scope != "loopback")
 reads no firewall, no NAT table and no security group, so
 .Ql bind_scope
 describes the bind and never reachability. A port published by a netfilter
-rule with no process behind it \(em Kubernetes
+rule with no process behind it - Kubernetes
 .Ql NodePort ,
 Docker with
 .Ql userland-proxy
-disabled, rootful Podman's default netavark \(em has no listening socket and
+disabled, rootful Podman's default netavark - has no listening socket and
 is invisible here. Every report names what it could not see in
 .Ql scan.exposure_blind_spots ,
 and a short exposure list means nothing until that has been read.

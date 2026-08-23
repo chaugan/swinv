@@ -1,4 +1,4 @@
-# Server-role detection — design
+# Server-role detection - design
 
 > **Status: phase 1 implemented.** The socket → process → unit spine is built
 > and runs against real `/proc`; the `services[]` schema, IIS, and everything
@@ -24,9 +24,9 @@ whether anything is behind it, and nothing in a package database says which.
 The gap runs in both directions, and the second direction is the interesting
 one:
 
-- Software installed but not running — most of a typical inventory. Real, but
+- Software installed but not running - most of a typical inventory. Real, but
   not reachable.
-- **Software running but not installed** — an application server unpacked into
+- **Software running but not installed** - an application server unpacked into
   `/opt`, a vendor binary in `/usr/local`, a container image with its own
   userspace. Package-based inventory cannot see these at all, and they are
   disproportionately the things nobody is patching.
@@ -40,7 +40,7 @@ vulnerability feed to consult at scan time. Both constraints point the same way:
 collect locally, decide later.
 
 That has a consequence for the schema. Reachability context cannot be
-reconstructed afterwards from a package list — a connected machine holding the
+reconstructed afterwards from a package list - a connected machine holding the
 report has no way to learn that `openssl` was loaded into a process listening on
 `:443`. If it is not captured at scan time it is gone. Prioritisation data must
 therefore travel *inside* the report, alongside the identity data that CVE
@@ -57,7 +57,7 @@ untrustworthy in ways that are hard to see. The proposal:
 | UDP bound socket | yes, marked | No listen state exists; a bound socket is the best available signal |
 | Unix domain socket | yes, marked | Real services (databases, `php-fpm`) are reached this way and nothing else records them |
 | systemd socket activation | yes, marked | `systemd` holds the socket and the service may not be running; that is a distinct and useful state |
-| Kernel-mode listener (`HTTP.sys`) | yes, special-cased | See the IIS section — there is no user process to attribute |
+| Kernel-mode listener (`HTTP.sys`) | yes, special-cased | See the IIS section - there is no user process to attribute |
 | Outbound connections | no | Not serving |
 | Firewall-blocked listeners | yes, unmarked | swinv does not read firewall state and must not imply it has |
 
@@ -67,7 +67,7 @@ plain "listening" claim.
 ## The spine, on Linux
 
 The pipeline is socket → PID → executable → component. It needs no external
-tools — no `ss`, `netstat`, `lsof`, no D-Bus — which matters for minimal
+tools - no `ss`, `netstat`, `lsof`, no D-Bus - which matters for minimal
 containers and hardened hosts where none of those exist.
 
 **Measured on a live host**, each step:
@@ -92,7 +92,7 @@ thing you hit.
 ### Attribution: joining an executable to a component
 
 When a package owns the executable's path, the service attaches to an existing
-component and inherits its PURL, version and CPEs — the identity CVE matching
+component and inherits its PURL, version and CPEs - the identity CVE matching
 needs, for free. When nothing owns the path, that is not a failure. That is the
 finding: serving software outside package management.
 
@@ -101,7 +101,7 @@ the executable against each component's `locations`, which `swinv` already
 records. Locations are a component's *evidence* files, not its contents: a deb
 records `/var/lib/dpkg/status` and its own `.list`, never `/usr/sbin/sshd`. On
 the first end-to-end run, all 30 attributable services on a normal Ubuntu server
-came back as unmanaged software — `sshd`, `postgres`, `chronyd`, `systemd`,
+came back as unmanaged software - `sshd`, `postgres`, `chronyd`, `systemd`,
 `docker-proxy`, every one of them. Not a missing answer: a confident wrong one,
 in the exact direction the section exists to avoid.
 
@@ -117,7 +117,7 @@ the catalogers test membership as they enumerate. Cost is proportional to the
 question rather than to the machine, the answer is exact, and a path that was
 not probed stays distinguishable from a path that no package owns.
 
-The same run, after: 27 high, 3 medium, 1 low. The three mediums are real —
+The same run, after: 27 high, 3 medium, 1 low. The three mediums are real -
 a binary under `/opt`, and two copies of `/usr/local/bin/node`.
 
 Components in a nested root are excluded from the join, for the reason
@@ -132,7 +132,7 @@ merge. A string comparison misses, and a running `nc` is reported as software
 no package manager installed. Caught by CI on a runner rather than by any unit
 test, because both sides of it were written from the same wrong assumption.
 
-Both sides are now canonicalised through the merge — but only for the
+Both sides are now canonicalised through the merge - but only for the
 directories that are *actually* symlinks under the scan root, checked with one
 `lstat` each. On Alpine `/bin` is a real directory, `/bin/busybox` and
 `/usr/bin/busybox` are different files, and folding them together would invent
@@ -143,7 +143,7 @@ a match rather than find one. Verified on both.
 Three cases, all of which the naive pipeline gets wrong. Each was checked rather
 than assumed.
 
-### 1. Containers — measured, and it produces a *wrong* answer, not a missing one
+### 1. Containers - measured, and it produces a *wrong* answer, not a missing one
 
 Running `nginx:alpine` under Docker and inspecting from the host:
 
@@ -151,33 +151,33 @@ Running `nginx:alpine` under Docker and inspecting from the host:
 |---|---|
 | `/proc/<pid>/exe` | `/usr/sbin/nginx` |
 | Does that path exist on the host? | **No** |
-| Read via `/proc/<pid>/root/usr/sbin/nginx` | `nginx/1.31.2` — exact match to truth |
+| Read via `/proc/<pid>/root/usr/sbin/nginx` | `nginx/1.31.2` - exact match to truth |
 
 `/proc/PID/exe` yields a path in the *container's* mount namespace. Joining it
-against host components finds nothing — or, on a host that also has nginx
+against host components finds nothing - or, on a host that also has nginx
 installed, silently attributes the container's service to the host's package and
 reports the wrong version with full confidence.
 
 Resolving through `/proc/PID/root` reaches the real binary and gives the right
 answer. So container services can be inventoried from the host, offline, with no
-Docker API and no container runtime cooperation — but only if every path
+Docker API and no container runtime cooperation - but only if every path
 traversal goes through `/proc/PID/root`, and only if the result is labelled as
 the container's rather than the host's.
 
 This was very nearly written into this document the wrong way round. The
 reproduction caught it.
 
-### 2. Interpreted and JVM daemons — the exe is the wrong object
+### 2. Interpreted and JVM daemons - the exe is the wrong object
 
 For `java`, `python3` or `node`, `/proc/PID/exe` identifies the runtime, not the
 product. Tomcat's version is not in the JVM binary and never will be.
 
 The evidence lives in launch context and deployed artifacts:
 
-- `/proc/PID/cmdline` — `-jar`, `-cp`, `@argfile`, `-Dcatalina.home`,
+- `/proc/PID/cmdline` - `-jar`, `-cp`, `@argfile`, `-Dcatalina.home`,
   `-Dcatalina.base`, `python -m gunicorn`, `node server.mjs`
-- `/proc/PID/cwd` — resolves relative paths in the command line
-- deployment roots — `WEB-INF/lib`, `BOOT-INF/lib`, `META-INF/MANIFEST.MF`
+- `/proc/PID/cwd` - resolves relative paths in the command line
+- deployment roots - `WEB-INF/lib`, `BOOT-INF/lib`, `META-INF/MANIFEST.MF`
   (`Implementation-Version`), Maven `pom.properties`, Spring Boot
   `META-INF/build-info.properties`, Python `*.dist-info`
 
@@ -191,7 +191,7 @@ One correction worth recording, because the opposite is tempting: **do not use
 mappings. It does not see the logical dependency graph of a managed runtime, and
 a design that relies on it will quietly under-report.
 
-### 3. IIS — there is no process to attribute
+### 3. IIS - there is no process to attribute
 
 This is the motivating example and it does not fit the spine at all.
 
@@ -210,13 +210,13 @@ The authoritative source is configuration, not runtime state:
 | app pool → `w3wp.exe` mapping | which sites are actually running |
 
 Reading `applicationHost.config` gives the entire IIS topology **offline,
-without touching a socket** — which suits an air-gapped scan better than
+without touching a socket** - which suits an air-gapped scan better than
 anything runtime-derived. The listener is then modelled as *evidence that IIS
 owns this endpoint*, not as a process attribution.
 
 The physical paths are the prize. They point at deployed web applications, whose
 third-party dependencies are ordinary components that existing catalogers can
-enumerate — and which are usually the least-patched software on the machine.
+enumerate - and which are usually the least-patched software on the machine.
 
 ## Determining the version
 
@@ -229,7 +229,7 @@ extraction would cover exactly the class of software this feature cares about.
 | Binary | Extracted | Truth | Verdict |
 |---|---|---|---|
 | `sshd` | `OpenSSH_10.2p1` | `OpenSSH_10.2p1` | exact |
-| `postgres` | `PostgreSQL 18.4` | `PostgreSQL 18.4` | exact — **plus a false positive** |
+| `postgres` | `PostgreSQL 18.4` | `PostgreSQL 18.4` | exact - **plus a false positive** |
 | `dockerd` | *(nothing)* | `29.6.0` | fails |
 | `node` | *(nothing)* | `22.22.1` | fails |
 
@@ -242,7 +242,7 @@ not a version. Anchored per-product patterns are necessary but not sufficient,
 because the anchor appears in error messages too.
 
 **Whole classes with no banner.** Go binaries carry their version in `-ldflags`,
-not a banner — `dockerd` embeds `dockerversion.Version=29.6.0` inside the
+not a banner - `dockerd` embeds `dockerversion.Version=29.6.0` inside the
 ldflags string, which is parseable but is not the same technique. Interpreters
 have no product version to carry, because the product is not the binary.
 
@@ -258,18 +258,18 @@ Sources in descending order of trustworthiness. Each is offline and read-only.
 | # | Source | Confidence | Notes |
 |---|---|---|---|
 | 1 | Package database ownership of the exe path | high | Already collected. Exact PURL and version. |
-| 2 | `.note.package` ELF note | high | Exact, and works outside the package DB — see below |
+| 2 | `.note.package` ELF note | high | Exact, and works outside the package DB - see below |
 | 3 | Go build info (`debug/buildinfo`) | high for deps | Exact dependency tree; main module is often `(devel)` |
 | 4 | PE `VERSIONINFO` (Windows) | medium-high | What Syft already uses |
 | 5 | Deployed artifact metadata | medium-high | `MANIFEST.MF`, `.dist-info`, `pom.properties` |
 | 6 | Config files | medium | `applicationHost.config`, `server.xml`, `nginx.conf` |
 | 7 | Anchored banner strings | **low** | Per the measurements above |
-| 8 | Allowlisted version probe | medium | Opt-in only — see below |
+| 8 | Allowlisted version probe | medium | Opt-in only - see below |
 
 ### The ELF package note: exact identity from the binary itself
 
 Binaries built by some distributions carry a `.note.package` section holding
-JSON that names the owning package — the systemd ELF packaging metadata
+JSON that names the owning package - the systemd ELF packaging metadata
 convention:
 
 ```console
@@ -280,7 +280,7 @@ Displaying notes found in: .note.package
                          "version":"1:10.2p1-2ubuntu3.5","architecture":"amd64"}
 ```
 
-This is exact, needs no package database, and — critically — **survives being
+This is exact, needs no package database, and - critically - **survives being
 copied out of package management and into a container**, which is precisely
 where the package DB cannot help.
 
@@ -305,8 +305,8 @@ payload rather than parsing section headers, verified against `readelf` on a
 sample. The 0% and 95%+ results are unambiguous; treat the Debian 13 figure as
 approximate.*
 
-The exceptions on Ubuntu are also informative — `cloudflared`, `containerd-shim`,
-`ctr`, `docker`, `snap` — third-party Go binaries not built by the distribution's
+The exceptions on Ubuntu are also informative - `cloudflared`, `containerd-shim`,
+`ctr`, `docker`, `snap` - third-party Go binaries not built by the distribution's
 toolchain. Absence of the note correlates with exactly the unmanaged-software
 class this feature exists to surface. It is a weak signal rather than a reliable
 one, since glibc utilities lack it too, but it is worth recording.
@@ -356,7 +356,7 @@ recorded in the evidence as `active_probe`.
 
 ## No network activity, including localhost
 
-A localhost connect would resolve real ambiguity — HTTP `Server` headers, TLS
+A localhost connect would resolve real ambiguity - HTTP `Server` headers, TLS
 certificates, SSH handshakes, database greetings. Nmap's service fingerprints
 are good prior art for turning such responses into product and version.
 
@@ -393,8 +393,8 @@ them; POSIX semaphores appear as deleted mappings by construction.
 The signal is real but requires filtering: file-backed, executable mappings,
 whose path lies inside a package-owned directory, excluding temp and shared
 memory. Report as `restart_required` with the specific files listed, never as a
-bare count. On Windows the equivalent — `EnumProcessModules` plus pending-reboot
-registry keys — is weaker, and in-place overwrite and static linking cause false
+bare count. On Windows the equivalent - `EnumProcessModules` plus pending-reboot
+registry keys - is weaker, and in-place overwrite and static linking cause false
 negatives on both platforms.
 
 Ship it scoped, with its limitations attached to the finding.
@@ -412,7 +412,7 @@ Measured, on a container's `nginx` process, as a non-root user versus root:
 
 Unprivileged, the socket → PID join fails for any process the user does not own,
 which on a server is nearly all of them. The cgroup path still resolves, so
-*some* attribution survives — enough to name the unit, not enough to identify the
+*some* attribution survives - enough to name the unit, not enough to identify the
 binary.
 
 An unprivileged run must therefore set `scan.incomplete`, warn explicitly that
@@ -433,7 +433,7 @@ Each entry carries endpoints, process and unit identity, evidence, confidence,
 and references to component identities.
 
 **The one real risk with this shape**: most CVE matchers ignore `services[]`
-entirely. The mitigation is a rule — *vulnerable software is always also a
+entirely. The mitigation is a rule - *vulnerable software is always also a
 normal component*. Services reference components by identity; they never become
 the only place a piece of software appears. A consumer that ignores `services[]`
 loses context and loses nothing else.
@@ -458,7 +458,7 @@ loses context and loses nothing else.
 | 6 | `--probe-versions`, if the passive ladder proves insufficient | Only with evidence that it is needed |
 
 Phase 1 alone is worth shipping. It answers "what is listening, and does
-anything own it" — which no package inventory can answer at all.
+anything own it" - which no package inventory can answer at all.
 
 ## Measured: the spine, running
 
@@ -475,7 +475,7 @@ container and on a hardened host.
 The privilege boundary is exactly as predicted: `/proc/net` is world-readable so
 the endpoints are always found, but `/proc/<pid>/fd` belongs to the process
 owner, so an unprivileged scan attributes only its own. Those sockets are still
-reported, with a warning naming the count — "something is listening on 443 and I
+reported, with a warning naming the count - "something is listening on 443 and I
 could not see what" is more useful than silence.
 
 What it produces on a real machine:
@@ -498,7 +498,7 @@ separately would misstate how much is running.
 The cgroup gives the unit for one file read, with no D-Bus client, and gives the
 container id for containerised processes.
 
-The interpreter problem is not an edge case — it is the *first* thing you hit.
+The interpreter problem is not an edge case - it is the *first* thing you hit.
 Two of the six attributed services unprivileged were `/usr/local/bin/node` and
 `/usr/bin/python3.14`, where the executable names the runtime and says nothing
 about the product.
@@ -507,8 +507,8 @@ about the product.
 systemd holds the socket and the service starts on first connection, so
 following socket → process lands on `systemd` for one of the most obviously
 interesting ports on the machine. That is now marked rather than reported as a
-systemd service, because it is a genuinely different state — the daemon may not
-be running at all — and not a failure to resolve one.
+systemd service, because it is a genuinely different state - the daemon may not
+be running at all - and not a failure to resolve one.
 
 ## Measured: the shape, shipped
 
@@ -545,7 +545,7 @@ exposure: 44   containers: 10
 
 Container operating systems read from each container's own `/etc/os-release`:
 `rhel-8.10`, `alpine-3.21.3`, `alpine-3.24.1`, `debian-12`, `debian-13`,
-`wolfi-20230201`, `ubuntu-26.04` — seven distributions on one Ubuntu 26.04
+`wolfi-20230201`, `ubuntu-26.04` - seven distributions on one Ubuntu 26.04
 host, each with its own advisory stream.
 
 Four things this measurement settled.
@@ -553,7 +553,7 @@ Four things this measurement settled.
 **The image is not an identity.** Every reviewer said so independently, and the
 mechanism is checkable: Grype dispatches matchers by ecosystem and has no `oci`
 matcher; OSV and OSS Index carry no OCI coordinates; Dependency-Track ingests
-the PURL, finds nothing, and renders the component clean — indistinguishable
+the PURL, finds nothing, and renders the component clean - indistinguishable
 from analysed-and-safe. The identity comes from the container's own package
 database instead, which was already reachable through `/proc/<pid>/root`.
 
@@ -564,7 +564,7 @@ the same discipline the host join already uses.
 
 **docker-proxy is a configuration, not a mechanism.** It does not exist with
 `"userland-proxy": false`, under rootless Docker, or under rootful Podman's
-default netavark — and in those configurations publishing is pure netfilter
+default netavark - and in those configurations publishing is pure netfilter
 DNAT with no process and no socket. Discovery is therefore the host namespace's
 socket table; the proxy's argv only rewrites a destination when that process
 happens to be the one holding the socket.
@@ -606,5 +606,5 @@ ingest pipeline; a machine-readable array does.
 load-bearing assumptions: that banner strings could be the primary version
 source, that IIS would fit the socket → PID → exe pipeline, and that opt-in
 execution should be ruled out entirely. The measurements throughout were taken
-independently and, in two cases — banner coverage and drift false positives —
+independently and, in two cases - banner coverage and drift false positives -
 contradicted the design as originally written.*

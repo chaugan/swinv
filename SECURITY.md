@@ -24,7 +24,7 @@ machine it runs on.
   results anywhere. There is no telemetry, no update check, and no phone-home.
 - **One optional network call.** A best-effort reverse-DNS lookup fills
   `host.fqdn`. It is ordinary name resolution against your configured resolver,
-  bounded to two seconds, never fatal, and carries no scan data — but it does
+  bounded to two seconds, never fatal, and carries no scan data - but it does
   tell that resolver the host looked itself up. **`--offline` disables it**, at
   which point the run performs no network activity at all. It is skipped
   automatically whenever `--root` is not `/`.
@@ -46,21 +46,21 @@ machine it runs on.
   `command` field**, keeping the endpoint, the executable, the unit and the
   attribution; **`--no-services` skips the whole section**. Collecting services
   also means reading `/proc/<pid>/fd` for processes swinv does not own, which
-  needs root — unprivileged, the ports are still reported and the processes
+  needs root - unprivileged, the ports are still reported and the processes
   behind them mostly are not.
 - **It reads container filesystems.** Identifying the software behind a
   published port means reading each container's own package database through
   `/proc/<pid>/root`, which is root-only. That filesystem's contents are chosen
   by whatever runs in the container, so every read there is size-capped and
   refuses anything that is not a regular file, and only fixed paths are opened
-  — no part of a path comes from the container. `--no-containers` disables it,
+  - no part of a path comes from the container. `--no-containers` disables it,
   at the cost of not being able to name any containerised software.
 - **It talks to one daemon, and only one.** On Windows, identifying what is
   behind a published container port requires the local Docker engine's named
   pipe, because a Docker Desktop container is a Linux process inside a virtual
   machine that no Windows API reaches. `swinv` connects to
   `\\.\pipe\docker_engine` (and the Unix socket equivalent elsewhere), reads
-  the container list, and does nothing else — no create, no exec, no attach.
+  the container list, and does nothing else - no create, no exec, no attach.
   This is local kernel IPC, not network activity: there is no address and no
   route, and nothing leaves the machine. `--no-containers` disables it. Note
   that reaching the engine implies membership of `docker-users` or equivalent,
@@ -68,7 +68,7 @@ machine it runs on.
 - **The exposure list is not a reachability claim.** `swinv` reads no firewall,
   no NAT table and no cloud security group. `bind_scope` describes the bind and
   nothing more, `scan.firewall_examined` is emitted as a constant `false`, and
-  `scan.exposure_blind_spots` names what could not be observed — including
+  `scan.exposure_blind_spots` names what could not be observed - including
   Kubernetes NodePort and any port published by a netfilter rule with no
   process behind it, which are invisible by construction. **A short exposure
   list is not evidence that little is exposed** until that array has been read.

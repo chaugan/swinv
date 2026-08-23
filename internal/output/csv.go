@@ -62,7 +62,7 @@ func CSVColumns() []string {
 
 // WriteCSV writes the report as RFC 4180 CSV: one row per component, UTF-8
 // with no byte-order mark, "\n" line endings, and the header row always
-// present — a report with no components still emits the header.
+// present - a report with no components still emits the header.
 //
 // Values containing a comma, a double quote, or a newline are quoted and
 // escaped by encoding/csv. The cpes, licenses, and locations columns are

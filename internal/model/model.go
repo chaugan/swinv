@@ -221,7 +221,7 @@ type Component struct {
 	// Vendor is the organisation behind the component, as its own ecosystem
 	// records it: an rpm Vendor, a dpkg or apk Maintainer, or CompanyName from
 	// a Windows PE version resource. Those are related but not identical
-	// facts, and the raw value is kept rather than normalised — see
+	// facts, and the raw value is kept rather than normalised - see
 	// vendorFromPackage in internal/scan.
 	//
 	// Frequently empty. Many ecosystems record no such field at all.
@@ -235,7 +235,7 @@ type Component struct {
 	// upstream advisories are written against. Both rows are right and neither
 	// should be dropped. But without a link between them, a consumer assessing
 	// the second as an upstream release compares a backported version against
-	// upstream's — Ubuntu's python3-cryptography 2.1.4-1ubuntu1.4+esm1 is
+	// upstream's - Ubuntu's python3-cryptography 2.1.4-1ubuntu1.4+esm1 is
 	// patched, while PyPI's cryptography 2.1.4 looks thirty-seven releases
 	// behind. On one reported host that produced 442 false findings.
 	//
@@ -306,7 +306,7 @@ func (c Component) identity() identity {
 //
 // Matching is on (Name, Type), then on version within that group. A component
 // present in both at a different version is a Change, not a removal plus an
-// addition — which is the whole point of running a delta on a daily inventory.
+// addition - which is the whole point of running a delta on a daily inventory.
 //
 // An identity can legitimately hold several versions at once: a Debian host
 // normally has two or three linux-image packages installed side by side. Those

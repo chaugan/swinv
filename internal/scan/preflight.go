@@ -26,14 +26,14 @@ const maxQuarantineWarnings = 5
 // to index (addSymlinkToIndex returns the target unless os.Stat reports
 // ENOENT). Each additional root is then passed to indexTree, which resolves it
 // with filepath.EvalSymlinks before any path-index visitor runs. If that
-// resolution fails — the common case being a symlink into another user's home
-// directory when swinv runs unprivileged — indexAllRoots treats the error as
+// resolution fails - the common case being a symlink into another user's home
+// directory when swinv runs unprivileged - indexAllRoots treats the error as
 // fatal and CreateSBOM returns nothing at all. A five-minute scan yields zero
 // components because of one unreadable symlink.
 //
 // Crucially, excluding the *target* does not help: the exclusion visitors run
 // inside indexPath, strictly after the fatal resolution. Verified on a live
-// host — excluding "./root/**" still failed on
+// host - excluding "./root/**" still failed on
 // "/opt/.../.venv12/bin/python -> /root/.local/.../python3.12". The only thing
 // that prevents the failure is excluding the *link* so the indexer never
 // queues its target.
@@ -43,7 +43,7 @@ const maxQuarantineWarnings = 5
 // honours the exclusion patterns already computed so it does not descend into
 // trees the scan will skip anyway.
 //
-// Errors are never fatal. An unreadable directory is skipped silently — it is
+// Errors are never fatal. An unreadable directory is skipped silently - it is
 // not something the operator can act on and the scan is still correct.
 func QuarantineSymlinks(ctx context.Context, root string, excludes []string) (patterns []string, warnings []string) {
 	absRoot, err := filepath.Abs(root)
@@ -113,8 +113,8 @@ func QuarantineSymlinks(ctx context.Context, root string, excludes []string) (pa
 // target of the symlink at linkPath.
 //
 // It mirrors what the indexer does: resolve the link, then resolve the target's
-// parent directory. A target that simply does not exist is fine — Syft skips a
-// dangling link — so only permission-style failures quarantine the link.
+// parent directory. A target that simply does not exist is fine - Syft skips a
+// dangling link - so only permission-style failures quarantine the link.
 func symlinkTargetResolvable(linkPath string) bool {
 	target, err := os.Readlink(linkPath)
 	if err != nil {

@@ -1,4 +1,4 @@
-# swinv — Local Software Inventory Collector
+# swinv - Local Software Inventory Collector
 #
 # Targets:
 #   build          static binary at bin/swinv
@@ -162,7 +162,7 @@ licenses: $(LICENSE_CSV) license-check
 	    echo "| Module | Licence | Source |"; \
 	    echo "|---|---|---|"; \
 	    LC_ALL=C sort -t, -k1,1 $(LICENSE_CSV) | awk -F, 'NF { url=$$2; \
-	        if (url == "" || url == "Unknown" || url !~ /^https?:\/\//) url="—"; \
+	        if (url == "" || url == "Unknown" || url !~ /^https?:\/\//) url="-"; \
 	        else url="[link](" url ")"; \
 	        printf "| `%s` | %s | %s |\n", $$1, $$3, url }'; \
 	} > $(LICENSE_DOC)
@@ -187,7 +187,7 @@ license-check: $(LICENSE_CSV)
 	        copyleft = (low ~ /gpl/); \
 	        unknown  = (lic == "" || low ~ /unknown/); \
 	        if (copyleft) { \
-	            printf "  %s: %s (copyleft — NOT allowlistable)\n", mod, lic; \
+	            printf "  %s: %s (copyleft - NOT allowlistable)\n", mod, lic; \
 	        } else if (unknown && !(mod in allowed)) { \
 	            printf "  %s: %s\n", mod, (lic == "" ? "(no licence detected)" : lic); \
 	        } \
@@ -199,7 +199,7 @@ license-check: $(LICENSE_CSV)
 	    echo "swinv must stay free of GPL/AGPL/LGPL code (spec section 3)." >&2; \
 	    echo "If a licence is merely UNRECOGNISED, read the actual LICENSE file and," >&2; \
 	    echo "if it is genuinely permissive, add an audited entry to $(LICENSE_ALLOWLIST)." >&2; \
-	    echo "A detected GPL/AGPL/LGPL can never be allowlisted — remove the dependency." >&2; \
+	    echo "A detected GPL/AGPL/LGPL can never be allowlisted - remove the dependency." >&2; \
 	    exit 1; \
 	fi; \
 	echo "OK: every dependency licence is permissive and identified"

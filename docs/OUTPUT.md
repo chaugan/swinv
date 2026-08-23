@@ -34,7 +34,7 @@ was.
 |---|---|
 | `Service.os_component`, `Exposure.os_component` | JSON, services CSV column 20, exposure CSV column 18 |
 
-`services[]`, `exposure[]` and `containers[]` now exist on Windows too — from
+`services[]`, `exposure[]` and `containers[]` now exist on Windows too - from
 `iphlpapi` for the sockets and from the local Docker engine for the containers,
 since a Docker Desktop container is a Linux process inside a virtual machine
 that no Windows API reaches.
@@ -53,15 +53,15 @@ the OS's own binaries are package-owned like any other.
 | `Report.exposure` | JSON, and a separate `-exposure.csv` file |
 | `Report.containers` | JSON, and CycloneDX `services[]` with `trustZone` |
 | `scan.firewall_examined`, `scan.exposure_blind_spots` | JSON, and repeated on every exposure CSV row |
-| `Service.processes`, `Service.published_as` | JSON, services CSV columns 18–19 |
+| `Service.processes`, `Service.published_as` | JSON, services CSV columns 18-19 |
 | Container packages in `components[]` with `root: "container:<id>"` | JSON, CSV, NDJSON, CycloneDX |
 
 See [`exposure`](#exposure) and [`containers`](#containers) below.
 
 **`services[].endpoints` did not change.** It is still an array of strings in
 the same order. Retyping it to objects would have been a silent break for the
-normal fate of a fleet inventory — an Elasticsearch mapping conflict rejects
-documents at ingest, with nothing to connect the failure to swinv — so the
+normal fate of a fleet inventory - an Elasticsearch mapping conflict rejects
+documents at ingest, with nothing to connect the failure to swinv - so the
 structured form lives in the new `exposure` array instead.
 
 **`services[]` did not change meaning either.** It is still the host network
@@ -86,7 +86,7 @@ a service appears once per listening process, and most components are behind no
 service at all. The component rows and the CSV column order are untouched, so
 every 1.5 consumer keeps working unchanged.
 
-`services` is absent — not empty — when services were never collected: on
+`services` is absent - not empty - when services were never collected: on
 Windows, with `--no-services`, or when `--root` points at a tree other than
 this machine. An empty array means the scan looked and found nothing listening.
 
@@ -102,7 +102,7 @@ A distribution-installed language package is reported twice, and both rows are
 right: the OS package is what the vendor patches, the ecosystem package is what
 upstream advisories are written against. Neither should be dropped. But without
 a link, a consumer assessing the ecosystem row against upstream compares a
-backported version against upstream's own numbering — Ubuntu's
+backported version against upstream's own numbering - Ubuntu's
 `python3-cryptography 2.1.4-1ubuntu1.4+esm1` is patched, while PyPI's
 `cryptography 2.1.4` reads as thirty-seven releases behind. One reported host
 produced 442 false findings that way.
@@ -134,27 +134,27 @@ Syft writes `"UNKNOWN"` when a cataloger cannot determine a version. That is
 worse than an absent field rather than merely untidy: it is valid syntax in
 several version grammars, and under Debian ordering it has no epoch, so it
 sorts below every real release. A consumer asking *"is the installed version
-below the fixed version"* gets **yes** — for every advisory ever filed against
+below the fixed version"* gets **yes** - for every advisory ever filed against
 that package. A downstream matcher reported exactly that against `git` in a
 snap base.
 
 **`root`** is `/` for software installed on the scanned machine, or the path of
-a nested root — a snap base, a container layer, an unpacked image. It is part
+a nested root - a snap base, a container layer, an unpacked image. It is part
 of a component's identity, so two packages of the same name and version in
 different roots are two rows rather than one merged row whose `locations` span
 both.
 
 A nested root that states its own release carries it in
 `attributes.root_os_id` and `attributes.root_os_version_id`. A base snap is a
-different operating system — `core18` is Ubuntu 18.04 while the host may be
-26.04 — and consumers were otherwise inferring that from the directory name,
+different operating system - `core18` is Ubuntu 18.04 while the host may be
+26.04 - and consumers were otherwise inferring that from the directory name,
 which is a naming convention rather than a fact.
 
 Packages found under a nested root have the distribution stripped from their
 PURL: `pkg:deb/ubuntu/openssl@3.0.11-1~deb12u2?distro=ubuntu-26.04` becomes
 `pkg:deb/openssl@3.0.11-1~deb12u2`. Syft stamps every package with the *scanned
 host's* distribution, and for a Debian package inside a snap base that is not
-merely unhelpful — a consumer matching `distro=` compares a Debian version
+merely unhelpful - a consumer matching `distro=` compares a Debian version
 against Ubuntu's fixed versions and gets a meaningless answer in both
 directions. A missing qualifier is honest where a wrong one is not.
 
@@ -190,7 +190,7 @@ ecosystem uses: an rpm `Vendor`, a dpkg or apk `Maintainer`, a Python or npm
 Windows PE version resource. Those are related but not identical facts, so the
 raw value is kept rather than normalised into a single invented definition.
 
-It is frequently empty — measured at 23% of components on a full Debian-family
+It is frequently empty - measured at 23% of components on a full Debian-family
 host, ranging from 66% for `deb` down to 0% for kernel modules, which have no
 such concept. Treat its absence as "not recorded", never as "no vendor".
 
@@ -207,7 +207,7 @@ document**: no field was renamed, removed, retyped, or reordered.
 
 The promise, plainly:
 
-- The **minor** version is bumped for additive changes — new optional fields,
+- The **minor** version is bumped for additive changes - new optional fields,
   new columns appended to the end of the CSV. Existing fields keep their name,
   their type, and their meaning.
 - The **major** version is bumped for anything that breaks that. Nothing has
@@ -228,13 +228,13 @@ that extension.
 
 | `--format` | Extension | Example filename | Reach for it when |
 |---|---|---|---|
-| `json` | `.json` | `web-01-20240309.json` | You want the whole report — host facts, scan metadata, warnings, delta. The only format that is a valid `--since` baseline. |
+| `json` | `.json` | `web-01-20240309.json` | You want the whole report - host facts, scan metadata, warnings, delta. The only format that is a valid `--since` baseline. |
 | `csv` | `.csv` | `web-01-20240309.csv` | You are loading a fleet into a spreadsheet or a SQL database. Flat, one row per component, host identity on every row. |
 | `ndjson` | `.ndjson` | `web-01-20240309.ndjson` | You are streaming into a log pipeline (Vector, Filebeat, Loki, `jq`). One self-describing object per line. |
 | `cyclonedx-json` | `.cdx.json` | `web-01-20240309.cdx.json` | You are handing the inventory to a vulnerability scanner or any other SBOM consumer. |
 
 With `--latest-symlink` (on by default) each format also gets a
-`{hostname}-latest.{ext}` symlink — `web-01-latest.cdx.json`, and so on.
+`{hostname}-latest.{ext}` symlink - `web-01-latest.cdx.json`, and so on.
 
 `--stdout` writes to standard output instead of files and requires exactly one
 `--format`. All human-readable logging goes to stderr, so a pipe is always
@@ -323,7 +323,7 @@ escaping is disabled, so PURLs and CPEs are written literally rather than with
 ```
 
 `tool`, `host`, `scan` and `components` are always present. `delta` appears only
-with `--since`. `components` is always an array — an empty inventory writes
+with `--since`. `components` is always an array - an empty inventory writes
 `[]`, never `null`.
 
 ### `tool`
@@ -338,7 +338,7 @@ with `--since`. `components` is always an array — an empty inventory writes
 ### `host`
 
 Machine identity, gathered by `internal/hostfacts` by reading kernel interfaces
-directly — never by shelling out to `hostnamectl`, `dmidecode`, `ip`, or
+directly - never by shelling out to `hostnamectl`, `dmidecode`, `ip`, or
 `uname`. **Every field except `hostname` is optional**: an unreadable source
 yields an omitted field, not an error and not a log line.
 
@@ -391,12 +391,12 @@ One entry per distinct piece of installed software.
 | `version` | string | Version string, verbatim. Not normalised, not parsed. Always present. |
 | `type` | string | Ecosystem: `deb`, `rpm`, `apk`, `python`, `npm`, `go-module`, `java-archive`, `binary`, … Always present. |
 | `language` | string | Ecosystem language where one applies (`python`, `javascript`, `go`). Omitted for OS packages. |
-| `purl` | string | Package URL. **The canonical identifier** — see below. Omitted only when Syft supplies none. |
+| `purl` | string | Package URL. **The canonical identifier** - see below. Omitted only when Syft supplies none. |
 | `cpes` | []string | Candidate CPEs, sorted. Syft generates several per package; all are kept. |
 | `licenses` | []string | Licence strings, sorted. SPDX identifiers where the ecosystem provides them, free text where it does not (`Apache 2.0` from a Python `METADATA` is a real example). Not validated against the SPDX list. |
 | `locations` | []string | Real absolute paths on the scanned machine, sorted, with the `--root` prefix stripped. For a deb this is usually `/var/lib/dpkg/status`; for a Python package the `dist-info` files. |
 | `found_by` | string | The originating Syft cataloger, e.g. `dpkg-db-cataloger`. Useful when a result looks wrong. |
-| `sha256` | string | Hex digest of the component's primary on-disk file. **Only with `--hash`**, and only for files backing exactly one component — see below. |
+| `sha256` | string | Hex digest of the component's primary on-disk file. **Only with `--hash`**, and only for files backing exactly one component - see below. |
 | `change` | string | `added` or `changed` for a component that moved since the `--since` baseline; absent for unchanged components and for runs without `--since`. `removed` appears only in `--delta-only` output, since a removed component is by definition not in the current inventory. |
 
 #### `--hash` and shared evidence files
@@ -405,7 +405,7 @@ One entry per distinct piece of installed software.
 component are deliberately skipped**: most debs cite `/var/lib/dpkg/status` as
 their evidence, so digesting it would give every package on the machine an
 identical hash *and* make all of them appear changed whenever any single package
-changed — precisely backwards for change detection. The count skipped is
+changed - precisely backwards for change detection. The count skipped is
 reported in `scan.warnings`:
 
 ```
@@ -419,7 +419,7 @@ in practice OS packages have no `sha256` and language packages do.
 ### `services`
 
 Schema 1.6. One entry per listening process, plus at most one aggregate entry
-for sockets that could not be attributed to a process at all. Linux only —
+for sockets that could not be attributed to a process at all. Linux only -
 see [docs/SERVER-ROLES.md](SERVER-ROLES.md).
 
 ```jsonc
@@ -453,7 +453,7 @@ see [docs/SERVER-ROLES.md](SERVER-ROLES.md).
 | `container` | string | The container id, when the process runs in one. |
 | `user` | string | The numeric uid the process runs as. |
 | `socket_activated` | bool | `init` holds the socket, not the service. The daemon may not be running at all. |
-| `components` | []string | The installed software behind it, by PURL where one exists and `name@version` otherwise. **Empty means nothing installed owns the executable** — which is the interesting case. |
+| `components` | []string | The installed software behind it, by PURL where one exists and `name@version` otherwise. **Empty means nothing installed owns the executable** - which is the interesting case. |
 | `confidence` | string | `high`, `medium` or `low`; see below. |
 | `evidence` | []string | What produced the finding, in the order it was established. |
 
@@ -466,15 +466,15 @@ the time it reaches anyone.
 | `confidence` | What was established |
 |---|---|
 | `high` | The process was identified and an installed package's own file list claims its executable. Product and version are known. |
-| `medium` (Windows, install directory) | The executable sits under a directory an installed product recorded as its `InstallLocation`. Weaker than a package's own file list — the product was installed there, which is not the same as it shipping this file — and graded as such. This is the only join available on Windows, where the registry records directories and never executables. |
-| `medium` | The process was identified, but **nothing installed owns its executable** — so it was not installed by a package manager. Not a weaker observation: this is the finding a package inventory alone cannot produce. Also used for a containerised process, whose executable path belongs to the container's filesystem and must not be matched against this host's packages. |
+| `medium` (Windows, install directory) | The executable sits under a directory an installed product recorded as its `InstallLocation`. Weaker than a package's own file list - the product was installed there, which is not the same as it shipping this file - and graded as such. This is the only join available on Windows, where the registry records directories and never executables. |
+| `medium` | The process was identified, but **nothing installed owns its executable** - so it was not installed by a package manager. Not a weaker observation: this is the finding a package inventory alone cannot produce. Also used for a containerised process, whose executable path belongs to the container's filesystem and must not be matched against this host's packages. |
 | `low` | Something is listening and the process behind it could not be identified: the scan lacked the privilege to read another user's open files, or `init` holds the socket. |
 
 #### How the attribution works
 
 The join is from a listening executable's path to the package that installed
-it, and it comes from the **package databases' own file lists** — `dpkg`,
-`rpm`, `apk`, `pacman` — not from `component.locations`. A deb's locations are
+it, and it comes from the **package databases' own file lists** - `dpkg`,
+`rpm`, `apk`, `pacman` - not from `component.locations`. A deb's locations are
 its evidence files (`/var/lib/dpkg/status`, its own `.list`), never
 `/usr/sbin/sshd`, so a naive join finds nothing and reports every daemon on a
 stock server as unmanaged software.
@@ -486,7 +486,7 @@ the catalogers check membership as they go. A path that was not probed and a
 path that no package owns are kept distinguishable.
 
 Where the package databases say nothing, a component that recorded the exact
-path as one of its own locations is used instead — which is what a Windows
+path as one of its own locations is used instead - which is what a Windows
 registry entry naming its own executable looks like.
 
 ### `exposure`
@@ -524,29 +524,29 @@ owning pid already attached.
 **Membership is the verdict.** A socket bound to `0.0.0.0` inside a container's
 network namespace is not reachable at this machine's addresses, and if such a
 row sat in this array next to an address, a reader would conclude the opposite.
-So those rows are not here at all — they are in [`containers`](#containers) —
+So those rows are not here at all - they are in [`containers`](#containers) -
 and a consumer reading only this array cannot get it wrong.
 
 One row per **bound endpoint**, not per process and not per socket handle,
 because that is the unit of the question: a process bound to four addresses can
 be four different answers, three on loopback and one on the world, while twenty
 handles on the same address and port are one open port. A socket held by two
-processes — `init` and the daemon it socket-activated — is one row too, and the
+processes - `init` and the daemon it socket-activated - is one row too, and the
 one kept is the row that names the daemon. Where two genuinely different
 programs share a UDP port, both identities are kept.
 
 | Field | Meaning |
 |---|---|
 | `address`, `port`, `protocol` | The bind, verbatim. `protocol` is `tcp` or `udp`. |
-| `family` | `ipv4` or `ipv6`, taken from the table the socket was read from — Go renders an IPv4-mapped address as a dotted quad, so the text of `address` is not reliable for this. |
+| `family` | `ipv4` or `ipv6`, taken from the table the socket was read from - Go renders an IPv4-mapped address as a dotted quad, so the text of `address` is not reliable for this. |
 | `bind_scope` | `wildcard`, `loopback`, `link_local`, or `specific`. See below. |
 | `wildcard_covers_ipv4` | A `::` bind on a kernel with `bindv6only` off accepts IPv4 too. Without this a consumer counting IPv4 exposure by family undercounts. |
-| `pid`, `executable`, `unit`, `user` | The process holding the socket. All are absent when the holder could not be identified — the socket is still reported, because "something is listening on 443 and I could not see what" is the statement this section exists to make. |
-| `container` | Set when the *holding* process is containerised — a `--network=host` container or a `hostNetwork` pod. |
+| `pid`, `executable`, `unit`, `user` | The process holding the socket. All are absent when the holder could not be identified - the socket is still reported, because "something is listening on 443 and I could not see what" is the statement this section exists to make. |
+| `container` | Set when the *holding* process is containerised - a `--network=host` container or a `hostNetwork` pod. |
 | `os_component` | The listener is part of the operating system itself. Set on Windows for anything under `%SystemRoot%`, which swinv represents by the installed servicing updates rather than file by file. **Filter it out before treating `medium` as "unmanaged software"**, or every Windows host contributes several dozen false entries. Never set on Linux, where the OS's own binaries are package-owned like any other. |
 | `processes` | How many sockets were found bound to this endpoint, when more than one was. A browser opens twenty on `0.0.0.0:5353` for mDNS; as exposure that is one open port, so the rows are folded and this records how many were folded. |
 | `backend` | Where a forwarded port leads. See below. |
-| `image` | The container image behind a forwarded port. **A locator, not an identity** — see [`containers`](#containers). |
+| `image` | The container image behind a forwarded port. **A locator, not an identity** - see [`containers`](#containers). |
 | `components` | The software behind this endpoint, by PURL. For a forwarded port this is the package **inside the container**, never the forwarding process's own. |
 | `confidence`, `evidence` | As for services. |
 
@@ -554,7 +554,7 @@ programs share a UDP port, both identities are kept.
 
 | Value | Meaning |
 |---|---|
-| `wildcard` | `0.0.0.0` or `::` — every address the host has now, and every one added tomorrow by a new interface. |
+| `wildcard` | `0.0.0.0` or `::` - every address the host has now, and every one added tomorrow by a new interface. |
 | `loopback` | `127.0.0.0/8` or `::1`. |
 | `link_local` | `169.254.0.0/16` or `fe80::/10`. |
 | `specific` | One particular address, which is kept verbatim in `address`. |
@@ -568,7 +568,7 @@ consumer with an actual network model can classify it; the reverse is not
 possible.
 
 `scan.firewall_examined` is emitted as a constant `false` for the same reason,
-and repeats on every row of the exposure CSV — a consumer's ingest pipeline
+and repeats on every row of the exposure CSV - a consumer's ingest pipeline
 never sees prose.
 
 #### `backend`: following a published port
@@ -576,8 +576,8 @@ never sees prose.
 A published container port is held on the host by a forwarding process. Its own
 package is not the answer: reporting `pkg:deb/ubuntu/docker-ce` as the software
 behind port 3000 is true and useless, and it was 14 of 31 services on the
-development host. So a recognised forwarder — `docker-proxy`, `rootlessport`,
-`slirp4netns`, `pasta` — **never** contributes its own attribution, and the
+development host. So a recognised forwarder - `docker-proxy`, `rootlessport`,
+`slirp4netns`, `pasta` - **never** contributes its own attribution, and the
 identity comes from the container behind it instead.
 
 The container is found by matching the forward's destination address against
@@ -590,7 +590,7 @@ coin flip presented as a finding.
 came from that process's command line. This is enrichment, never discovery:
 `docker-proxy` does not exist at all when the daemon runs with
 `"userland-proxy": false`, under rootless Docker, or under rootful Podman's
-default netavark — see the blind spots below.
+default netavark - see the blind spots below.
 
 ### `containers`
 
@@ -606,13 +606,13 @@ software. No daemon is involved.
 On **Windows** none of that is possible. A Docker Desktop container is a Linux
 process inside a WSL2 virtual machine: it has no entry in the Windows process
 table, its sockets live in a namespace inside that VM, and no Windows API
-reaches either. So swinv asks the local Docker engine over its named pipe —
+reaches either. So swinv asks the local Docker engine over its named pipe -
 the one place it talks to a daemon, taken because the alternative is a wrong
 answer rather than a missing one. It is still true that no network activity
 occurs: a named pipe is kernel IPC with no address and no route.
 
 The engine gives the container, the image, the entrypoint and the exact
-published port mappings — better than anything derivable from a forwarding
+published port mappings - better than anything derivable from a forwarding
 process's command line, and used in preference to it on any platform where a
 runtime supplies them. What it cannot give is the packages inside the
 container, so those services are reported at `medium` with the workload and
@@ -643,14 +643,14 @@ the container host itself.
 machine only if something published it, and that fact lives in `exposure`,
 cross-linked from `published_as`.
 
-`state` is the runtime's own word — `running`, `exited`, `created`. **Stopped
+`state` is the runtime's own word - `running`, `exited`, `created`. **Stopped
 containers are included, and contribute no exposure rows**: they serve nothing,
 but they are software present on the machine, an image with a known CVE does
 not stop having it because the container is down, and it will be up again.
 
 `declared_endpoints` are the ports the image (`EXPOSE`) or the run
 configuration (`-p`) says the container serves on. **A declaration, never an
-observation** — for a stopped container it is the only network fact available.
+observation** - for a stopped container it is the only network fact available.
 What is actually reachable on this host is in `exposure` and nowhere else.
 
 Containers with no network endpoint at all, declared or observed, are left out.
@@ -659,7 +659,7 @@ and reading its filesystem would cost without answering anything.
 
 `os_id` and `os_version_id` come from the container's *own* `/etc/os-release`.
 This is not decoration: a container is a different operating system from its
-host — one on the development machine is RHEL 8.10 on an Ubuntu 26.04 server —
+host - one on the development machine is RHEL 8.10 on an Ubuntu 26.04 server -
 and that is what decides which advisories apply to its packages.
 
 `processes` folds a prefork server back into one service. nginx's master and
@@ -673,7 +673,7 @@ The `components` PURL comes from the **container's own package database**, by
 one of two routes with different precision.
 
 **Through `/proc/<pid>/root`**, probed only for the executables that are
-actually listening — the same discipline the host join uses, one namespace
+actually listening - the same discipline the host join uses, one namespace
 over. Precise, needs no daemon, and gives the package behind a *specific*
 listening process. Linux, running containers only.
 
@@ -683,7 +683,7 @@ route for a stopped container, and the only route for any container on
 Windows, where a Docker Desktop container is a Linux process inside a virtual
 machine that no Windows API reaches. It gives the container's *whole* package
 list rather than the owner of one executable, because there is no process to
-ask about — a weaker statement, and marked as such by
+ask about - a weaker statement, and marked as such by
 `attributes.scan_scope = "container-package-database"` on each component.
 
 `dpkg`, `apk` and `rpm` are read by both routes. Where the first route already
@@ -697,25 +697,25 @@ which is most application containers.
 **The image reference is a locator, not an identity a matcher can use.** There
 is no `oci` matcher in Grype, no OCI coordinates in OSV or OSS Index, and
 Dependency-Track will ingest an image PURL, find nothing, and display the
-component as clean — which is indistinguishable from "analysed and safe". So
+component as clean - which is indistinguishable from "analysed and safe". So
 `image` never appears in any `components` list. Use it to join to an image scan
 you perform elsewhere; that is what actually produces findings for an image.
 Note that `manifest_digest` is the registry manifest digest, which is what
 `repo@sha256:…` means and what an image scanner will have seen, while `id` is
-the local config digest — a different value, and confusing the two is the
+the local config digest - a different value, and confusing the two is the
 classic bug here.
 
 #### Container packages join `components[]`
 
 Each package found this way is also added to the main `components` array with
 `root: "container:<short-id>"`, so that CVE tooling reading `components[]` and
-nothing else — which is most of it, `grype sbom:` included — sees them at all.
+nothing else - which is most of it, `grype sbom:` included - sees them at all.
 
 Every such row carries an `attributes.scan_scope` saying how it was found:
 
 | `scan_scope` | Meaning |
 |---|---|
-| `listening-executables-only` | Only the packages owning a listening executable were probed. **Not a container inventory** — a precise answer to a narrow question. |
+| `listening-executables-only` | Only the packages owning a listening executable were probed. **Not a container inventory** - a precise answer to a narrow question. |
 | `container-package-database` | The container's whole package database, read through the runtime. A complete list of what that container contains, with no claim about which of it is serving. |
 
 Each also carries `container_id`, `container_name`, `container_state` and the
@@ -732,8 +732,8 @@ Schema 1.7. What this scan could not observe, in machine-readable form.
 ```
 
 **This is the most important field in the exposure section.** Without it, a
-host running Docker with `userland-proxy` disabled — where publishing is pure
-netfilter DNAT and no process holds a socket — produces a document identical to
+host running Docker with `userland-proxy` disabled - where publishing is pure
+netfilter DNAT and no process holds a socket - produces a document identical to
 a host with nothing exposed at all. A consumer must be able to tell "looked and
 found nothing" from "could not look", and warning strings do not survive an
 ingest pipeline.
@@ -748,8 +748,8 @@ ingest pipeline.
 | `container-packages-not-readable` | Containers are running and were identified, but their filesystems could not be read, so the packages inside them are unknown. Normal on Windows, where the container's filesystem is inside a virtual machine. The image is reported, and an image reference is not something a vulnerability matcher resolves. |
 
 swinv does **not** parse iptables, nftables or IPVS. Doing so would mean
-netlink or shelling out, would still miss eBPF-based implementations, and —
-decisively — would not answer the reachability question even when it succeeded,
+netlink or shelling out, would still miss eBPF-based implementations, and -
+decisively - would not answer the reachability question even when it succeeded,
 because that depends on chain policies, `ct state` matches, ipsets, interface
 constraints, and whatever sits in front of the NIC. Trading a declared blind
 spot for an undeclared guess is the wrong trade. For a Kubernetes fleet, the
@@ -757,14 +757,14 @@ API server answers this correctly in one call, with service names.
 
 ---
 
-## Identity and ordering — the guarantees consumers rely on
+## Identity and ordering - the guarantees consumers rely on
 
 These are not implementation details. They are the contract that makes these
 files joinable and diffable, and they are enforced by
 `model.Normalize`/`model.Less` and covered by tests.
 
 **1. PURL is the canonical join key.** Package URLs are the identifier to join
-on across machines — they encode ecosystem, namespace, name, version, and
+on across machines - they encode ecosystem, namespace, name, version, and
 qualifiers in one string. `swinv` populates `purl` whenever Syft provides one.
 Join on `name` alone at your peril: `python3-requests` the deb and `requests`
 the PyPI package are different rows and should stay that way.
@@ -779,8 +779,8 @@ component:
   first to finish, so the result does not depend on cataloger completion order.
 
 **3. Deterministic sort.** Components are sorted by `type`, then `name`, then
-`version`, then `purl`. Every string slice — `locations`, `cpes`, `licenses`,
-`ipv4`, `ipv6`, `macs`, `excluded` — is sorted and deduplicated too.
+`version`, then `purl`. Every string slice - `locations`, `cpes`, `licenses`,
+`ipv4`, `ipv6`, `macs`, `excluded` - is sorted and deduplicated too.
 
 **4. Two runs on an unchanged machine are byte-identical apart from the
 timestamps in `scan`.** Nothing in the output path reads the wall clock,
@@ -842,7 +842,7 @@ same way as `components`.
 ### Matching is on `(name, type)`, not version
 
 This is the point of the feature. An upgraded package must read as **one
-`changed` entry**, not as a removal plus an unrelated addition — otherwise a
+`changed` entry**, not as a removal plus an unrelated addition - otherwise a
 daily diff of a machine that patched twenty packages reports forty events and
 tells you nothing about which version moved to which.
 
@@ -931,7 +931,7 @@ right. Split on `;` after parsing the CSV, never before.
 
 ### `sha256` and `change` are always present
 
-Both columns are emitted **even when `--hash` and `--since` were not used** —
+Both columns are emitted **even when `--hash` and `--since` were not used** -
 empty, but present. The column shape therefore never varies with the flags a
 given host happened to run with. That is what keeps CSVs concatenable across
 machines and across runs, and it is why they must not be made conditional.
@@ -995,12 +995,12 @@ A denormalised consumer never sees the `scan` block, and without them it cannot
 tell a complete row from one produced by a scan that could not look. A natural
 key for deduplicating across scans is `machine_id + address + port + protocol`.
 
-`--stdout` has no sidecars — there is only one stream — so `--stdout --format
+`--stdout` has no sidecars - there is only one stream - so `--stdout --format
 csv` gives the components alone. Use `--stdout --format json` if you want the
 services, containers or exposure blocks on a pipe.
 
 The file is written whenever services were collected at all, even when nothing
-was listening — a header with no rows says "we looked and found nothing", which
+was listening - a header with no rows says "we looked and found nothing", which
 a missing file does not. It is **not** written when services were never
 collected: on Windows, with `--no-services`, or when `--root` is not `/`.
 
@@ -1053,7 +1053,7 @@ that is safe, and dropping it here would hide it completely.
 A published container port carries `container_id` and `container_name`, and its
 `executable` is the process **inside** the container rather than the forwarder.
 `os_component` marks a listener that is part of the operating system, which on
-Windows is most of them — filter it before treating an unattributed port as
+Windows is most of them - filter it before treating an unattributed port as
 interesting.
 
 #### `container` records
@@ -1075,7 +1075,7 @@ than absent. A consumer can rank them last; it cannot invent them.
 ```
 
 `os_id` and `os_version_id` are the container's own, which is what its packages
-must be matched against — a Debian 12 container on an Ubuntu host is Debian.
+must be matched against - a Debian 12 container on an Ubuntu host is Debian.
 
 #### Two shapes chosen for streaming consumers
 
@@ -1086,22 +1086,22 @@ executable)` could not tell the difference.
 
 **Arrays come with a flattened twin.** Splunk's JSON extraction renames an
 array field with a `{}` suffix, so a search asking for `endpoints` silently
-gets nothing — which once reported a whole fleet as publishing no ports. Every
+gets nothing - which once reported a whole fleet as publishing no ports. Every
 array field therefore also has `_text` (`;`-joined) and `n_` (count) forms.
 
 #### With `--heartbeat`
 
 Exposure and container records are **still emitted on an unchanged scan**. The
 heartbeat suppresses the components, which are the volume; what is listening
-can change while the installed software does not — a port opened, a container
-started — so suppressing those too would make the heartbeat hide the
+can change while the installed software does not - a port opened, a container
+started - so suppressing those too would make the heartbeat hide the
 fastest-moving facts in the report. Both sections are a few dozen records
 against many thousands of components.
 
 ### The heartbeat
 
 Schema 1.9, with `--heartbeat`. One extra record at the head of the stream,
-and — when the inventory has not changed since the last scan — the only record
+and - when the inventory has not changed since the last scan - the only record
 in it.
 
 ```json
@@ -1111,17 +1111,17 @@ in it.
 ```
 
 **Why it exists.** Every scan restates the whole inventory, which is the right
-shape for correctness — a package that disappears is genuinely gone rather than
-merely unmentioned — and the wrong shape for volume. At 5,000 hosts averaging
+shape for correctness - a package that disappears is genuinely gone rather than
+merely unmentioned - and the wrong shape for volume. At 5,000 hosts averaging
 14,000 components scanned hourly that is over a billion records a day, nearly
 all identical to the day before. The heartbeat lets a consumer decide a host is
 unchanged *before* reading any of its components.
 
 | Field | Meaning |
 |---|---|
-| `record_type` | Literally `heartbeat`. **A record without this field is a component** — which is what every line was before this existed, so existing consumers are unaffected. |
+| `record_type` | Literally `heartbeat`. **A record without this field is a component** - which is what every line was before this existed, so existing consumers are unaffected. |
 | `digest` | Opaque. Compare it only against the previous value stored for the same host; never parse it, and never assume it is stable across swinv versions. |
-| `n_components` | The real count, **even on a scan that sends none** — so a quiet host stays distinguishable from an empty one. |
+| `n_components` | The real count, **even on a scan that sends none** - so a quiet host stays distinguishable from an empty one. |
 | `machine_id`, `os_id`, `os_version_id`, `architecture` | Host identity, so a consumer's host record stays fed on a scan carrying no components. |
 
 **Only NDJSON is affected.** JSON, CSV and CycloneDX carry the complete
@@ -1135,7 +1135,7 @@ keeps that property while removing the volume.
 
 #### What the digest is built from
 
-Identity alone: `type`, `name`, `version`, `root` and `purl` — the same tuple
+Identity alone: `type`, `name`, `version`, `root` and `purl` - the same tuple
 deduplication uses. Deliberately **not** `locations`, `found_by`, `sha256`,
 `licenses`, `cpes`, `vendor` or `change`: files get relinked, catalogers get
 renamed upstream, `sha256` appears and disappears with `--hash`, and none of
@@ -1171,10 +1171,10 @@ Two differences from CSV worth knowing:
 
 - **Multi-valued fields stay JSON arrays** rather than `;`-joined strings.
   Unlike CSV, the format can represent them losslessly.
-- **The line carries the same fields as the CSV columns** — `hostname`, `machine_id`,
+- **The line carries the same fields as the CSV columns** - `hostname`, `machine_id`,
   `os_id`, `os_version_id`, `architecture`, `scanned_at`, `name`, `version`,
   `type`, `language`, `purl`, `cpes`, `licenses`, `locations`, `found_by`,
-  `sha256` and `change` — the last two omitted when empty.
+  `sha256` and `change` - the last two omitted when empty.
 
 Empty optional fields are omitted from the object rather than emitted as `""`.
 
@@ -1205,7 +1205,7 @@ CycloneDX encoder would drag Syft into `internal/output` and break that rule, so
 the document is assembled from `model.Report` directly via
 `github.com/CycloneDX/cyclonedx-go` (Apache-2.0). The practical consequence is
 that the CycloneDX output is a projection of the same normalised, deduplicated,
-sorted component list as every other format — not a second, independently
+sorted component list as every other format - not a second, independently
 derived view of the machine.
 
 ### It is deterministic
@@ -1225,21 +1225,21 @@ identity (the PURL when there is one, otherwise `type:name@version`, with a
 | `metadata.timestamp` | `scan.started_at` |
 | `metadata.tools.components` | `swinv` (with `swinv:tool:commit`) and `anchore/syft` at the version compiled in |
 | `metadata.component` | The scanned machine, as a `device` with `bom-ref: swinv:host`; host facts become `swinv:host:*` properties, `os_pretty_name` becomes the description |
-| `metadata.properties` | `swinv:schema_version` plus `swinv:scan:*` — `root`, `started_at`, `finished_at`, `duration_ms`, `ran_as_root`, `incomplete`, and one property per cataloger, exclusion, and warning |
+| `metadata.properties` | `swinv:schema_version` plus `swinv:scan:*` - `root`, `started_at`, `finished_at`, `duration_ms`, `ran_as_root`, `incomplete`, and one property per cataloger, exclusion, and warning |
 | `components[]` | Each inventory component, as `type: "library"` |
-| `components[].cpe` | The **first** CPE only — CycloneDX carries one per component. The rest are preserved as `swinv:component:cpe` properties. |
+| `components[].cpe` | The **first** CPE only - CycloneDX carries one per component. The rest are preserved as `swinv:component:cpe` properties. |
 | `components[].licenses` | SPDX `id` for a single-token value, `name` for free text, `expression` for a lone compound expression containing `AND`/`OR`/`WITH` or parentheses |
 | `components[].evidence.occurrences` | One entry per `location` |
 | `components[].properties` | `swinv:component:type`, `:language`, `:found_by`, and any extra `:cpe` values |
-| `services[]` | Each entry of the `services` block, with `bom-ref: swinv:service:<unit or executable basename>`, the schema's own `endpoints` field, and everything else as `swinv:service:*` properties — `confidence`, `executable`, `command`, `unit`, `container`, `user`, `pid`, `socket_activated`, and one `:evidence` property per line of the evidence trail |
-| `services[].trustZone` | `host-network`, `host-loopback`, or `container-network`. Used rather than `x-trust-boundary`, which is a boolean about whether *using* a service crosses a boundary — a different claim that other tools read that way. |
+| `services[]` | Each entry of the `services` block, with `bom-ref: swinv:service:<unit or executable basename>`, the schema's own `endpoints` field, and everything else as `swinv:service:*` properties - `confidence`, `executable`, `command`, `unit`, `container`, `user`, `pid`, `socket_activated`, and one `:evidence` property per line of the evidence trail |
+| `services[].trustZone` | `host-network`, `host-loopback`, or `container-network`. Used rather than `x-trust-boundary`, which is a boolean about whether *using* a service crosses a boundary - a different claim that other tools read that way. |
 | `services[].group` | The container name, for a service inside one. |
 | `components[]` of type `operating-system` | The distribution, with `syft:distro:*` properties. This is where SBOM consumers look for it: Syft's decoder, which Grype uses for `grype sbom:`, reads the Linux release only from a component of this type. Without it every deb and rpm arrives with no distro and matching falls back to comparing backported versions against upstream numbering. |
 | `dependencies[]` | One edge per service that was attributed, `dependsOn` the `bom-ref`s of the components behind it. This is the edge worth having: it answers "is anything internet-facing running the component this advisory is about" without a join |
 
 Custom property names are namespaced with `swinv:` as CycloneDX asks. Note that
-`type`, `language` and `found_by` survive only as properties — CycloneDX has no
-native slot for them — so a generic SBOM consumer will see the PURL, version,
+`type`, `language` and `found_by` survive only as properties - CycloneDX has no
+native slot for them - so a generic SBOM consumer will see the PURL, version,
 CPE and licences, and a `swinv`-aware one can recover the rest.
 
 Nothing is dropped silently, but the document is **larger**: on the test fixture
@@ -1264,7 +1264,7 @@ tail -q -n +2 *-latest.csv         >> all.csv
 ```
 
 This works because the column shape does not vary with the flags each host ran
-with — `sha256` and `change` are always present, empty or not.
+with - `sha256` and `change` are always present, empty or not.
 
 ### PostgreSQL
 
@@ -1317,7 +1317,7 @@ ORDER BY version;
 ```
 
 **Where has version drift crept in across the fleet?** Packages installed on
-more than one host with more than one version in play — the list to hand to
+more than one host with more than one version in play - the list to hand to
 whoever owns patching:
 
 ```sql
@@ -1332,7 +1332,7 @@ HAVING count(DISTINCT version) > 1 AND count(DISTINCT hostname) > 1
 ORDER BY versions DESC, hosts DESC;
 ```
 
-`min`/`max` here are lexicographic, not semantic — version strings are recorded
+`min`/`max` here are lexicographic, not semantic - version strings are recorded
 verbatim and are not parsed. Treat them as a hint, not an ordering.
 
 **Which components carry a given licence?** `licenses` is `;`-joined, so match
@@ -1362,7 +1362,7 @@ sqlite3 inventory.db '.mode csv' '.import all.csv inventory'
 
 When the target table does not yet exist, `.import` creates it from the header
 row, so it comes out with the same 17 columns. Everything lands as `text`,
-including `scanned_at` — RFC 3339 in UTC sorts and compares correctly as a
+including `scanned_at` - RFC 3339 in UTC sorts and compares correctly as a
 string, so that is rarely a problem.
 
 ### Working from the NDJSON instead
@@ -1370,7 +1370,7 @@ string, so that is rarely a problem.
 The NDJSON carries the same field names but keeps `cpes`, `licenses` and
 `locations` as arrays, which is the better starting point if your target is a
 JSON column or a document store. For anything that wants flat rows, use the CSV
-— it is the format designed for it.
+- it is the format designed for it.
 
 Loading it into a `jsonb` column needs one trick. `COPY` has no JSON mode, so
 the delimiter and quote characters are set to control bytes that cannot appear

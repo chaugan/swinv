@@ -60,7 +60,7 @@ make clean          # remove bin/, coverage output, and the bench output tree
 
 Neither is a module dependency, and neither is required to build.
 
-- **`golangci-lint`** — `make lint` runs `go vet` unconditionally and then runs
+- **`golangci-lint`** - `make lint` runs `go vet` unconditionally and then runs
   `golangci-lint` only if it is on `PATH`, printing a skip notice otherwise. CI
   always runs it, so a local skip is not a pass.
 
@@ -68,7 +68,7 @@ Neither is a module dependency, and neither is required to build.
   go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
   ```
 
-- **`go-licenses`** — used by `make licenses` and `make license-check`. If it is
+- **`go-licenses`** - used by `make licenses` and `make license-check`. If it is
   not on `PATH` the `Makefile` falls back to
   `go run github.com/google/go-licenses@v1.6.0`, which re-downloads it on every
   invocation. Install it once to avoid that:
@@ -105,7 +105,7 @@ forbids. Do not "simplify" it back.
 
 | Package | Responsibility | Constraints |
 |---|---|---|
-| `cmd/swinv` | Flag parsing and validation, wiring, report assembly, exit codes | Thin. Stdlib `flag` only — no Cobra, no Viper |
+| `cmd/swinv` | Flag parsing and validation, wiring, report assembly, exit codes | Thin. Stdlib `flag` only - no Cobra, no Viper |
 | `internal/model` | Output types, `SchemaVersion`, dedup/merge, deterministic sort, delta computation | **Stdlib only.** No dependencies at all |
 | `internal/hostfacts` | Machine identity: hostname, machine-id, DMI, kernel, NICs | Stdlib only. Reads kernel interfaces directly; **never** shells out to `hostnamectl`, `dmidecode`, `ip`, or `uname` |
 | `internal/scan` | Syft integration: source construction, exclusions, symlink preflight, cataloging, conversion, `--hash` digests | The only package that may import Syft |
@@ -124,7 +124,7 @@ Each of these cost real debugging time. They are all still live in v1.51.0.
 _ "modernc.org/sqlite"
 ```
 
-Syft v1.51.0 no longer registers a SQLite driver itself — it requires the
+Syft v1.51.0 no longer registers a SQLite driver itself - it requires the
 *consumer* to do it, exactly as its own `cmd/syft/main.go` does. Without the
 import, `CreateSBOM` does not merely skip RPM databases: it **fails outright**
 with `sqlite driver is required for cataloging newer RPM databases`, **even on a
@@ -158,14 +158,14 @@ This is the most important behaviour in the codebase. Upstream:
 [anchore/syft#3286](https://github.com/anchore/syft/issues/3286), still open.
 
 When Syft's indexer meets a symlink it queues the link's **target** as an
-*additional root* — `addSymlinkToIndex` returns the target unless `os.Stat`
+*additional root* - `addSymlinkToIndex` returns the target unless `os.Stat`
 reports `ENOENT`, so a *permission* error still queues it. Each additional root
 is then resolved with `filepath.EvalSymlinks` **before any path-index visitor
 runs**, and `indexAllRoots` treats a failure there as fatal to the whole scan.
 Observed on a live host running unprivileged: **zero components** after a
 five-minute scan, from one virtualenv symlink pointing into `/root`.
 
-**Excluding the target does not help.** That was tested, not assumed —
+**Excluding the target does not help.** That was tested, not assumed -
 `--exclude './root/**'` failed identically, because the fatal resolution happens
 before exclusions are consulted.
 
@@ -180,13 +180,13 @@ patterns.** `*/` and `**/` patterns are ignored there, so those paths are still
 walked by the preflight. That asymmetry is intentional and must be preserved:
 `*/` and `**/` do not mean quite the same thing once re-anchored to an absolute
 root, and a matcher that skipped slightly too much would let through exactly the
-symlink the pass exists to catch — resurrecting the zero-component failure. Extra
+symlink the pass exists to catch - resurrecting the zero-component failure. Extra
 `lstat` calls are cheap; a lost scan is not. If you touch `absoluteMatchers`, be
 sure you are erring towards walking more, never less.
 
 ### 4. `sbom.Artifacts.LinuxDistribution` may be nil
 
-It is a `*linux.Release` and it is nil more often than you would guess — a tree
+It is a `*linux.Release` and it is nil more often than you would guess - a tree
 with no `os-release`, or cataloging that failed early. Scanning `/usr/bin`
 produces a nil distribution. Always nil-check, and fall back to
 `internal/hostfacts`:
@@ -211,7 +211,7 @@ make lint   # go vet ./... + golangci-lint
 Both must be clean. CI runs the same gates plus the licence gate and a
 systemd-unit check.
 
-**The race detector needs cgo.** That applies to the test step only —
+**The race detector needs cgo.** That applies to the test step only -
 `CGO_ENABLED=1` for `go test -race`, while the shipped binary is always built
 with `CGO_ENABLED=0`. CI sets it per step and then asserts with `ldd` that
 `bin/swinv` is not a dynamic executable. Do not "fix" a race-detector build
@@ -219,7 +219,7 @@ failure by making the product binary dynamic.
 
 Golden files live in `testdata/golden` and are generated from the fixture rootfs
 in `testdata/rootfs`. Regenerate them with `make golden` (which sets
-`SWINV_UPDATE_GOLDEN=1`) and **review the diff before committing** — a golden
+`SWINV_UPDATE_GOLDEN=1`) and **review the diff before committing** - a golden
 update is a claim that the output change is intended.
 
 ### Tests that must not be weakened
@@ -229,7 +229,7 @@ change pass is almost always the wrong fix.
 
 | Test | The bug it encodes |
 |---|---|
-| `TestQuarantineSymlinks` | One unresolvable symlink aborting the scan — the zero-component failure behind the preflight |
+| `TestQuarantineSymlinks` | One unresolvable symlink aborting the scan - the zero-component failure behind the preflight |
 | `TestSnapMountsSurviveTheSquashfsRule` | Snaps are squashfs loop mounts, so the "skip non-local filesystems" rule silently deleted the "scan snaps" rule and made `--no-snap` a no-op |
 | `TestHashComponentsSkipsSharedEvidenceFiles` | Hashing `/var/lib/dpkg/status` gave every deb the same digest and made every package look changed whenever any one changed |
 | `TestNormalizeIsOrderIndependent` | Dedup and merge must not depend on cataloger completion order; the output has to be byte-identical between runs |
@@ -260,7 +260,7 @@ the GPL. This is a hard requirement, not a preference.
 
 `make license-check` fails the build if any dependency's licence is GPL, AGPL,
 LGPL, or unidentified. CI runs it as its own job, then runs `make licenses` and
-fails again if `THIRD_PARTY_LICENSES.md` is stale — so regenerate and commit that
+fails again if `THIRD_PARTY_LICENSES.md` is stale - so regenerate and commit that
 file whenever the dependency graph changes.
 
 ### `licenses-allowlist.txt`
@@ -270,7 +270,7 @@ two dependencies ship permissive licences in prose it cannot recognise:
 
 | Module | Actual licence | Read where |
 |---|---|---|
-| `github.com/xi2/xz` | Public domain — the LICENSE says so in as many words | Module cache, `xi2/xz@v0.0.0-20171230120015-48954b6210f8/LICENSE` |
+| `github.com/xi2/xz` | Public domain - the LICENSE says so in as many words | Module cache, `xi2/xz@v0.0.0-20171230120015-48954b6210f8/LICENSE` |
 | `modernc.org/mathutil` | Verbatim 3-clause BSD text | Module cache, `modernc.org/mathutil@v1.7.1/LICENSE` |
 
 Both were read by a human, and the allowlist records the licence found and where
@@ -280,8 +280,8 @@ an audit, not to silence the gate.
 **The hard rule: an allowlist entry only ever suppresses an "Unknown"
 classification. It can never suppress a detected GPL/AGPL/LGPL.** The gate checks
 for copyleft *before* it consults the allowlist and reports such a module as
-`copyleft — NOT allowlistable` regardless of what is listed. This has been
-negative-tested in both directions — injecting a GPL dependency correctly failed,
+`copyleft - NOT allowlistable` regardless of what is listed. This has been
+negative-tested in both directions - injecting a GPL dependency correctly failed,
 and flipping an allowlisted module to LGPL **also** correctly failed. Preserve
 that property in any edit to the gate.
 
@@ -298,30 +298,30 @@ as a question.** Do not import it and do not vendor it.
 
 The formats do not all pick up a new field automatically. Work through this list.
 
-1. **`internal/model/model.go`** — add the field to `Component` (or `Report`,
+1. **`internal/model/model.go`** - add the field to `Component` (or `Report`,
    `Host`, `ScanMeta`) with a `snake_case` JSON tag. Optional fields take
    `omitempty`.
-2. **Dedup and ordering** — if the field takes part in identity, update
+2. **Dedup and ordering** - if the field takes part in identity, update
    `Component.identity`, `Component.key`, and `Less`. If it is merged across
    duplicates, extend `Normalize`: multi-valued fields union and sort,
    single-valued fields take the first non-empty value so the result does not
    depend on cataloger completion order.
-3. **Populate it** — `componentFromPackage` in `internal/scan/scan.go` for
+3. **Populate it** - `componentFromPackage` in `internal/scan/scan.go` for
    anything derived from a Syft package; `internal/hostfacts` for host identity.
-4. **`internal/output/csv.go`** — append the column to `csvColumns` and write it
+4. **`internal/output/csv.go`** - append the column to `csvColumns` and write it
    in `WriteCSV`. **CSV columns are unconditional**: they are emitted even when
    the flag that populates them was not used, so the column shape never varies
    with flags and files stay concatenable across machines and runs. Do not make a
    column conditional.
-5. **`internal/output/ndjson.go`** — `ndjsonLine` is an explicit struct, so a new
+5. **`internal/output/ndjson.go`** - `ndjsonLine` is an explicit struct, so a new
    component field does **not** appear there for free. Add it if it belongs.
-6. **`internal/output/cyclonedx.go`** — map it in `cdxComponent` or as a scan
+6. **`internal/output/cyclonedx.go`** - map it in `cdxComponent` or as a scan
    property, if CycloneDX has somewhere sensible to put it. Build it from
    `model.Report`; do not reach for Syft's encoder.
 7. **`internal/output/json.go`** needs nothing: it marshals `model.Report`.
 8. **Bump `SchemaVersion`** per the policy below.
-9. **Tests** — extend the unit tests, then `make golden` and review the diff.
-10. **Docs** — update the flag/format tables in `README.md` and §6 of the spec.
+9. **Tests** - extend the unit tests, then `make golden` and review the diff.
+10. **Docs** - update the flag/format tables in `README.md` and §6 of the spec.
 
 ---
 
@@ -337,11 +337,11 @@ The formats do not all pick up a new field automatically. Work through this list
 4. Re-check every landmine above. In particular: does Syft register a SQLite
    driver itself yet, does it still mutate the exclusion slice, and is
    [#3286](https://github.com/anchore/syft/issues/3286) fixed? If #3286 is fixed,
-   the preflight can go — with its tests replaced, not merely deleted.
+   the preflight can go - with its tests replaced, not merely deleted.
 5. `make test` and `make lint`.
 6. `make golden` and read the diff. A cataloger change upstream shows up here
    first.
-7. `make licenses` — a Syft bump moves a large part of the dependency graph, and
+7. `make licenses` - a Syft bump moves a large part of the dependency graph, and
    the licence gate is the thing that catches a new copyleft transitive.
 8. Run the binary against a real host and sanity-check the component count and
    the licence coverage before and after.
@@ -369,7 +369,7 @@ A major bump is a real event: say so in the pull request, and update the spec's
 §6 in the same change.
 
 Note that `--since` deliberately accepts **any** schema version as a baseline.
-Refusing an older report would break the flag exactly when it is most wanted —
+Refusing an older report would break the flag exactly when it is most wanted -
 immediately after an upgrade.
 
 ---
@@ -381,14 +381,14 @@ Keep both brief.
 - One logical change per commit. Conventional-commit style subjects
   (`fix: quarantine symlinks before source construction`) are welcome but not
   enforced.
-- Explain **why** in the body, not what — the diff already says what. The
+- Explain **why** in the body, not what - the diff already says what. The
   non-obvious reasons are the ones worth writing down, and several of them ended
   up in the spec as a result.
 - A pull request should say what changed, why, and what you ran. `make test`,
   `make lint`, and `make license-check` at minimum; add `make golden` output if
   the golden files moved.
 - If you changed a documented behaviour, update `README.md` and the spec in the
-  same pull request. The spec is the specification of record — leaving it stale
+  same pull request. The spec is the specification of record - leaving it stale
   is a defect.
 - If a change touches one of the tests listed above, say so explicitly and
   explain why weakening it is safe. The default answer is that it is not.

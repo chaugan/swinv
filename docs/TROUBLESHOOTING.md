@@ -35,8 +35,8 @@ jq '.components | length'      web-01-latest.json   # how much was found
 jq '.scan.ran_as_root, .scan.duration_ms' web-01-latest.json
 ```
 
-`--verbose` adds a per-stage timing breakdown on `stderr` — symlink preflight,
-source construction, cataloging, conversion — which tells you which stage is
+`--verbose` adds a per-stage timing breakdown on `stderr` - symlink preflight,
+source construction, cataloging, conversion - which tells you which stage is
 responsible before you start changing flags:
 
 ```console
@@ -80,7 +80,7 @@ unable to index filesystem path="/root/.local/share/uv/.../python3.12":
 
 The bug is upstream, [anchore/syft#3286](https://github.com/anchore/syft/issues/3286).
 When Syft's directory indexer meets a symlink it queues the link's **target** as
-an *additional root* to index — `addSymlinkToIndex` returns the target unless
+an *additional root* to index - `addSymlinkToIndex` returns the target unless
 `os.Stat` reports `ENOENT`, so a *permission* error still queues it. Each
 additional root is then resolved with `filepath.EvalSymlinks` **before any
 path-index visitor runs**, and `indexAllRoots` treats a failure there as fatal to
@@ -124,7 +124,7 @@ Work down this list:
    `symlink preflight did not complete`, the lstat walk itself aborted and a bad
    symlink may still be present.
 3. **The preflight only honours `./`-anchored exclusion patterns.** `*/` and
-   `**/` patterns are ignored there, so those paths are still walked — deliberate,
+   `**/` patterns are ignored there, so those paths are still walked - deliberate,
    because over-skipping in the preflight would let through exactly the symlink it
    exists to catch. This means the preflight can only *miss* a link that lives
    under a `./`-excluded tree, which Syft would not index either.
@@ -175,7 +175,7 @@ cataloging did not complete, the inventory may be missing packages: <error>
 ```
 
 Other entries in `scan.warnings` are informational and do **not** set
-`incomplete` — they are there so a consumer can tell what was skipped:
+`incomplete` - they are there so a consumer can tell what was skipped:
 
 | Warning | Meaning |
 |---|---|
@@ -194,7 +194,7 @@ failure:
 swinv --out /var/lib/swinv || [ $? -eq 1 ]
 ```
 
-Exit **3** is the genuine failure — the source could not be constructed or the
+Exit **3** is the genuine failure - the source could not be constructed or the
 output could not be written; nothing usable was produced. Exit **4** means the
 `--timeout` deadline (default `30m`) expired.
 
@@ -222,24 +222,24 @@ findmnt -rno TARGET,FSTYPE -t nfs,nfs4,cifs,fuse.sshfs   # what is mounted
 ```
 
 A warning of the form `could not read /proc/self/mountinfo (...)` means the
-guard could not run at all — the scan is still correct, only slow.
+guard could not run at all - the scan is still correct, only slow.
 
 Note the deliberate carve-out: snaps are squashfs loop mounts, and mount points
 under `/snap` and `/var/lib/snapd/snap` are exempted from the squashfs rule
-unless `--no-snap` is passed. A squashfs image mounted anywhere else — an ISO, an
-appliance payload — stays excluded.
+unless `--no-snap` is passed. A squashfs image mounted anywhere else - an ISO, an
+appliance payload - stays excluded.
 
 ### 2. Is `--include-home` on?
 
 Turn it off. On the development host `/home` alone was 508,687 files and 40 GB
-across 86 `node_modules` trees — more than the entire rest of the filesystem
+across 86 `node_modules` trees - more than the entire rest of the filesystem
 combined, and a full scan with home included did not finish in a comparable
 time. `/home` and `/root` are excluded by default for exactly this reason.
 
 ### 3. Are there large source trees under `/opt` or `/srv`?
 
 These are not excluded by default because they legitimately hold installed
-software. A developer checkout is a different matter — the reference host carried
+software. A developer checkout is a different matter - the reference host carried
 156k files of `node_modules` under `/opt`. Exclude the checkout, not the tree:
 
 ```sh
@@ -266,7 +266,7 @@ Narrowing catalogers narrows the parsing, not the walk. Measured on the referenc
 host: `--catalogers os` took **135 s**, against a 2 s target for OS-only
 collection.
 
-The obvious follow-up — also excluding `/usr` and `/opt` — does get an OS-only
+The obvious follow-up - also excluding `/usr` and `/opt` - does get an OS-only
 scan to about 4 s, and it is a trap: **dpkg licences are read from
 `/usr/share/doc/*/copyright`**, so excluding `/usr` silently drops deb licence
 coverage from 99% to 0%. That optimisation was implemented, measured, and
@@ -296,7 +296,7 @@ Measured on the reference host, every row producing the same inventory:
 | `--max-memory 768MiB --parallelism 1` | 615 s | **1085 MB** |
 
 **If you change one thing, change `--max-memory`.** At `1536MiB` it beat the
-default on both axes — 30% less memory *and* 13% faster — because a smaller heap
+default on both axes - 30% less memory *and* 13% faster - because a smaller heap
 means less to scan and better cache locality.
 
 ```sh
@@ -305,15 +305,15 @@ swinv --max-memory 768MiB --parallelism 1 --out /var/lib/swinv   # constrained h
 ```
 
 `--max-memory` sets Go's soft memory limit: the garbage collector works
-proportionally harder as the limit is approached. It is *soft* by design — if the
+proportionally harder as the limit is approached. It is *soft* by design - if the
 genuinely live data exceeds it, `swinv` still allocates rather than failing,
 because a truncated inventory is worse than a larger one. It lowers peak RSS; it
 cannot guarantee a ceiling. Do not set a `MemoryMax=` in the systemd unit and
-expect a clean result — that will get the process killed, not slowed.
+expect a clean result - that will get the process killed, not slowed.
 
 > **`--no-file-ownership` will NOT help.** It is roughly 33% faster but uses
 > slightly **more** memory (2414 MB against the default's 2271 MB). Use it to buy
-> speed, never RAM — and note it reintroduces binary/package duplicates, because
+> speed, never RAM - and note it reintroduces binary/package duplicates, because
 > file ownership is what lets Syft drop a `binary` component already claimed by
 > an OS package.
 
@@ -368,11 +368,11 @@ make build
 ## `sqlite driver is required for cataloging newer RPM databases`
 
 Only relevant if you are building a modified copy of `swinv`. **The blank import
-of `modernc.org/sqlite` in `internal/scan` is load-bearing — do not remove it.**
+of `modernc.org/sqlite` in `internal/scan` is load-bearing - do not remove it.**
 
 As of v1.51.0 Syft no longer registers a SQLite driver itself; it requires the
 *consumer* to do it (Syft's own `cmd/syft/main.go` does exactly this import).
-Without it, `CreateSBOM` does not merely skip RPM databases — it **fails
+Without it, `CreateSBOM` does not merely skip RPM databases - it **fails
 outright**, on any host, **including hosts with no RPM database at all**.
 
 The driver is pure Go, so `CGO_ENABLED=0` and the static binary are unaffected.
@@ -408,7 +408,7 @@ A non-root run is fully supported and exits 0. It records:
 
 `host.product_serial` and `host.product_uuid` come from
 `/sys/class/dmi/id/product_serial` and `product_uuid`, which are root-readable
-only. On `EACCES` they are left empty and no separate warning is emitted —
+only. On `EACCES` they are left empty and no separate warning is emitted -
 `hostfacts` never turns a missing or unreadable file into an error. The same
 applies to any package under a directory the user cannot traverse.
 
@@ -435,7 +435,7 @@ Two causes, and `swinv` tells you which.
 
 ### You compared against a different machine's report
 
-Permitted, but recorded as a warning — otherwise it silently looks like the whole
+Permitted, but recorded as a warning - otherwise it silently looks like the whole
 system was replaced:
 
 ```
@@ -474,7 +474,7 @@ jq '.delta.delta_only // false' baseline.json    # true => unusable as a baselin
 ```
 
 Fix it by keeping a full inventory as the baseline. `--delta-only` is for the
-*output* you ship to a change feed, not for the file you keep on disk — the
+*output* you ship to a change feed, not for the file you keep on disk - the
 default (delta **plus** the full component list) keeps the file self-contained
 and reusable.
 
@@ -491,7 +491,7 @@ upgrade reads as one `changed` entry rather than a removal plus an addition).
 ## Disk filling up in timestamped mode
 
 `--output-mode timestamped` writes **a brand-new file for every run and keeps it
-forever**. There is no built-in retention in `swinv` — it writes files and stops
+forever**. There is no built-in retention in `swinv` - it writes files and stops
 there. If a daily timer has been running for a year, you have a year of files.
 
 Check what you have:
@@ -515,13 +515,13 @@ find /var/lib/swinv -maxdepth 1 -type f \( -name '*.json' -o -name '*.csv' \
 
 ### Running under WSL2
 
-`swinv` works under WSL2 — verified on Fedora 44 — but two things differ from a
+`swinv` works under WSL2 - verified on Fedora 44 - but two things differ from a
 bare-metal host, and both are correct rather than faults.
 
 **Windows drives are not scanned.** WSL mounts them under `/mnt`, which is a
 default exclusion, and the mount-table rule catches `/mnt/wsl`, `/mnt/wslg` and
 `/usr/lib/wsl/lib` besides. If you ever see a scan of `/` taking hours under
-WSL, check that `/mnt/**` is still in `scan.excluded` — walking a mounted C:
+WSL, check that `/mnt/**` is still in `scan.excluded` - walking a mounted C:
 drive is the one way to make this tool unusable:
 
 ```sh
@@ -534,7 +534,7 @@ carries the Windows driver packages, complete with vendor `.exe`, `.dll` and
 .NET assemblies. Before `9p` was treated as a non-local filesystem, a Fedora 44
 guest reported **477 of 1,003 components (48% of the inventory)** as ASUS,
 Intel and NVIDIA software installed on Linux. If you see vendor names you
-recognise from Windows in a Linux inventory, that is what happened — upgrade,
+recognise from Windows in a Linux inventory, that is what happened - upgrade,
 or add `--exclude './usr/lib/wsl/**'`.
 
 **Kernel modules are not inventoried.** WSL supplies its own kernel and mounts
@@ -548,8 +548,8 @@ auto-excluded 23 non-local filesystem mount point(s):
 
 The effect is large. On a bare-metal Ubuntu host the kernel cataloger accounted
 for 6,905 of 14,190 components; under WSL it contributes none. That is the
-right answer — those modules belong to WSL, not to the installed
-distribution — but do not compare component counts between a WSL guest and a
+right answer - those modules belong to WSL, not to the installed
+distribution - but do not compare component counts between a WSL guest and a
 physical host and expect them to line up.
 
 **systemd may not be running.** WSL2 only starts it when `/etc/wsl.conf`
@@ -560,7 +560,7 @@ cannot be enabled. That is a WSL configuration matter, not a `swinv` problem.
 ### `hostname: command not found`, or a path with nothing before `-latest.json`
 
 `hostname` is not installed on a minimal Fedora, on many container images, or
-on hardened builds — it is a separate package, not part of coreutils. A command
+on hardened builds - it is a separate package, not part of coreutils. A command
 written as `$(hostname)-latest.json` then expands to just `-latest.json` and
 fails with a confusing "no such file" naming a path you never typed:
 
@@ -590,7 +590,7 @@ inventory, `timestamped` is the wrong mode:
 | Mode | Files produced | Growth |
 |---|---|---|
 | `dated` | `web-01-20240309.json` | one per day |
-| `overwrite` | `web-01.json` | none — one fixed file, replaced atomically |
+| `overwrite` | `web-01.json` | none - one fixed file, replaced atomically |
 | `timestamped` *(default)* | `web-01-20240309T140506Z.json` | one per run, forever |
 
 Whatever you choose, **consumers should follow the `-latest` symlink**, not
@@ -602,7 +602,7 @@ rsync -a /var/lib/swinv/*-latest.json collector:/inventory/
 
 `{hostname}-latest.json` / `.csv` are maintained on by default
 (`--latest-symlink`), updated atomically, and point at the newest file by
-relative name — which is why a cleanup that deletes files must leave the symlinks
+relative name - which is why a cleanup that deletes files must leave the symlinks
 themselves in place. Note also that `cyclonedx-json` output is roughly twice the
 size of the JSON, so dropping it from `--format` is an easy saving if nothing
 consumes it.
@@ -620,7 +620,7 @@ $ swinv --version
 swinv dev (commit none, syft v1.51.0, linux/amd64)
 ```
 
-**2. The warnings array** — this is the single most useful field, and it is where
+**2. The warnings array** - this is the single most useful field, and it is where
 `swinv` records everything that degraded the scan.
 
 ```sh
@@ -652,7 +652,7 @@ jq -r '.host.os_pretty_name, .host.kernel_release, .host.architecture,
 **6. The exit code**, and the full `stderr` text of the run.
 
 If the report itself is the problem, a `.scan` block plus one offending component
-is usually enough — do **not** attach a full inventory. It carries hostname,
+is usually enough - do **not** attach a full inventory. It carries hostname,
 machine ID, MAC addresses, IP addresses, DMI serial and UUID, and the complete
 software list of the machine.
 

@@ -4,7 +4,7 @@
 # (which is `nfpm package -f packaging/nfpm.yaml -p deb|rpm -t dist/`)
 #
 # swinv is a statically linked CGO_ENABLED=0 binary, so the packages declare no
-# runtime dependencies at all — that is the whole point of the distribution
+# runtime dependencies at all - that is the whole point of the distribution
 # model. Do not add any without a reason that survives `ldd bin/swinv`.
 
 name: swinv

@@ -5,7 +5,7 @@
 # recognise, and reports as "Unknown". Listing a module here records that a
 # human read the actual licence text and confirmed it is permissive.
 #
-# SCOPE OF THIS FILE — read before adding an entry:
+# SCOPE OF THIS FILE - read before adding an entry:
 #   * An entry ONLY suppresses an "Unknown"/undetected classification.
 #   * It does NOT and MUST NOT suppress a detected GPL, AGPL, or LGPL licence.
 #     `make license-check` fails on those regardless of what is listed here.

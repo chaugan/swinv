@@ -17,14 +17,14 @@
 disk, nothing leaves the host.**
 
 `swinv` scans the machine it runs on and records every piece of installed
-software it can find — OS packages on Linux, the registry on Windows, language
+software it can find - OS packages on Linux, the registry on Windows, language
 packages on both, loose binaries that no package manager ever installed, and
-the contents of the containers it is running or has stopped — then writes the
+the contents of the containers it is running or has stopped - then writes the
 result to local JSON and CSV files.
 
 It also records **what is actually listening and what is exposed at the
 network edge**, on Linux and Windows both, and follows a published port into
-the container that answers it — so an open port on the host resolves to the
+the container that answers it - so an open port on the host resolves to the
 exact package inside the container serving it:
 
 ```
@@ -33,10 +33,10 @@ exact package inside the container serving it:
 ```
 
 That is the question an inventory of packages cannot answer on its own, and
-the reason this exists — see [why not just use…?](#why-not-just-use)
+the reason this exists - see [why not just use…?](#why-not-just-use)
 
-`swinv` **is** no server, no daemon and no database — it is one binary that
-runs, writes files and exits — and **no inventory data ever leaves the
+`swinv` **is** no server, no daemon and no database - it is one binary that
+runs, writes files and exits - and **no inventory data ever leaves the
 machine**. Collecting the files afterwards is deliberately your job: `rsync`,
 Ansible, a log shipper, or `scp`.
 
@@ -45,11 +45,11 @@ local container runtime, over its Unix socket or named pipe. That is the only
 way to see inside a stopped container, and the only way to see inside any
 container from Windows, where a Docker Desktop container is a Linux process in
 a virtual machine that no Windows API reaches. It is local kernel IPC with no
-address and no route, it reads the container list and files and nothing else —
-no create, no exec, no attach — and `--no-containers` turns it off.
+address and no route, it reads the container list and files and nothing else -
+no create, no exec, no attach - and `--no-containers` turns it off.
 
 The one piece of network activity is an optional reverse-DNS lookup used to
-fill in the host's FQDN — ordinary name resolution against your configured
+fill in the host's FQDN - ordinary name resolution against your configured
 resolver, carrying no inventory data. `--offline` turns it off, at which point
 the run performs no network activity at all.
 
@@ -136,7 +136,7 @@ No package? The binary is static and has no dependencies, so
 `install -m0755 swinv-v0.6.1-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
-That writes timestamped files plus `-latest` symlinks — and, run as root with
+That writes timestamped files plus `-latest` symlinks - and, run as root with
 containers present, two more alongside them for the services and the network
 edge:
 
@@ -158,14 +158,14 @@ swinv --since /var/lib/swinv/*-latest.json      # added/removed/changed
 ```
 
 To run it daily across a fleet, install the `.deb` or `.rpm` and enable the
-timer — see [Install](#install).
+timer - see [Install](#install).
 
 Running as root finds more (root-only paths, DMI serials). Running unprivileged
 is fully supported, never an error, and records a warning saying what it missed.
 
 ### What comes out
 
-Everything below is real output, reproducible from a clone — the repository ships
+Everything below is real output, reproducible from a clone - the repository ships
 a small fixture filesystem so you can see the shape before scanning anything.
 Only the hostname has been substituted:
 
@@ -239,13 +239,13 @@ consumer can tell a thin inventory from a complete one.
 Three fields on that second component are worth calling out, because they exist
 to stop a consumer drawing the wrong conclusion:
 
-- **`vendor`** — who made it, taken from whatever the ecosystem records: an rpm
+- **`vendor`** - who made it, taken from whatever the ecosystem records: an rpm
   `Vendor`, a dpkg `Maintainer`, a Python or npm `Author`, a Windows PE
   `CompanyName`.
-- **`root`** — which filesystem root it was found in. `/` is the machine
+- **`root`** - which filesystem root it was found in. `/` is the machine
   itself; anything else is a snap base, a container layer or a mounted image,
   which are separate operating systems with their own release and patch state.
-- **`owned_by`** — the OS package that installed it, where one did. Ubuntu's
+- **`owned_by`** - the OS package that installed it, where one did. Ubuntu's
   `python3-flask` backports fixes without changing the upstream version, so
   assessing the PyPI row against upstream releases reports a patched host as
   badly out of date. An **empty** `owned_by` is equally meaningful: the package
@@ -284,7 +284,7 @@ Multi-valued columns are joined with `;` **inside** the field, so a licence
 containing a comma stays in its own column. `sha256` and `change` are always
 present even when unused, so the column shape never varies with flags.
 
-A real host produces the same shape at a very different scale — around 14,000
+A real host produces the same shape at a very different scale - around 14,000
 components on the machine this was developed on.
 
 #### What is listening
@@ -318,7 +318,7 @@ swinv: wrote /var/lib/swinv/web-01-20260822T131806.571Z-exposure.csv
 
 **The middle number in that summary is the one to read.** Three of the
 thirty-one services on that host are software that is serving traffic and that
-no package manager installed — a vendor binary under `/opt`, and two copies of
+no package manager installed - a vendor binary under `/opt`, and two copies of
 `/usr/local/bin/node`. Nothing in a package list says so.
 
 `confidence` is recorded rather than implied, and every finding carries the
@@ -326,7 +326,7 @@ no package manager installed — a vendor binary under `/opt`, and two copies of
 indistinguishable from a guess by the time it reaches anyone. Socket-activated
 ports are marked as such rather than blamed on `systemd`, since the daemon may
 not be running at all. Unprivileged, the ports are still reported and the
-processes behind them mostly are not — which is stated, not hidden.
+processes behind them mostly are not - which is stated, not hidden.
 
 It all comes from `/proc`: no `ss`, no `netstat`, no `lsof`, no D-Bus.
 `--no-services` skips it; `--no-service-command` keeps it but drops the command
@@ -335,7 +335,7 @@ lines, which is where secrets end up.
 #### What is exposed, and what is inside the containers
 
 The same run records the network edge: one row per listening socket in the
-**host** network namespace, with the software behind it — following a published
+**host** network namespace, with the software behind it - following a published
 port into the container that answers it.
 
 ```jsonc
@@ -351,19 +351,19 @@ port into the container that answers it.
 ```
 
 That PURL is the point. It comes from the **container's own package database**
-— an Alpine container on an Ubuntu host — and it is a coordinate Grype and
+- an Alpine container on an Ubuntu host - and it is a coordinate Grype and
 Trivy match today. An image reference is not: there is no `oci` matcher
 anywhere in the chain, so an image PURL alone yields a component that gets
 reported clean because nothing ever looked at it. swinv emits the image digest
 as a *locator*, on its own field, never as an identity.
 
-`containers[]` lists every container and what it runs, with its own OS —
+`containers[]` lists every container and what it runs, with its own OS -
 `rhel-8.10`, `alpine-3.21.3`, `wolfi-20230201`, each a different operating
 system from the host, deciding which advisories apply. On the machine this was
 developed on that is 17 containers across five distributions and **1,281
 packages**, 570 of them inside containers that are not even running.
 
-Here is that same nginx from the other end — the container itself, with what
+Here is that same nginx from the other end - the container itself, with what
 it runs and where the host publishes it:
 
 ```jsonc
@@ -393,12 +393,12 @@ it runs and where the host publishes it:
 ```
 
 `processes: 9` is nginx's master and its eight workers folded back into one
-service — they share the socket, and reporting nine would misstate both what is
+service - they share the socket, and reporting nine would misstate both what is
 running and how much of it. `published_as` is the back-link to the `exposure`
 row above.
 
 **Stopped containers are included too.** They serve nothing, so they get no
-exposure row — but a stopped `postgres:14` still holds 142 packages with the
+exposure row - but a stopped `postgres:14` still holds 142 packages with the
 same advisories, and it will be up again:
 
 ```jsonc
@@ -421,7 +421,7 @@ same advisories, and it will be up again:
 }
 ```
 
-`declared_endpoints` is what `EXPOSE` or `-p` says it would serve on — **a
+`declared_endpoints` is what `EXPOSE` or `-p` says it would serve on - **a
 declaration, never an observation**, which is why a stopped container's ports
 appear here and never in `exposure`. A container with no network endpoint at
 all is skipped, since it is not part of this machine's attack surface.
@@ -441,8 +441,8 @@ carry `attributes.scan_scope` saying which produced them.
 **`bind_scope` is about the bind, not about reachability.** swinv reads no
 firewall, no NAT table and no security group, so there is no "public" and
 nothing says "internet-facing". And because a port published by a netfilter
-rule has no listening socket at all — Kubernetes NodePort, Docker with
-`userland-proxy` disabled, Podman's default netavark — every report carries
+rule has no listening socket at all - Kubernetes NodePort, Docker with
+`userland-proxy` disabled, Podman's default netavark - every report carries
 `scan.exposure_blind_spots` naming what it could not see. **A short exposure
 list means nothing until you have read that array.**
 
@@ -459,19 +459,19 @@ swinv --out /var/lib/swinv --format ndjson --heartbeat --ndjson-include all
 
 **`--heartbeat`** puts a one-line digest of the inventory at the head of the
 stream and omits the component records when that digest matches the last scan.
-Every scan otherwise restates the whole inventory — correct, since a package
+Every scan otherwise restates the whole inventory - correct, since a package
 that disappears is genuinely gone rather than merely unmentioned, and expensive:
 5,000 hosts averaging 14,000 components scanned hourly is over a billion records
 a day, nearly all identical to the day before. Measured on a 23,493-component
 host: **23,494 lines became 1**, while the JSON stayed complete at 24 MB.
 
 It is never a delta. When anything changes the whole list is sent again, because
-a delta cannot express a removal — and "this package is no longer installed" is
+a delta cannot express a removal - and "this package is no longer installed" is
 the fact that decides whether a vulnerability is fixed or merely unreported.
 
 **`--ndjson-include`** adds `exposure` and `container` records, so what is
-listening reaches the stream and not only the JSON document. Both are small — 46
-and 16 records against 2,715 components on a 17-container host — so they are
+listening reaches the stream and not only the JSON document. Both are small - 46
+and 16 records against 2,715 components on a 17-container host - so they are
 sent even on an unchanged heartbeat scan: a port opening is exactly the kind of
 change that happens while installed software does not.
 
@@ -483,7 +483,7 @@ line without one is a component, so nothing that reads the stream today breaks.
 **[Full schema, NDJSON, CycloneDX and SQL loading →](docs/OUTPUT.md)**
 
 Two runs on an unchanged machine produce **byte-identical output** apart from the
-timestamps in `scan` — which is what makes these files worth diffing.
+timestamps in `scan` - which is what makes these files worth diffing.
 
 ## Install
 
@@ -514,7 +514,7 @@ sudo dnf install --nogpgcheck "./swinv-${VER}-1.x86_64.rpm"   # upgrade with: dn
 The `./` prefix is required, or `dnf` searches the repositories for a package by
 that name. `--nogpgcheck` is needed because releases are not yet signed.
 
-### Any Linux — the static binary
+### Any Linux - the static binary
 
 It has no dependencies of any kind, not even libc, so this works everywhere
 including Alpine and distroless images:
@@ -527,8 +527,8 @@ sudo install -m0755 swinv-linux-amd64 /usr/bin/swinv
 ```
 
 Use `swinv-linux-arm64` for 64-bit ARM. Every release publishes each binary
-twice — once with the version in the name for archival, and once without, so
-these `latest/download` URLs keep working and never need editing. **Always check the digest** — you are about
+twice - once with the version in the name for archival, and once without, so
+these `latest/download` URLs keep working and never need editing. **Always check the digest** - you are about
 to run this as root against your whole filesystem.
 
 ### With Go
@@ -589,7 +589,7 @@ docker run --rm -v /:/host:ro -v "$PWD":/out \
 ```
 
 `swinv` recognises a mounted tree as a root filesystem when it contains
-`etc/os-release`, and applies the usual layout exclusions to it — otherwise
+`etc/os-release`, and applies the usual layout exclusions to it - otherwise
 this would walk `/host/proc`, `/host/sys` and every home directory on the
 machine. It says so in `scan.warnings` rather than doing it silently. Verified:
 scanning an Ubuntu host this way found 1,587 deb components against `dpkg`'s
@@ -609,7 +609,7 @@ Needs Go 1.26.6 or newer; see [Building](#building).
 
 The packages place the binary at `/usr/bin/swinv`, the systemd units in
 `/usr/lib/systemd/system/`, the man page at `swinv(8)`, and create
-`/var/lib/swinv`. **The daily timer ships deliberately disabled** — turning on a
+`/var/lib/swinv`. **The daily timer ships deliberately disabled** - turning on a
 filesystem-wide scan uninvited would be rude:
 
 ```sh
@@ -631,7 +631,7 @@ distribution's own package manager:
 
 | Distribution | Package manager | Result |
 |---|---|---|
-| Alpine | apk | **16 / 16** — and the static binary runs on musl |
+| Alpine | apk | **16 / 16** - and the static binary runs on musl |
 | Debian | dpkg | **78 / 78** |
 | Ubuntu | dpkg | full scan on a real host, 14,190 components |
 | Fedora | rpm | **147 / 147** in a container, **257 / 257** on a real host |
@@ -650,8 +650,8 @@ Beyond OS packages, on real hosts:
 | `.deb` install, systemd run, purge | **Tested** on Ubuntu |
 | `.rpm` install and upgrade | **Tested** on Fedora via `dnf` |
 | Go modules and ELF binaries | **Tested** on Fedora, CVE-matched via `grype` |
-| CycloneDX → `grype` | **Tested** — 234 matches from a 568-component document |
-| `linux/arm64` | **Tested** under emulation — apk 16/16, dpkg 78/78, rpm 147/147, `architecture` correctly `arm64` |
+| CycloneDX → `grype` | **Tested** - 234 matches from a 568-component document |
+| `linux/arm64` | **Tested** under emulation - apk 16/16, dpkg 78/78, rpm 147/147, `architecture` correctly `arm64` |
 | Listening sockets and exposure | **Tested** on Linux and on Windows, in CI and on real hosts |
 | Containers, running and stopped | **Tested** on a host with 17 containers across 5 distributions; CI starts its own and asserts the published port resolves to the package inside |
 
@@ -677,13 +677,13 @@ to see.
 
 | Surface | Status |
 |---|---|
-| uninstall registry | **Tested** on Windows 11 25H2 and Server 2025 — 380 and 423 products |
-| Store and MSIX packages | **Tested** — 135 packages on a real laptop |
-| Windows servicing state | **Tested** — cumulative update version asserted equal to the host's build and UBR |
-| MFT enumeration | **Tested** — 2,889,563 records in 12 s, every path resolved |
-| PE version extraction | **Tested** — 14,769 components from 19,550 files |
-| Python and npm manifests | **Tested** — 2,266 packages from 2,598 manifests |
-| Host identity | **Tested** — `os_id`, `machine_id`, build and UBR, on client and server |
+| uninstall registry | **Tested** on Windows 11 25H2 and Server 2025 - 380 and 423 products |
+| Store and MSIX packages | **Tested** - 135 packages on a real laptop |
+| Windows servicing state | **Tested** - cumulative update version asserted equal to the host's build and UBR |
+| MFT enumeration | **Tested** - 2,889,563 records in 12 s, every path resolved |
+| PE version extraction | **Tested** - 14,769 components from 19,550 files |
+| Python and npm manifests | **Tested** - 2,266 packages from 2,598 manifests |
+| Host identity | **Tested** - `os_id`, `machine_id`, build and UBR, on client and server |
 
 Every one of those runs on a `windows-latest` runner on each push, including an
 end-to-end collection with and without `--full-scan`. The runner is a server
@@ -712,18 +712,18 @@ sources.
 |---|---|
 | uninstall registry | installed applications, with version and publisher |
 | package repository | Store and MSIX apps |
-| component store | Windows servicing state — cumulative update, servicing stack, .NET rollup |
+| component store | Windows servicing state - cumulative update, servicing stack, .NET rollup |
 | `iphlpapi` | what is listening, with the process holding each socket |
 | the container runtime | containers, their images and their packages |
 
-The same run produces `services[]`, `exposure[]` and `containers[]` — see
+The same run produces `services[]`, `exposure[]` and `containers[]` - see
 [what is exposed](#what-is-exposed-and-what-is-inside-the-containers). Two
 things work differently here than on Linux, and the report says so rather than
 leaving you to infer it:
 
 - **Most of what listens on Windows is the operating system.** On one real
   laptop, 77 of 173 non-loopback endpoints were `svchost.exe` and the kernel.
-  They carry `os_component: true` — **filter that out before treating
+  They carry `os_component: true` - **filter that out before treating
   `medium` as "unmanaged software"**, or every host contributes several dozen
   false entries.
 - **A container's software comes from the runtime, not the filesystem.** A
@@ -739,26 +739,26 @@ from 49 to 58, and from zero `high` confidence to 21.
 
 ### `--full-scan`
 
-Adds everything the registry does not record — software unpacked into a
-directory, vendor tools, anything copied onto the machine — plus Python and npm
+Adds everything the registry does not record - software unpacked into a
+directory, vendor tools, anything copied onto the machine - plus Python and npm
 packages. It needs an elevated process and an NTFS volume.
 
 It does **not** walk directories. It enumerates the Master File Table: 2.9
 million records in five seconds on a real laptop, opening nothing. Then it
 discards what the registry already accounts for and what belongs to Windows
-itself, and opens only the remainder — **19,549 files of 99,920** on that
+itself, and opens only the remainder - **19,549 files of 99,920** on that
 machine, an 80% reduction in the one operation that costs anything.
 
 | | |
 |---|---|
 | MFT enumeration | 2,889,563 records in 12 s, no file opened |
-| attributed to a registry product | 26,827 — version already known, not opened |
-| operating-system and Store territory | 53,553 — accounted for elsewhere |
+| attributed to a registry product | 26,827 - version already known, not opened |
+| operating-system and Store territory | 53,553 - accounted for elsewhere |
 | **opened to extract a version** | **19,550** |
 
 The first `--full-scan` on a machine is slow and the rest are not. Antivirus
 scans each executable the first time it is opened and caches the result, so the
-same command took **14 minutes** cold and **1 second** warm — a scheduled task
+same command took **14 minutes** cold and **1 second** warm - a scheduled task
 pays that once.
 
 `--volumes D:` or `--volumes D:,E:` selects which volumes to enumerate, and
@@ -766,8 +766,8 @@ pays that once.
 
 ### Language ecosystems
 
-Python and npm packages are found during the same MFT pass, by their manifests —
-`*.dist-info/METADATA`, `*.egg-info/PKG-INFO`, `package.json` — and only those
+Python and npm packages are found during the same MFT pass, by their manifests -
+`*.dist-info/METADATA`, `*.egg-info/PKG-INFO`, `package.json` - and only those
 files are opened. They carry real PURLs, since `pypi` and `npm` are canonical
 PURL types.
 
@@ -784,15 +784,15 @@ one. `machine_id` is derived from `MachineGuid` and normalised to the same
 32-hex-character shape as a Linux `machine-id`.
 
 Two Windows quirks are handled: the registry still reads `Windows 10 Pro` on
-Windows 11 hosts, and client and server share build numbers — Windows 11 24H2
-and Server 2025 are both `26100` — so a server reports its release year rather
+Windows 11 hosts, and client and server share build numbers - Windows 11 24H2
+and Server 2025 are both `26100` - so a server reports its release year rather
 than a client major.
 
 ### What is out of scope
 
 Operating-system components are **not** inventoried file by file. `C:\Windows\
-WinSxS` held 39,536 executables on a real machine — 40% of every candidate on
-the volume — and they are hard-linked servicing copies that say little
+WinSxS` held 39,536 executables on a real machine - 40% of every candidate on
+the volume - and they are hard-linked servicing copies that say little
 individually. The installed servicing packages express the same thing in the
 form an operator patches by, with the cumulative update's version equal to the
 host's build and UBR.
@@ -805,15 +805,15 @@ as a service account sees that account's and no other's.
 ## Why not just use…?
 
 Most of what `swinv` does, something else also does. One thing it does I have
-not found in another tool, and it is the reason this exists — see
+not found in another tool, and it is the reason this exists - see
 [the chain](#the-chain-nobody-else-seems-to-walk) below.
 
 | | What it gives you | Why `swinv` |
 |---|---|---|
-| **`syft` CLI** | The same detection engine — `swinv` imports it | Adds host identity, stable dated/rotating filenames, atomic writes, day-over-day deltas, and a flat CSV built for SQL. Syft has no concept of a listening socket. One binary, no JSON round-trip |
+| **`syft` CLI** | The same detection engine - `swinv` imports it | Adds host identity, stable dated/rotating filenames, atomic writes, day-over-day deltas, and a flat CSV built for SQL. Syft has no concept of a listening socket. One binary, no JSON round-trip |
 | **osquery** | Far broader host telemetry, SQL over live state | `swinv` is a oneshot binary, not an always-on agent with a daemon and its own query language. osquery can join `listening_ports` to `processes`, but it has no table saying which *package* owns a process's executable, and no package table for the inside of a container |
 | **`dpkg -l` / `rpm -qa`** | Fast, already installed | OS packages only. Misses every language ecosystem and every unmanaged binary, and the output differs per distro |
-| **`grype dir:/`** | Package discovery *and* CVE matching in one pass — also Anchore's, also Syft-powered | A complement, not a competitor. `grype` needs a vulnerability database it downloads and refreshes; `swinv` runs `--offline` with no network at all. `grype` produces findings, `swinv` produces an inventory. Keep the SBOM and you can re-match new CVEs daily **without re-walking the filesystem** — see [below](#vulnerability-scanning) |
+| **`grype dir:/`** | Package discovery *and* CVE matching in one pass - also Anchore's, also Syft-powered | A complement, not a competitor. `grype` needs a vulnerability database it downloads and refreshes; `swinv` runs `--offline` with no network at all. `grype` produces findings, `swinv` produces an inventory. Keep the SBOM and you can re-match new CVEs daily **without re-walking the filesystem** - see [below](#vulnerability-scanning) |
 | **`trivy` / image scanners** | Deep, authoritative container image analysis, and CVE matching | Image-centric: you point them at an image. They do not tell you *which* image is running on *this* host, on *which* port, or that a stopped container still holds a vulnerable one. `swinv` answers that and hands you the digest to scan |
 | **Wazuh / agent inventory** | Fleet inventory with a server, dashboards, alerting | A server, an agent and a database. `swinv` writes files and exits; collecting them is your job. If you want the dashboards, use Wazuh |
 
@@ -840,7 +840,7 @@ side of the second.
 Three more things follow from taking that seriously, and I have not seen them
 together elsewhere either:
 
-- **Stopped containers are inventoried too.** They serve nothing — but a
+- **Stopped containers are inventoried too.** They serve nothing - but a
   stopped `postgres:14` still holds 142 packages with the same advisories, and
   it will be up again.
 - **Every finding carries its evidence and a confidence.** A row saying "port
@@ -870,7 +870,7 @@ exactly which package is behind it.**
 `{date}` and `{datetime}` (millisecond precision, so two runs in the same
 second cannot collide).
 
-Every write is atomic — temp file, `fsync`, `rename` — so a collector can never
+Every write is atomic - temp file, `fsync`, `rename` - so a collector can never
 pick up a half-written inventory, and killing `swinv` mid-write leaves the
 previous file intact. `--latest-symlink` (on by default) keeps
 `{hostname}-latest.{ext}` pointing at the newest file, which is what makes
@@ -895,17 +895,17 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--no-services` | false | Do not report what is listening |
 | `--no-containers` | false | Do not identify containers or what they run; also stops swinv talking to the container runtime |
 | `--no-service-command` | false | Linux: keep the services block, drop the command lines |
-| `--since PATH` | — | Diff against a previous report |
+| `--since PATH` | - | Diff against a previous report |
 | `--heartbeat` | false | NDJSON: a digest every scan, components only when they change |
-| `--ndjson-include LIST` | — | NDJSON also carries `exposure`, `containers`, or `all` |
+| `--ndjson-include LIST` | - | NDJSON also carries `exposure`, `containers`, or `all` |
 | `--hash` | false | Record a SHA-256 per component |
 | `--fast` | false | Scan at normal priority and full parallelism (see below) |
-| `--max-memory SIZE` | — | Soft memory limit, e.g. `1536MiB` |
-| `--debug-stacks-after DUR` | — | Dump goroutine stacks if the scan is still running, for a run that appears hung |
+| `--max-memory SIZE` | - | Soft memory limit, e.g. `1536MiB` |
+| `--debug-stacks-after DUR` | - | Dump goroutine stacks if the scan is still running, for a run that appears hung |
 | `--timeout DURATION` | `30m` | Whole-run deadline |
 | `--verbose` / `--quiet` | false | Per-stage timing / silence |
 | `--full-scan` | false | Windows: also enumerate the filesystem and read manifests |
-| `--volumes LIST` | `C:` | Windows: volumes to enumerate, e.g. `D:` or `D:,E:` — replaces the default |
+| `--volumes LIST` | `C:` | Windows: volumes to enumerate, e.g. `D:` or `D:,E:` - replaces the default |
 
 **[Full flag reference and exit codes →](docs/FLAGS.md)**
 
@@ -915,7 +915,7 @@ An inventory collector is background maintenance: it runs unattended, on a
 timer, on machines doing real work, and nobody is waiting for its answer. So by
 default swinv runs at `nice 10` with idle I/O priority on Linux, in background
 priority mode on Windows, and with a quarter of the CPUs as cataloger workers.
-Worker count matters here beyond speed — it sets how deep an I/O queue the scan
+Worker count matters here beyond speed - it sets how deep an I/O queue the scan
 presents to the kernel, and that is most of what decides whether the rest of the
 machine feels slow while it runs.
 
@@ -924,7 +924,7 @@ default and 30.6 s with `--fast`. Pass `--fast` when a person is waiting.
 
 All human-readable output goes to **stderr**; only `--stdout` data goes to
 stdout. Exit codes distinguish complete (`0`), partial (`1`), usage (`2`), fatal
-(`3`) and timeout (`4`) — a single failing cataloger never aborts a run, because
+(`3`) and timeout (`4`) - a single failing cataloger never aborts a run, because
 an inventory missing one ecosystem beats no inventory.
 
 ## What is skipped by default
@@ -937,17 +937,17 @@ are opinionated:
 - Container and orchestrator storage: `/var/lib/{docker,containers,containerd}`,
   `/var/lib/kubelet/pods`.
 - Build and VCS noise: `**/.git/**`, `**/__pycache__/**`, `**/.cache/**`.
-- **Every mount that is not a local filesystem** — NFS, CIFS, sshfs, autofs,
-  overlay, squashfs — read from `/proc/self/mountinfo`. Walking a mounted NFS
+- **Every mount that is not a local filesystem** - NFS, CIFS, sshfs, autofs,
+  overlay, squashfs - read from `/proc/self/mountinfo`. Walking a mounted NFS
   share is the single biggest cause of a scan taking hours. Disable with
   `--no-auto-exclude-mounts`.
 - **`/home` and `/root`.** On the machine this was built on, `/home` alone was
-  508,687 files across 86 `node_modules` trees — more than the rest of the
+  508,687 files across 86 `node_modules` trees - more than the rest of the
   filesystem combined. Home directories are also per-user, high-churn and
   privacy-sensitive, none of which is true of the machine's own software.
   `--include-home` turns them back on.
 
-**Snap and Flatpak are scanned** — they are genuinely installed software. Snaps
+**Snap and Flatpak are scanned** - they are genuinely installed software. Snaps
 are squashfs loop mounts, so `swinv` specifically carves `/snap` and
 `/var/lib/snapd/snap` out of the "skip non-local filesystems" rule; a squashfs
 image mounted anywhere else stays excluded. `--no-snap` / `--no-flatpak` opt out.
@@ -958,7 +958,7 @@ Whatever is skipped is always recorded in `scan.excluded`, with a note in
 ## Change detection
 
 `--hash` adds a SHA-256 of each component's primary file. Files backing *more
-than one* component are deliberately not hashed — most debs cite
+than one* component are deliberately not hashed - most debs cite
 `/var/lib/dpkg/status`, and digesting it would give every package on the machine
 the same hash and make all of them look changed whenever any one changed.
 
@@ -980,7 +980,7 @@ Worth knowing before you roll this out fleet-wide:
 
 - **No inventory data is ever transmitted.** `swinv` opens no sockets to send
   results anywhere. The single exception to "no network at all" is a
-  best-effort reverse-DNS lookup that fills `host.fqdn` — a normal name
+  best-effort reverse-DNS lookup that fills `host.fqdn` - a normal name
   resolution against your configured resolver, bounded to two seconds and never
   fatal. It carries no scan data, but it does tell that resolver the host
   looked itself up. **`--offline` disables it**, making the run completely
@@ -988,14 +988,14 @@ Worth knowing before you roll this out fleet-wide:
   `--root` is not `/`.
 - **It records host identity**: hostname, `/etc/machine-id`, boot ID, kernel,
   DMI vendor/product, and non-loopback IPs and MAC addresses. That is what makes
-  reports joinable across a fleet — but it means the files identify the machine.
+  reports joinable across a fleet - but it means the files identify the machine.
   DMI serial and UUID are root-only and simply absent otherwise.
 - **It records installed software paths.** With `--include-home`, that includes
   paths inside users' home directories. This is the main reason home directories
   are off by default.
 - **It talks to the container runtime, if one is there.** Naming the software
   inside a container means asking the local Docker engine over its Unix socket
-  or named pipe — the only route into a stopped container, and the only route
+  or named pipe - the only route into a stopped container, and the only route
   into any container from Windows. It reads the container list and files from
   container filesystems; it never creates, execs or attaches. This is local
   kernel IPC, not network activity: no address, no route, nothing leaves the
@@ -1003,7 +1003,7 @@ Worth knowing before you roll this out fleet-wide:
   which is itself a privileged position on the host. `--no-containers`
   disables it.
 - **It records service command lines.** The `services` block includes each
-  listening process's `argv`, and command lines are where secrets end up — a
+  listening process's `argv`, and command lines are where secrets end up - a
   `--password` on a daemon's ExecStart, a connection string with credentials in
   it. Anything visible in `ps` can therefore reach an inventory file that gets
   copied elsewhere. **`--no-service-command`** drops that one field;
@@ -1015,7 +1015,7 @@ Worth knowing before you roll this out fleet-wide:
   filesystem.** It sets `ProtectSystem=strict`, `ReadWritePaths=/var/lib/swinv`,
   `PrivateTmp`, `NoNewPrivileges`, and the `ProtectKernel*` / `ProtectClock` /
   `ProtectControlGroups` family. It pointedly does *not* set `ProtectHome`,
-  `PrivateDevices`, `PrivateUsers` or `ProtectProc=invisible` — each would hide
+  `PrivateDevices`, `PrivateUsers` or `ProtectProc=invisible` - each would hide
   something the scan needs, and the unit documents why inline. Reading the whole
   tree is the tool's entire job.
 - **No GPL/AGPL/LGPL anywhere in the dependency tree**, enforced by a CI gate
@@ -1035,33 +1035,33 @@ enabled:
 
 ### How long it takes
 
-At default scheduling priority — `nice 10` with idle I/O, **not** `--fast` —
+At default scheduling priority - `nice 10` with idle I/O, **not** `--fast` -
 across repeated runs on those two machines:
 
 | Scan | Runs | Median | Range | Components |
 |---|---|---|---|---|
-| Linux `/` | 3 | **5m50s** | 5m16s – 6m18s | ~14,400 |
-| Linux `/` with `--include-home` | 4 | **9m51s** | 9m28s – 9m57s | ~23,500 |
-| Windows, registry only | — | **126 ms** | — | 502 |
-| Windows `--full-scan` | 4 | 14m11s | **2m26s – 15m35s** | ~7,900 |
+| Linux `/` | 3 | **5m50s** | 5m16s - 6m18s | ~14,400 |
+| Linux `/` with `--include-home` | 4 | **9m51s** | 9m28s - 9m57s | ~23,500 |
+| Windows, registry only | - | **126 ms** | - | 502 |
+| Windows `--full-scan` | 4 | 14m11s | **2m26s - 15m35s** | ~7,900 |
 
 Linux is predictable: repeat runs land within a minute of each other, and
 peak RSS is near 2.3 GB. `--include-home` costs about four extra minutes and
-9,000 components, almost all of it `~/go/pkg/mod` and `node_modules` — build
+9,000 components, almost all of it `~/go/pkg/mod` and `node_modules` - build
 caches rather than installed software, which is why home is excluded by
 default.
 
 **Windows `--full-scan` is not predictable, and the spread is the finding.**
 Four runs on one laptop, same machine, near-identical component counts, and a
 **6.4× spread** between fastest and slowest. That is Defender inspecting every
-file swinv opens and the state of its scan cache — not anything swinv does
+file swinv opens and the state of its scan cache - not anything swinv does
 differently. Which is exactly why the Windows default reads the registry, the
 package repository and the component store and opens **no file at all**: the
 126 ms path is the one you can schedule hourly, and `--full-scan` is opt-in for
 when you want the executables on disk as well.
 
 A fleet server with a couple of thousand packages and no source trees is a
-very different shape from either — measure your own before drawing
+very different shape from either - measure your own before drawing
 conclusions.
 
 **The heartbeat is where the fleet arithmetic changes.** Components are 99%+
@@ -1097,12 +1097,12 @@ Read these before trusting the output.
 
 ### Nested root filesystems produce phantom packages
 
-Scanning `/` walks into **any second root filesystem stored on the disk** — an
+Scanning `/` walks into **any second root filesystem stored on the disk** - an
 extracted tarball, a container rootfs backup, a chroot, a VM image, or a test
-fixture — reads its package database, and reports those packages as installed.
+fixture - reads its package database, and reports those packages as installed.
 
 Each such component records the root it came from in `root`, and has the
-distribution claim stripped from its PURL — a Debian 12 `openssl` inside a snap
+distribution claim stripped from its PURL - a Debian 12 `openssl` inside a snap
 base is reported as `pkg:deb/openssl@3.0.11-1~deb12u2` rather than as an Ubuntu
 package, because asserting the scanning host's distribution over it would make
 both "is it affected" and "is it fixed" meaningless. Where the nested root
@@ -1110,7 +1110,7 @@ states its own release, `attributes.root_os_id` and `root_os_version_id` carry
 it.
 
 What remains is that those packages are still *reported*, which is usually
-right — a base snap is real software on the machine — but means a count of
+right - a base snap is real software on the machine - but means a count of
 "installed packages" includes them.
 
 `swinv` **warns** when it detects this, naming the directories it found:
@@ -1143,7 +1143,7 @@ physical ARM machine.
 ## Vulnerability scanning
 
 `swinv` deliberately does not scan for vulnerabilities. Emit CycloneDX and hand
-it to a scanner — for example Anchore's [`grype`](https://github.com/anchore/grype),
+it to a scanner - for example Anchore's [`grype`](https://github.com/anchore/grype),
 whose Syft library `swinv` is built on:
 
 ```sh
@@ -1160,7 +1160,7 @@ grype sbom:sbom.json
 - **CVE results go stale when the host has not changed.** An inventory is a
   fact about a machine at a point in time and stays true; a vulnerability
   report is a join against a database that moves daily. Keeping them separate
-  means you can tell "the machine changed" from "the advisories changed" —
+  means you can tell "the machine changed" from "the advisories changed" -
   which is exactly what `--since` answers.
 - **`grype` needs the network to fetch and refresh its database.** `swinv
   --offline` performs no network activity whatsoever, which matters on
@@ -1170,7 +1170,7 @@ grype sbom:sbom.json
 Verified end to end on Fedora 44: a 568-component CycloneDX document was
 accepted by `grype` v0.117.0, which resolved both `rpm` and `go-module`
 components and returned **234 vulnerability matches**. That is a stronger
-result than "it parsed" — CVE matching is a join on package identity, so it
+result than "it parsed" - CVE matching is a join on package identity, so it
 also confirms the PURLs are well-formed and correct.
 
 ## Building
@@ -1203,7 +1203,7 @@ $ ldd bin/swinv
 `swinv` is **Apache-2.0** and **community-owned**. See [`LICENSE`](LICENSE).
 
 Copyright is held collectively by the contributors listed in
-[`AUTHORS`](AUTHORS) — each retains copyright in their own work and licenses it
+[`AUTHORS`](AUTHORS) - each retains copyright in their own work and licenses it
 to everyone under Apache-2.0. There is no CLA and no copyright assignment. The
 trade-off is deliberate and worth stating plainly: because no single party owns
 the whole work, `swinv` **cannot be relicensed or dual-licensed** without the
@@ -1211,7 +1211,7 @@ agreement of every contributor. That is the protection community ownership
 buys.
 
 Syft is Apache-2.0, so importing it imposes no copyleft obligation; attribution
-is in [`NOTICE`](NOTICE). **No GPL, AGPL or LGPL module may enter this binary** —
+is in [`NOTICE`](NOTICE). **No GPL, AGPL or LGPL module may enter this binary** -
 linking one in would force the whole combined work under the GPL. CI enforces
 that with a hard gate (`make license-check`) that fails on any dependency whose
 licence is copyleft or unidentified. Of 278 dependencies, none is copyleft.
@@ -1221,13 +1221,13 @@ hand-written.
 ## Architecture
 
 ```
-cmd/swinv/          flags, wiring, exit codes — thin
+cmd/swinv/          flags, wiring, exit codes - thin
 internal/model/     output types + schema version. Stdlib only.
 internal/hostfacts/ machine identity, read straight from kernel interfaces
-internal/scan/      the Syft integration — the ONLY package that imports Syft
+internal/scan/      the Syft integration - the ONLY package that imports Syft
 internal/wincollect/ the Windows collector: registry, Appx, servicing, MFT
 internal/service/   what is listening, and what is behind it
-internal/dockerapi/ the container runtime client — the ONLY package that
+internal/dockerapi/ the container runtime client - the ONLY package that
                     talks to a daemon
 internal/ctrpkg/    package databases read from inside a container
 internal/output/    JSON, CSV, NDJSON, CycloneDX writers + atomic writes
@@ -1257,7 +1257,7 @@ Everything downstream operates on `internal/model` types.
 ## Non-goals
 
 No central server or phone-home. No configuration management, patching or
-remediation. No vulnerability scanning — swinv produces the inventory and the
+remediation. No vulnerability scanning - swinv produces the inventory and the
 SBOM; matching them against advisories is a separate job with a database that
 moves daily. No macOS support. No TUI.
 
@@ -1268,5 +1268,5 @@ of one container rootfs on the development host ran past ten minutes without
 finishing, which is the measurement that settled it.
 
 It reads no firewall, NAT table or security group, so nothing it reports is a
-statement about reachability — `bind_scope` describes a bind, and
+statement about reachability - `bind_scope` describes a bind, and
 `scan.exposure_blind_spots` names what could not be seen.

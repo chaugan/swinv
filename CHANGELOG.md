@@ -7,7 +7,7 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
-## [0.6.1] — 2026-08-23
+## [0.6.1] - 2026-08-23
 
 ### Added
 
@@ -15,7 +15,7 @@ schema and cataloger coverage may still change between releases. See
   [#8](https://github.com/chaugan/swinv/issues/8). The NDJSON stream can now
   carry `exposure` and `container` records alongside components. Both sections
   were already collected and written to the JSON document and the CSV sidecars,
-  but not to the one output shape a log forwarder monitors — so the format built
+  but not to the one output shape a log forwarder monitors - so the format built
   for streaming was the one dropping them.
 
   `exposure` is denormalised to one record per (port, package), so a
@@ -26,9 +26,9 @@ schema and cataloger coverage may still change between releases. See
   container's id and name, and its `executable` is the process inside the
   container rather than the forwarder.
 
-  `container` is one record per container, **including stopped ones** — a
+  `container` is one record per container, **including stopped ones** - a
   stopped container is one `docker start` from a running one, so its
-  vulnerabilities are latent rather than absent — carrying the container's own
+  vulnerabilities are latent rather than absent - carrying the container's own
   `os_id` and `os_version_id`, which is what its packages must be matched
   against.
 
@@ -43,13 +43,13 @@ schema and cataloger coverage may still change between releases. See
   components.
 
   Two shapes chosen for streaming consumers rather than for elegance: **no
-  field is ever `null`** — Splunk indexes a JSON null as the four-character
+  field is ever `null`** - Splunk indexes a JSON null as the four-character
   string `"null"`, which would give every listener a systemd unit named `null`
-  — and **every array has a `_text` and `n_` twin**, because Splunk renames an
+  - and **every array has a `_text` and `n_` twin**, because Splunk renames an
   array field with a `{}` suffix and a search for `endpoints` otherwise
   silently returns nothing.
 
-## [0.6.0] — 2026-08-22
+## [0.6.0] - 2026-08-22
 
 An inventory heartbeat, so a fleet stops re-sending what has not changed.
 
@@ -61,8 +61,8 @@ An inventory heartbeat, so a fleet stops re-sending what has not changed.
   matches the previous scan on this host. Schema `1.9`.
 
   Every scan otherwise restates the whole inventory. That is the right shape
-  for correctness — a package that disappears is genuinely gone rather than
-  merely unmentioned — and the wrong shape for volume: 5,000 hosts averaging
+  for correctness - a package that disappears is genuinely gone rather than
+  merely unmentioned - and the wrong shape for volume: 5,000 hosts averaging
   14,000 components scanned hourly is over a billion records a day, nearly all
   identical to the day before.
 
@@ -73,14 +73,14 @@ An inventory heartbeat, so a fleet stops re-sending what has not changed.
   removal and "this package is no longer installed" is the fact that decides
   whether a vulnerability is fixed or merely unreported.
 
-  The digest is built from identity alone — type, name, version, root, purl —
+  The digest is built from identity alone - type, name, version, root, purl -
   and deliberately not from locations, `found_by`, `sha256`, licences, CPEs or
   vendor. Files get relinked and catalogers get renamed upstream; a digest that
   moved with them would report change constantly and be ignored within a week.
 
   A full list is also sent when nothing is known about the host, when the state
   file cannot be read, on `--force-full`, and whenever `--full-interval` has
-  elapsed (default 24h) — so a digest collision or a hand-edited state file
+  elapsed (default 24h) - so a digest collision or a hand-edited state file
   cannot hide a change indefinitely. Any doubt resolves toward sending too
   much.
 
@@ -90,13 +90,13 @@ An inventory heartbeat, so a fleet stops re-sending what has not changed.
   reports so deleting the output directory deletes the state with it rather
   than leaving a stale digest to claim a fresh machine is unchanged.
 
-## [0.5.2] — 2026-08-22
+## [0.5.2] - 2026-08-22
 
 ### Fixed
 
 - **`container_state` is now stamped by both routes.** The runtime route set it
   and the targeted probe did not, so a consumer filtering on it silently
-  dropped whatever the probe had found — which is the more precisely
+  dropped whatever the probe had found - which is the more precisely
   identified half of the two, the packages tied to a specific listening
   executable.
 
@@ -104,12 +104,12 @@ An inventory heartbeat, so a fleet stops re-sending what has not changed.
 
 - **The README says what the collector is for.** The comparison table
   explained, for each of four tools, why swinv differs; it never said what
-  swinv does that none of them do. The chain — an open port, through the
-  forwarder, into the container, to the package inside it — is now the second
+  swinv does that none of them do. The chain - an open port, through the
+  forwarder, into the container, to the package inside it - is now the second
   thing in the document and has its own section, with rows added for image
   scanners and agent inventory now that containers are in scope.
 
-## [0.5.1] — 2026-08-22
+## [0.5.1] - 2026-08-22
 
 Two things a v0.5.0 run on a real Windows laptop found, both about the same
 seam between the two ways into a container.
@@ -118,9 +118,9 @@ seam between the two ways into a container.
 
 - **A running container whose listening executable is not package-owned came
   out with no software at all**, while a stopped one got its whole package
-  list. The targeted probe found the executable, found no package owning it —
+  list. The targeted probe found the executable, found no package owning it -
   which is most application images, where the app is unpacked rather than
-  installed — and the runtime read was then skipped because the container was
+  installed - and the runtime read was then skipped because the container was
   already described. That said nothing about the other forty packages in it.
   Six of seventeen containers on the development host; reading them takes the
   container package count from 763 to 1281.
@@ -129,7 +129,7 @@ seam between the two ways into a container.
   on the service, and the whole-database read lifts its packages into the
   inventory and leaves the service empty. Both routes are now considered.
 
-## [0.5.0] — 2026-08-22
+## [0.5.0] - 2026-08-22
 
 Containers, running and stopped, on both platforms.
 
@@ -138,7 +138,7 @@ Containers, running and stopped, on both platforms.
 - **Stopped containers are inventoried, on both platforms.** The question is
   what software on this machine has a network endpoint, and a stopped container
   that declares one is software that will serve on it the moment it is started
-   — its packages carry the same advisories either way. It gets no exposure
+   - its packages carry the same advisories either way. It gets no exposure
   row, because nothing is listening.
 
   This is reached through the container runtime's archive endpoint, which
@@ -146,7 +146,7 @@ Containers, running and stopped, on both platforms.
   That is also the only route into any container from Windows, so the same
   mechanism closes the `container-packages-not-readable` gap there. Measured on
   the development host: 17 containers instead of 10, and 570 packages from five
-  stopped ones — real `pkg:deb/ubuntu/openssl@1.1.1f-1ubuntu2.23` rows a matcher
+  stopped ones - real `pkg:deb/ubuntu/openssl@1.1.1f-1ubuntu2.23` rows a matcher
   can use.
 
   Where `/proc/<pid>/root` already answered, it wins: naming the package behind
@@ -155,7 +155,7 @@ Containers, running and stopped, on both platforms.
   `attributes.scan_scope`.
 
 - **`Container.state` and `Container.declared_endpoints`.** The declared ports
-  are what the image's `EXPOSE` or the run's `-p` says it serves on — a
+  are what the image's `EXPOSE` or the run's `-p` says it serves on - a
   declaration, never an observation, and for a stopped container the only
   network fact available. Containers with no endpoint at all, declared or
   observed, are skipped: a build container with no ports is not part of this
@@ -166,7 +166,7 @@ Containers, running and stopped, on both platforms.
   machine with eight stopped containers with nothing to distinguish that from a
   broken pipe.
 
-## [0.4.1] — 2026-08-22
+## [0.4.1] - 2026-08-22
 
 Everything in this release came out of one afternoon of running 0.4.0 on a
 real Windows laptop. The attributions it did make were all correct; these are
@@ -178,7 +178,7 @@ the ones it failed to make, and the noise it made instead.
   neither route.** `InstallLocations()` already recovers a directory from
   `DisplayIcon` and `UninstallString`, because `InstallLocation` is absent on
   72% of uninstall entries, and the recovered directory was handed to the
-  coverage set — so a full scan treated the files under it as accounted for and
+  coverage set - so a full scan treated the files under it as accounted for and
   never opened them, producing no PE component. But the component itself took
   its locations from `InstallLocation` alone, so it had no directory either.
   Good enough to suppress the file scan, not good enough to be reported.
@@ -186,8 +186,8 @@ the ones it failed to make, and the noise it made instead.
   a listening socket on 1883 that nothing could name. Components now carry every
   directory the entry points at.
 - **The kernel process is now named.** No handle can be opened to pid 4, so its
-  image was unreadable and the ports it serves — 445, 139, 138, 137 and several
-  http.sys reservations, 29 endpoints on one machine — were reported as software
+  image was unreadable and the ports it serves - 445, 139, 138, 137 and several
+  http.sys reservations, 29 endpoints on one machine - were reported as software
   nobody could identify. It is now `System`, marked `os_component`.
 - **An endpoint's sockets fold into one row.** Deduplication was keyed on the
   socket inode and `iphlpapi` supplies none, so on Windows it never fired:
@@ -197,13 +197,13 @@ the ones it failed to make, and the noise it made instead.
   many folded in `processes`. On the machine in question, 189 rows for 158
   endpoints.
 - **The services summary called named software unnamed.** It bucketed on
-  confidence, so an install-directory match — `medium`, but with a product named
-  — was counted as "running software nothing installed". The same scan reported
+  confidence, so an install-directory match - `medium`, but with a product named
+  - was counted as "running software nothing installed". The same scan reported
   0 attributed on one line and 49 identified on another.
 - `Exposure.processes` is emitted only where more than one socket shares the
   endpoint, rather than as `1` on every row.
 
-## [0.4.0] — 2026-08-22
+## [0.4.0] - 2026-08-22
 
 The network edge on Windows, and containers read from the Docker engine.
 
@@ -219,7 +219,7 @@ The network edge on Windows, and containers read from the Docker engine.
   Desktop container is a Linux process inside a WSL2 virtual machine: no entry
   in the Windows process table, sockets in a namespace inside the VM, and no
   Windows API that reaches either. Without asking the engine, a published port
-  resolves to Docker's own proxy — the non-answer this design exists to avoid.
+  resolves to Docker's own proxy - the non-answer this design exists to avoid.
   This is a deliberate exception to the no-daemon-APIs rule, taken because the
   alternative on Windows is a wrong answer rather than a missing one, and it is
   still true that swinv performs no network activity: a named pipe is kernel
@@ -244,25 +244,25 @@ The network edge on Windows, and containers read from the Docker engine.
 
 - **Windows could attribute nothing at all.** The join matched an executable
   against a component's recorded locations, but a Windows registry entry
-  records the directory a product was installed into — `C:\Program Files\7-Zip`
-  — and never the executables under it, so nothing ever matched and every
+  records the directory a product was installed into - `C:\Program Files\7-Zip`
+  - and never the executables under it, so nothing ever matched and every
   listener reported as unmanaged software. The longest containing install
   directory now counts, case-insensitively, graded `medium` because a
   containing directory says the product was installed there rather than that
   it ships that particular file.
 - **Sockets with no identifiable process vanished from `exposure[]`.** They
   were counted and then dropped, so a privileged run inside WSL2 reported
-  twelve listening sockets and zero exposure rows — a machine described as
+  twelve listening sockets and zero exposure rows - a machine described as
   having nothing exposed on the strength of not having been able to look. They
   are now reported without a process against them, which is the statement the
   section exists to make.
 - **The unattributed-sockets warning blamed the wrong thing.** It said an
   unprivileged scan sees only its own sockets, which was printed verbatim to a
   user running under `sudo`. There are two causes and the message now names
-  both: unreadable open files, or a holder outside this PID namespace — the
+  both: unreadable open files, or a holder outside this PID namespace - the
   latter being exactly what happens under WSL2.
 
-## [0.3.0] — 2026-08-22
+## [0.3.0] - 2026-08-22
 
 What is exposed at the network edge, and what runs inside the containers.
 
@@ -272,7 +272,7 @@ What is exposed at the network edge, and what runs inside the containers.
   containers**, on Linux, and with it schema `1.7`.
 
   `exposure[]` is one row per listening socket in the **host** network
-  namespace, and nothing else — membership is the verdict, so a consumer
+  namespace, and nothing else - membership is the verdict, so a consumer
   reading only that array cannot mistake a container's `0.0.0.0` bind for a
   host one. `bind_scope` then says how widely each is bound. Deliberately not
   "public"/"private" and never "internet-facing": swinv reads no firewall, and
@@ -283,14 +283,14 @@ What is exposed at the network edge, and what runs inside the containers.
   namespace, with the identity that makes this useful:
   `pkg:apk/alpine/nginx@1.27.5-r1` from the container's own package database,
   read through `/proc/<pid>/root`. That is a coordinate Grype and Trivy match
-  today. An image reference is not — there is no `oci` matcher anywhere in the
+  today. An image reference is not - there is no `oci` matcher anywhere in the
   chain, and Dependency-Track will ingest one, find nothing, and show the
   component as clean, which is indistinguishable from safe. The image digest is
   emitted as a locator on its own field and never as an identity.
 
   A published port follows into the container behind it, so a host endpoint
   names the software that actually answers rather than the package that ships
-  `docker-proxy` — which was 14 of 31 services on the development host.
+  `docker-proxy` - which was 14 of 31 services on the development host.
 
 - **`scan.exposure_blind_spots`** names, in machine-readable form, what could
   not be observed: netfilter DNAT always, plus an unprivileged scan, a
@@ -312,7 +312,7 @@ What is exposed at the network edge, and what runs inside the containers.
 
 - **Containerised processes were attributed to host packages.** Container
   detection only recognised the systemd cgroup driver's `.scope` layout, so
-  under the cgroupfs driver — and on Kubernetes, and under LXC — a container's
+  under the cgroupfs driver - and on Kubernetes, and under LXC - a container's
   process looked like a host process and had its executable matched against the
   *host's* package databases. A container running `/usr/sbin/nginx` on a host
   that also has nginx got the host's package, the host's version, and
@@ -320,8 +320,8 @@ What is exposed at the network edge, and what runs inside the containers.
   guard no longer depends on recognising a layout at all: a process in a
   different mount namespace than init is never joined to host packages.
 
-- **CycloneDX output carried no distro.** Syft's decoder — which is what Grype
-  uses for `grype sbom:`, a recipe this project documents — reads the Linux
+- **CycloneDX output carried no distro.** Syft's decoder - which is what Grype
+  uses for `grype sbom:`, a recipe this project documents - reads the Linux
   release only from a `components[]` entry of type `operating-system`, and
   swinv emitted none. Every deb and rpm therefore arrived with no distro, and
   matching fell back to comparing backported versions against upstream
@@ -331,14 +331,14 @@ What is exposed at the network edge, and what runs inside the containers.
 - **What is listening is now part of the inventory**, on Linux, and with it
   schema `1.6`. A new top-level `services[]` array records each listening
   socket, the process behind it, its systemd unit and container, and which
-  installed software owns its executable — with a `confidence` and an
+  installed software owns its executable - with a `confidence` and an
   `evidence` trail, because a service finding is assembled from evidence of
   varying strength and a bare claim that "port 443 is nginx 1.24" is
   indistinguishable from a guess.
 
   The interesting rows are the `medium` ones: software that is serving traffic
   and that no package manager installed. A package inventory cannot produce
-  that finding at all. On the development host it is three of thirty-one — a
+  that finding at all. On the development host it is three of thirty-one - a
   vendor binary under `/opt` and two copies of `/usr/local/bin/node`.
 
   Everything comes from `/proc`: no `ss`, no `netstat`, no `lsof`, no D-Bus.
@@ -361,28 +361,28 @@ What is exposed at the network edge, and what runs inside the containers.
   actually a symlink is checked rather than assumed, because on Alpine `/bin`
   is real and `/bin/busybox` is not `/usr/bin/busybox`.
 - **`--no-services`** skips the whole section, and **`--no-service-command`**
-  omits just the `command` field. Command lines are where secrets end up — a
+  omits just the `command` field. Command lines are where secrets end up - a
   `--password` on a daemon's ExecStart, a connection string with credentials in
-  it — and an inventory file is usually copied somewhere with a different
+  it - and an inventory file is usually copied somewhere with a different
   audience. [SECURITY.md](SECURITY.md) now says so plainly.
 - **Base snaps are recognised as their own filesystem root**, so the components
   inside them stop being attributed to the host. A base snap is a different
-  operating system — `core18` is Ubuntu 18.04 while the host may be 26.04, with
-  its own package set and its own update cadence — and 862 components on one
+  operating system - `core18` is Ubuntu 18.04 while the host may be 26.04, with
+  its own package set and its own update cadence - and 862 components on one
   reported host all claimed `root: "/"`. Where a nested root states its own
   release, `attributes.root_os_id` and `attributes.root_os_version_id` now carry
   it, rather than leaving consumers to infer 18.04 from the name `core18`.
 - **Python and npm packages are now inventoried on Windows** under
   `--full-scan`. The Linux collector gets roughly forty ecosystems from Syft and
   the Windows collector could get none, because Syft's resolver opens every file
-  it indexes — measured as unworkable on Windows, where every open is inspected
+  it indexes - measured as unworkable on Windows, where every open is inspected
   by antivirus. Instead, MFT enumeration already produces every filename without
   opening anything, and installed packages announce themselves by name:
   `*.dist-info/METADATA`, `*.egg-info/PKG-INFO`, `package.json`. Only those files
   are opened. They carry real PURLs, since unlike registry entries these
   ecosystems have canonical PURL types.
 
-## [0.2.3] — 2026-08-21
+## [0.2.3] - 2026-08-21
 
 One reported issue: distribution-installed language packages now name the OS
 package that owns them.
@@ -392,16 +392,16 @@ package that owns them.
 - **`Component.owned_by`** links a distribution-installed language package to
   the OS package that owns its files, and with it schema `1.5`. Syft already
   computes this and swinv was discarding it: the deb's file list contains the
-  very `egg-info` path the Python cataloger read. Both rows are still reported —
+  very `egg-info` path the Python cataloger read. Both rows are still reported -
   the OS package is what the vendor patches, the ecosystem package is what
-  upstream advisories are written against — but a consumer assessing the second
+  upstream advisories are written against - but a consumer assessing the second
   against upstream was comparing a backported version with upstream's own
   numbering. One reported host produced 442 false findings that way, because
   Ubuntu's `cryptography 2.1.4+esm1` is patched while PyPI's `2.1.4` reads as
   thirty-seven releases behind. An empty `owned_by` is equally meaningful: the
   component came from `pip` or `npm` and genuinely should be checked upstream.
 
-## [0.2.2] — 2026-08-21
+## [0.2.2] - 2026-08-21
 
 Four issues reported by someone building an offline vulnerability matcher
 against swinv output, and the Windows update model rebuilt on what the
@@ -414,9 +414,9 @@ and is not one, which is the worst way for an inventory to fail.
 
 ### Added
 
-- **`Component.root`** records which filesystem root a component was found in —
+- **`Component.root`** records which filesystem root a component was found in -
   `/` for the scanned machine, or a nested root such as a snap base or a
-  container layer — and participates in deduplication. Two packages of the same
+  container layer - and participates in deduplication. Two packages of the same
   name and version in different roots are two installs with two patch states;
   they were previously merged into one row whose `locations` spanned both, so a
   consumer could not tell which root either belonged to. CSV column 19.
@@ -446,7 +446,7 @@ and is not one, which is the worst way for an inventory to fail.
   real release, so a consumer asking whether the installed version is below the
   fixed version got **yes**, for every advisory ever filed against the package.
 
-## [0.2.1] — 2026-08-21
+## [0.2.1] - 2026-08-21
 
 Windows now sees Store apps and installed updates, both from the registry and
 neither costing a file open, so they are in the default scan rather than behind
@@ -456,9 +456,9 @@ neither costing a file open, so they are in the default scan rather than behind
 
 - **Store and MSIX packages** are now inventoried, from the AppModel package
   repository. Read without opening a file, so this runs in the default scan
-  rather than behind `--full-scan`. Resource bundles are filtered out — one
+  rather than behind `--full-scan`. Resource bundles are filtered out - one
   ships per display scale and per language, and counting them turns a single
-  application into a dozen rows differing only in an asset resolution — as are
+  application into a dozen rows differing only in an asset resolution - as are
   packages under `Windows\SystemApps`, which are the shell rather than
   installed software.
 - **Installed Windows updates**, by KB number, from the component store. Not
@@ -470,19 +470,19 @@ neither costing a file open, so they are in the default scan rather than behind
 ### Changed
 
 - **Operating-system components are out of scope by decision rather than by
-  omission.** `C:\Windows\WinSxS` held 39,536 executables on a real machine —
-  40% of every candidate on the volume — and they are hard-linked servicing
+  omission.** `C:\Windows\WinSxS` held 39,536 executables on a real machine -
+  40% of every candidate on the volume - and they are hard-linked servicing
   copies that say little individually. The installed-updates list expresses the
   same thing in the form an operator patches by. The warning now says this
   instead of promising catalogers that were never going to be worth writing.
 
-## [0.2.0] — 2026-08-21
+## [0.2.0] - 2026-08-21
 
 Windows support, and a schema that carries who made a thing.
 
 `swinv.exe` now collects an inventory rather than failing slowly at one. It is
 **experimental**: one week old, exercised on CI and a single developer laptop,
-with real gaps named in [docs/WINDOWS.md](docs/WINDOWS.md) — operating-system
+with real gaps named in [docs/WINDOWS.md](docs/WINDOWS.md) - operating-system
 components and Store apps are not inventoried, and per-user software is visible
 only for the account running the scan. The Linux collector is unchanged in what
 it finds; every cross-distro count still matches its own package manager
@@ -498,32 +498,32 @@ exactly.
   on Windows 11 hosts, and client and server share build numbers, so a server
   reports its release year rather than a client major.
 - **A Windows binary in releases**, `swinv-<version>-windows-amd64.exe`,
-  covered by the same `SHA256SUMS`. A binary only — no MSI, which would claim a
+  covered by the same `SHA256SUMS`. A binary only - no MSI, which would claim a
   maturity this does not have.
 
 - **MFT enumeration for Windows** (`internal/usn`), the first piece of the
   Windows collector that is not the Linux one cross-compiled. It reads a record
   per file straight from the Master File Table via `FSCTL_ENUM_USN_DATA`,
   opening nothing. On a stock Windows 11 volume it read **1,301,728 records in
-  42 seconds** and kept the **9.8%** that are executables — the other 90.2% cost
+  42 seconds** and kept the **9.8%** that are executables - the other 90.2% cost
   one record each and are never touched, where a directory walk would have
   opened all 1.3 million. `C:\Program Files` alone, a fraction of that volume,
   does not finish inside ten minutes through the directory resolver. Not yet
   wired into the scan path.
 - **A working Windows collector.** `swinv.exe` now produces a real inventory
   instead of running the Linux filesystem scan on a platform that keeps its
-  records elsewhere. It reads the uninstall registry for installed products —
-  fast, no elevation, no file opened — and with `--full-scan` enumerates the
+  records elsewhere. It reads the uninstall registry for installed products -
+  fast, no elevation, no file opened - and with `--full-scan` enumerates the
   MFT, attributes each executable to a known product, and opens only what is
   left to read its PE version resource. `--volumes D:` or `D:,E:` selects which
   volumes to enumerate, replacing the default of `C:` rather than adding to it.
-- **`Component.attributes`**, a string map for ecosystem-specific identity —
+- **`Component.attributes`**, a string map for ecosystem-specific identity -
   Windows product codes, registry keys, install scopes, the several version
-  strings a PE resource carries — and with it schema `1.3`. In JSON and
+  strings a PE resource carries - and with it schema `1.3`. In JSON and
   CycloneDX properties, deliberately not in the CSV, whose fixed column shape
   is what lets files be concatenated across machines.
 - **The Windows architecture is now measured rather than reasoned.** The
-  proposed derived allowlist does not hold up — only 106 of 380 installed
+  proposed derived allowlist does not hold up - only 106 of 380 installed
   products record an `InstallLocation`, and adding `DisplayIcon` and
   `UninstallString` raises that to 147, covering 57.8% of third-party
   executables. What the measurement showed is that the allowlist was pointed
@@ -531,28 +531,28 @@ exactly.
   five seconds, nothing opened) and *extraction* is what costs. A file under a
   known product's directory already has its version from the registry, so
   registry coverage is an extraction filter, not a scan filter. Applied that
-  way it cuts files needing to be opened from 99,919 to 19,549 — 80% fewer.
+  way it cuts files needing to be opened from 99,919 to 19,549 - 80% fewer.
 - **The Windows uninstall registry reader** (`internal/arp`), which is the
   Windows equivalent of reading a package database: names, versions, publishers
-  and install locations, with no file opened. It covers all three scopes —
+  and install locations, with no file opened. It covers all three scopes -
   native `HKLM`, `WOW6432Node` for 32-bit installs, which are invisible to code
   that reads only the native key, and `HKCU`. Never via `Win32_Product`, whose
   enumeration triggers MSI repair and can modify the machine.
 - **`--usn-probe` and `--volumes`**, Windows-only and experimental. The probe
-  enumerates the MFT and reports what it found — record count, candidate count,
-  timing, and where the candidates live — without scanning or opening anything,
+  enumerates the MFT and reports what it found - record count, candidate count,
+  timing, and where the candidates live - without scanning or opening anything,
   so the numbers that decide the rest of the Windows design come from real
   machines rather than from a hosted runner with nothing installed on it.
   `--volumes D:` or `--volumes D:,E:` **replaces** the default of `C:` rather
   than adding to it. Passing `--volumes` without `--usn-probe` is a usage error
   rather than being ignored, so nobody believes they have restricted a scan
   when they have not.
-- **CI now runs natively on `windows-latest`**, which is elevated and NTFS —
+- **CI now runs natively on `windows-latest`**, which is elevated and NTFS -
   the two things MFT enumeration requires. `docs/WINDOWS.md` set a condition
   that no Windows work should begin without a machine to test on, and a hosted
   runner satisfies it.
 - **`Component.vendor`**, the organisation behind a component, and with it
-  schema `1.2`. It comes from whichever field the ecosystem uses — an rpm
+  schema `1.2`. It comes from whichever field the ecosystem uses - an rpm
   `Vendor`, a dpkg or apk `Maintainer`, a Python or npm `Author`, `Vendor` from
   a systemd ELF package note, or `CompanyName` from a Windows PE version
   resource, which is what makes a `.dll` attributable to its publisher. The raw
@@ -560,14 +560,14 @@ exactly.
   Microsoft `CompanyName` are related but not identical facts. Additive: JSON
   omits it when empty, `vendor` is appended as CSV column 18 so positional
   readers are unaffected, and CycloneDX maps it to `publisher`. Present on 23%
-  of components on a full Debian-family host — 66% of `deb`, 0% of kernel
-  modules — so absence means "not recorded", not "no vendor".
+  of components on a full Debian-family host - 66% of `deb`, 0% of kernel
+  modules - so absence means "not recorded", not "no vendor".
 - **swinv now gets out of the way of the machine it is inventorying.** By
   default a scan runs at `nice 10` with the idle I/O scheduling class on Linux,
   in background priority mode on Windows, and with a quarter of the CPUs as
   cataloger workers rather than all of them. An inventory collector is
-  background maintenance — unattended, on a timer, on a machine doing real
-  work — and a scan that finishes sooner but makes an interactive session
+  background maintenance - unattended, on a timer, on a machine doing real
+  work - and a scan that finishes sooner but makes an interactive session
   stutter has made a bad trade. `--fast` restores the previous behaviour for
   when a person is waiting: measured on `/usr` on an 8-core host, the default
   takes 41.6 s against 30.6 s with `--fast`, so politeness costs about a third
@@ -576,20 +576,20 @@ exactly.
   while a scan is still running, for diagnosing one that appears to have hung.
   Go already does this on `SIGQUIT`, and on Windows on Ctrl+Break, but neither
   is reachable from a systemd timer or a Windows scheduled task, and many
-  laptops have no Break key — which is exactly the situation the first Windows
+  laptops have no Break key - which is exactly the situation the first Windows
   tester was in.
 - **A long scan now says it is still alive**, every 30 seconds, with elapsed
   time, memory taken from the operating system, and the deadline. Memory is on
   the line because its growth is what distinguishes a scan that is merely slow
-  from one that has started paging and dragged the whole machine down with it —
+  from one that has started paging and dragged the whole machine down with it -
   a distinction that cost an afternoon of diagnosis when the heartbeat itself
   went silent for nine minutes on a Windows host. Between "scanning ..." and the result there was
   previously no output at all for up to 30 minutes, so a slow scan and a hung
-  one were indistinguishable — which is exactly how the first Windows run was
+  one were indistinguishable - which is exactly how the first Windows run was
   read, and reasonably so.
 
 - `docs/SERVER-ROLES.md`, the proposed design for detecting what is running and
-  serving — as distinct from what is installed — on both platforms, including
+  serving - as distinct from what is installed - on both platforms, including
   IIS. Also unimplemented. Its measurements corrected three assumptions it was
   written to confirm: binary version banners cover far less than expected,
   deleted-mapping drift detection had a 100% false-positive rate unfiltered, and
@@ -628,14 +628,14 @@ exactly.
   longer an empty pager. Usage errors still go to stderr, and no longer print
   the entire help page after the one line saying what was wrong.
 - **Scan warnings are printed, not only recorded in the report.** Every
-  warning — not running as root, unidentified files, filesystems skipped —
+  warning - not running as root, unidentified files, filesystems skipped -
   went into the JSON where only someone who opened it would find them.
 
 ### Fixed
 
 - **`ran_as_root` was always `false` on Windows, including for an elevated
-  Administrator.** `os.Geteuid` returns a hard-coded `-1` there — not an error
-  and not an unsupported marker — so the check reported "unprivileged" for a
+  Administrator.** `os.Geteuid` returns a hard-coded `-1` there - not an error
+  and not an unsupported marker - so the check reported "unprivileged" for a
   fully elevated process and put a confident wrong value in the report.
   Privilege is now detected per platform, via the process token's elevation
   flag on Windows, and the accompanying warning is phrased for the platform
@@ -668,14 +668,14 @@ exactly.
   dpkg 78/78, rpm 147/147, with `host.architecture` correctly reporting
   `arm64`. Previously the binary was only ever cross-compiled and checksummed.
 
-## [0.1.2] — 2026-08-19
+## [0.1.2] - 2026-08-19
 
 ### Fixed
 
 - **A `--root` other than `/` got no exclusions at all**, so scanning a mounted
   root filesystem walked its `proc`, `sys` and every home directory on it. Found
-  by running the container recipe from the README — `-v /:/host:ro --root /host`
-  — which hung rather than completing. A tree containing `etc/os-release` is now
+  by running the container recipe from the README - `-v /:/host:ro --root /host`
+  - which hung rather than completing. A tree containing `etc/os-release` is now
   recognised as a root filesystem and gets the usual layout exclusions, with a
   warning saying so. An arbitrary directory still gets none, which was the
   original intent.
@@ -691,7 +691,7 @@ exactly.
 - **Seven package managers checked against their own tooling**, each an exact
   match: Alpine apk 16/16, Debian dpkg 78/78, Fedora rpm 147/147 (257/257 on a
   real host), Arch pacman 137/137, openSUSE rpm 123/123, Gentoo portage
-  296/296, Ubuntu dpkg 1,587 against 1,586 installed — correctly excluding 11
+  296/296, Ubuntu dpkg 1,587 against 1,586 installed - correctly excluding 11
   packages removed with their config kept. The Alpine run also proves the
   `CGO_ENABLED=0` binary carries no glibc assumption.
 
@@ -699,12 +699,12 @@ exactly.
   `grype` v0.117.0 accepted a 568-component document from a Fedora 44 host and
   returned 234 vulnerability matches across `rpm` and `go-module` components.
   Because CVE matching is a join on package identity, this also confirms the
-  emitted PURLs are well-formed — the CycloneDX writer is built from
+  emitted PURLs are well-formed - the CycloneDX writer is built from
   `cyclonedx-go` rather than reusing Syft's encoder, so that was not a given.
 - The Go module and binary catalogers ran against real Linux binaries on a
   non-Debian host.
 
-## [0.1.1] — 2026-08-19
+## [0.1.1] - 2026-08-19
 
 ### Fixed
 
@@ -713,8 +713,8 @@ exactly.
   list covered network and virtual filesystems but not the ones a hypervisor
   or WSL uses to project the *host's* directories into a guest. On a Fedora 44
   guest under WSL2, `/usr/lib/wsl` is a `9p` mount carrying the Windows host's
-  driver packages: 477 of that host's 1,003 components — 48% of the whole
-  inventory — were ASUS, Intel and NVIDIA binaries and .NET assemblies
+  driver packages: 477 of that host's 1,003 components - 48% of the whole
+  inventory - were ASUS, Intel and NVIDIA binaries and .NET assemblies
   reported as installed Linux software, with nothing marking them foreign.
   `9p`, `virtiofs`, `drvfs`, `lxfs`, `vboxsf`, `vmhgfs`, `prl_fs` and the
   network filesystems `ceph`, `glusterfs`, `lustre`, `beegfs`, `afs`, `smbfs`
@@ -737,15 +737,15 @@ exactly.
   Debian-family host can reach.
 - The `.rpm` package installs and runs on Fedora via `dnf install`.
 
-## [0.1.0] — 2026-08-19
+## [0.1.0] - 2026-08-19
 
 First public release.
 
 ### Added
 
-- Scans a Linux host and enumerates installed software — OS packages
+- Scans a Linux host and enumerates installed software - OS packages
   (dpkg, rpm, apk, pacman, portage, nix, Homebrew, snap), roughly 40 language
-  ecosystems, and loose binaries — by importing
+  ecosystems, and loose binaries - by importing
   [Syft](https://github.com/anchore/syft) v1.51.0 as a library.
 - Four output formats: JSON, CSV, NDJSON and CycloneDX 1.6, schema `1.1`.
 - `--output-mode` chooses how files accumulate across runs: `dated` (one file
