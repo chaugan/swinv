@@ -75,7 +75,42 @@ type heartbeatLine struct {
 	OSID         string `json:"os_id,omitempty"`
 	OSVersionID  string `json:"os_version_id,omitempty"`
 	Architecture string `json:"architecture,omitempty"`
+
+	// --- manifest, schema_version 2 --------------------------------------
+	//
+	// Everything below turns the heartbeat from "this host is alive" into
+	// "this stream contains exactly the following". A receiver that stores
+	// fewer component records than Counts says were sent has lost data, and
+	// can say so in the same minute rather than after a day of narrowing down
+	// which of eight layers dropped it. n_components above is kept exactly as
+	// it was so a server that predates this parses the record unchanged.
+	SchemaVersion int                           `json:"schema_version,omitempty"`
+	ScanID        string                        `json:"scan_id,omitempty"`
+	SwinvVersion  string                        `json:"swinv_version,omitempty"`
+	Counts        map[string]int                `json:"counts,omitempty"`
+	Sources       map[string]model.SourceStatus `json:"sources,omitempty"`
+	DurationMS    int64                         `json:"duration_ms,omitempty"`
+
+	// InventoryUnchanged explains the one case where Counts["component"] and
+	// NComponents legitimately disagree: --heartbeat suppressed the component
+	// records because the digest matched the previous scan. Without this the
+	// receiver has to choose between reconciling against a number that is
+	// deliberately zero and reconciling against one that is deliberately not,
+	// and either choice reports a false discrepancy on every unchanged scan.
+	InventoryUnchanged bool `json:"inventory_unchanged,omitempty"`
+
+	// InventoryComponents is the host's full component count regardless of
+	// what this stream carries -- the same number as n_components, named for
+	// what it measures rather than for what it used to mean.
+	InventoryComponents int `json:"inventory_components,omitempty"`
 }
+
+// manifestSchemaVersion is the version of the heartbeat record's own shape.
+//
+// 1 was hostname/digest/n_components/scanned_at plus host identity. 2 adds
+// scan_id, counts, sources and duration_ms. The field is absent in 1 and
+// present in 2, so a receiver tells them apart without a heuristic.
+const manifestSchemaVersion = 2
 
 // WriteNDJSON writes one JSON object per component, one per line, with no
 // indentation and a trailing newline after every record. A report with no
@@ -108,18 +143,15 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 
 	scannedAt := formatScannedAt(r.Scan.StartedAt)
 
+	// The manifest states the counts before a single record is written, so it
+	// has to be able to predict them exactly. Everything below then counts
+	// what it really wrote and the two are compared at the end: a writer that
+	// declares 3,993 components and emits 15 must fail here rather than
+	// produce a stream that looks healthy to everything downstream.
+	planned := ndjsonCounts(r)
+
 	if r.Scan.InventoryDigest != "" {
-		if err := enc.Encode(heartbeatLine{
-			RecordType:   "heartbeat",
-			Hostname:     r.Host.Hostname,
-			Digest:       r.Scan.InventoryDigest,
-			NComponents:  len(r.Components),
-			ScannedAt:    scannedAt,
-			MachineID:    r.Host.MachineID,
-			OSID:         r.Host.OSID,
-			OSVersionID:  r.Host.OSVersionID,
-			Architecture: r.Host.Architecture,
-		}); err != nil {
+		if err := enc.Encode(manifestRecord(r, scannedAt, planned)); err != nil {
 			return fmt.Errorf("output: writing ndjson heartbeat: %w", err)
 		}
 		if r.Scan.InventoryUnchanged {
@@ -129,14 +161,16 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 			// change while the installed software does not -- a port opened,
 			// a container started. Suppressing them would make the heartbeat
 			// hide the fastest-moving facts in the report.
-			if err := writeExtraRecords(enc, r, scannedAt); err != nil {
+			written, err := writeExtraRecords(enc, r, scannedAt)
+			if err != nil {
 				return err
 			}
-			return nil
+			return reconcileNDJSON(planned, written)
 		}
 	}
 
-	if err := writeExtraRecords(enc, r, scannedAt); err != nil {
+	written, err := writeExtraRecords(enc, r, scannedAt)
+	if err != nil {
 		return err
 	}
 
@@ -169,28 +203,108 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 		if err := enc.Encode(line); err != nil {
 			return fmt.Errorf("output: writing ndjson record for %q: %w", c.Name, err)
 		}
+		written[model.RecordComponent]++
+	}
+	return reconcileNDJSON(planned, written)
+}
+
+// ndjsonCounts predicts exactly how many records of each type this report will
+// produce, in the same order of decisions the writer makes.
+//
+// It is deliberately a separate function from the writing loop rather than a
+// tally kept alongside it: the manifest is line 1 and the records follow, so
+// the count has to exist before the records do. reconcileNDJSON then closes
+// the gap that separation opens.
+func ndjsonCounts(r *model.Report) map[string]int {
+	counts := map[string]int{
+		model.RecordComponent: len(r.Components),
+		model.RecordExposure:  0,
+		model.RecordContainer: 0,
+	}
+	if r.Scan.InventoryDigest != "" && r.Scan.InventoryUnchanged {
+		counts[model.RecordComponent] = 0
+	}
+	if includes(r, recordExposure) {
+		counts[model.RecordExposure] = len(exposureLines(r, ""))
+	}
+	if includes(r, recordContainer) {
+		counts[model.RecordContainer] = len(r.Containers)
+	}
+	return counts
+}
+
+// manifestRecord builds line 1: what this stream contains and where it came
+// from.
+func manifestRecord(r *model.Report, scannedAt string, counts map[string]int) heartbeatLine {
+	return heartbeatLine{
+		RecordType: recordHeartbeat,
+
+		Hostname: r.Host.Hostname,
+		Digest:   r.Scan.InventoryDigest,
+		// Unchanged meaning, unchanged value: the host's full component count.
+		// A pre-manifest server reads this field and nothing else, and it must
+		// keep getting the same answer it always got.
+		NComponents:  len(r.Components),
+		ScannedAt:    scannedAt,
+		MachineID:    r.Host.MachineID,
+		OSID:         r.Host.OSID,
+		OSVersionID:  r.Host.OSVersionID,
+		Architecture: r.Host.Architecture,
+
+		SchemaVersion:       manifestSchemaVersion,
+		ScanID:              r.Scan.ScanID,
+		SwinvVersion:        r.Tool.Version,
+		Counts:              counts,
+		Sources:             r.Scan.Sources,
+		DurationMS:          r.Scan.DurationMS,
+		InventoryUnchanged:  r.Scan.InventoryUnchanged,
+		InventoryComponents: len(r.Components),
+	}
+}
+
+// reconcileNDJSON refuses to hand back a stream whose manifest disagrees with
+// the records that followed it.
+//
+// This is the cheapest possible instance of the rule that every layer asserts
+// expected against actual. It has never fired in practice, which is the point:
+// the failure it guards is one where every layer reports success and the data
+// is simply not there.
+func reconcileNDJSON(planned, written map[string]int) error {
+	for kind, want := range planned {
+		if got := written[kind]; got != want {
+			return fmt.Errorf(
+				"output: ndjson manifest declared %d %s record(s) and %d were written; "+
+					"the stream would have been silently wrong", want, kind, got)
+		}
 	}
 	return nil
 }
 
 // writeExtraRecords emits the non-component record types this run was asked
-// for.
-func writeExtraRecords(enc *json.Encoder, r *model.Report, scannedAt string) error {
+// for, and reports how many of each it actually wrote.
+func writeExtraRecords(enc *json.Encoder, r *model.Report, scannedAt string) (map[string]int, error) {
+	written := map[string]int{
+		model.RecordComponent: 0,
+		model.RecordExposure:  0,
+		model.RecordContainer: 0,
+	}
 	if includes(r, recordExposure) {
 		for _, line := range exposureLines(r, scannedAt) {
 			if err := enc.Encode(line); err != nil {
-				return fmt.Errorf("output: writing ndjson exposure record: %w", err)
+				return written, fmt.Errorf("output: writing ndjson exposure record: %w", err)
 			}
+			written[model.RecordExposure]++
 		}
 	}
 	if includes(r, recordContainer) {
 		for _, line := range containerLines(r, scannedAt) {
 			if err := enc.Encode(line); err != nil {
-				return fmt.Errorf("output: writing ndjson container record: %w", err)
+				return written, fmt.Errorf("output: writing ndjson container record: %w", err)
 			}
+			written[model.RecordContainer]++
 		}
 	}
-	return nil
+	return written, nil
 }
 
 // includes reports whether a record type was asked for.

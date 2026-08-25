@@ -11,7 +11,8 @@ swinv [flags]
 
 `swinv` takes **no positional arguments** - passing one is a usage error. It
 scans the machine it runs on, enumerates installed software, and writes the
-result to local files. Nothing is sent over the network.
+result to local files. Nothing is sent over the network unless `--transmit`
+says so, and even then the files are still written.
 
 Flags are parsed by the Go standard `flag` package, so `-flag`, `--flag`,
 `-flag=value` and `-flag value` are all accepted. This document writes the
@@ -573,6 +574,66 @@ under `--stdout`; `--name` is rejected outright.
 csv` gives the components alone. `--stdout --format json` carries the whole
 report, `services[]` included.
 
+### Transmitting to a server
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--transmit URL` | *(off)* | Also POST this scan to a Riskability server, e.g. `https://riskability.example/api/v1`. The report files under `--out` are written exactly as they would be without it. |
+| `--transmit-token-file PATH` | *(none)* | Read the bearer token from this file. `$SWINV_TRANSMIT_TOKEN` is the alternative. |
+| `--transmit-cert PATH` | *(none)* | Client certificate (PEM). |
+| `--transmit-key PATH` | *(none)* | Private key (PEM) for `--transmit-cert`. |
+| `--transmit-ca PATH` | *(none)* | CA bundle (PEM) to verify the server against. |
+| `--transmit-insecure` | `false` | Do not verify the server's certificate. Prints a warning on every run, `--quiet` included. |
+| `--transmit-batch-lines N` | `2000` | Maximum records per request. |
+| `--transmit-batch-bytes SIZE` | `1MiB` | Maximum uncompressed bytes per request. |
+| `--transmit-attempts N` | `5` | Attempts per request including the first, with exponential backoff and jitter. |
+| `--transmit-timeout DURATION` | `60s` | Deadline for one request, not for the whole upload. |
+
+**There is no `--transmit-token` flag.** Every process on the machine can read
+`/proc/<pid>/cmdline`, so a token on the command line is a token handed to
+every local user. Use the file or the environment variable.
+
+**Both auth mechanisms are supported, and both may be used at once.** Some
+estates will not distribute bearer tokens; some cannot run an internal CA.
+
+**File output stays first class.** `--transmit` adds a destination, it does not
+replace one. Air-gapped sites are the likeliest audience for this product and
+they move files by means they already trust. Pair `--transmit` with
+`--output-mode overwrite` if a growing directory of timestamped files is not
+wanted.
+
+**Batching.** A batch ends when either limit trips. Line count alone is not
+enough: a host with large attribute maps puts 2,000 lines well past any sane
+request body, and a 4 MB scan in one request is what this exists to prevent.
+Bodies are gzipped (about 9:1 on this data).
+
+**Idempotency and resumption.** Every scan gets a `scan_id`, sent with every
+batch, and the server dedupes on `(scan_id, batch_index)` - so a retry after a
+timeout cannot double-count a host. The NDJSON is spooled to
+`<out>/.swinv-spool/` before the first request and removed only once the server
+has accepted and reconciled it. A collector that dies at batch nine is finished
+by the next run rather than rescanning; a server that restarts mid-scan costs a
+few duplicate batches rather than the whole upload. The resume point comes from
+`GET .../status`, because the server is the only party that knows what it
+stored.
+
+**Retries.** 5xx and network failures are retried; 4xx are not, except `429`,
+which is the one 4xx that says "later" rather than "no". A permanent failure
+says so on stderr and leaves the spool in place.
+
+**Proxies.** `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` are honoured.
+
+**`--transmit` implies the manifest.** The server opens a scan with the
+heartbeat record and reconciles the close against its counts, so the record is
+emitted whether or not `--heartbeat` was given. `--heartbeat` still controls
+whether unchanged inventories suppress their component records.
+
+`--transmit` is refused with `--offline` (which promises no network activity at
+all), with `--stdout` (there is nowhere to spool), and with `--delta-only` (the
+server reconciles against a full inventory, and a delta is not one). To send
+exposure and container records as well as components, add `--ndjson-include
+all`; without it those counts are legitimately zero.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -582,6 +643,23 @@ report, `services[]` included.
 | 2 | Usage error: bad flag, positional argument, unknown `--format` or `--output-mode`, bad exclusion pattern, conflicting options, unusable `--since` baseline |
 | 3 | Fatal: could not construct the source, could not create `--out`, could not write output, or `--require-host-id` with no machine ID |
 | 4 | Timeout: `--timeout` exceeded |
+| 5 | A source could not be enumerated: a package database is present on this host and could not be read |
+| 6 | Transmission did not complete, or completed and did not reconcile |
+
+**Exit 5 is the refusal to be quietly useless.** A package database that exists
+and cannot be read produces a small, valid, perfectly healthy-looking
+inventory - and fifteen components from a host with four thousand is
+indistinguishable from a minimal machine. The report is still written, and
+`scan.sources` names the source and the reason; the exit code is what a timer
+checks. It outranks 1 and 6, so a run that both lost a source and failed to
+transmit reports the source.
+
+Exit 5 is not raised when the database is absent (that is a fact about the
+host, reported as `skipped`), when it is present and zero bytes, or when
+`--catalogers` deliberately excluded the source.
+
+**Exit 6 never destroys the local copy.** The report files are written before
+anything is uploaded, and the spooled scan is kept for the next run.
 
 **A single failing cataloger never aborts the run.** The failure is recorded in
 `scan.warnings`, `scan.incomplete` is set to `true`, the output is written

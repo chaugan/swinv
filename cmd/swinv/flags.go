@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chaugan/swinv/internal/transmit"
 )
 
 // parseFlags builds a config from argv.
@@ -110,8 +112,77 @@ func parseFlags(args []string, stdout, stderr io.Writer) (*config, int, error) {
 	if cfg.toStdout && cfg.nameSet {
 		return nil, exitUsage, fmt.Errorf("--name has no meaning with --stdout")
 	}
+	if code, err := validateTransmit(cfg); err != nil {
+		return nil, code, err
+	}
 
 	return cfg, exitOK, nil
+}
+
+// validateTransmit checks the transmission flags against each other.
+//
+// Every check here refuses a combination that would otherwise produce a
+// confident, wrong answer rather than an error: an upload nobody asked for, a
+// partial inventory the server would reconcile against a full count, or a
+// "network-silent" run that opens a TLS connection.
+func validateTransmit(cfg *config) (int, error) {
+	if cfg.transmit == "" {
+		// Nothing to validate, but the tuning flags must not look like they
+		// took effect. An operator who set --transmit-batch-lines and forgot
+		// --transmit would otherwise see a clean run and no upload.
+		for name, set := range map[string]bool{
+			"--transmit-token-file": cfg.transmitTokenFile != "",
+			"--transmit-cert":       cfg.transmitCert != "",
+			"--transmit-key":        cfg.transmitKey != "",
+			"--transmit-ca":         cfg.transmitCA != "",
+			"--transmit-insecure":   cfg.transmitInsecure,
+		} {
+			if set {
+				return exitUsage, fmt.Errorf("%s requires --transmit", name)
+			}
+		}
+		return exitOK, nil
+	}
+
+	if cfg.offline {
+		return exitUsage, fmt.Errorf("--offline and --transmit contradict each other: " +
+			"--offline promises no network activity at all")
+	}
+	if cfg.toStdout {
+		return exitUsage, fmt.Errorf("--transmit needs a directory to spool into, so it cannot be used with --stdout")
+	}
+	if cfg.deltaOnly {
+		// The server reconciles the manifest's declared count against what it
+		// stored. A delta carries only what changed, so every scan would be
+		// declared complete and be a fraction of the host.
+		return exitUsage, fmt.Errorf("--transmit cannot be combined with --delta-only: " +
+			"the server reconciles against a full inventory, and a delta is not one")
+	}
+	if cfg.transmitBatchLines <= 0 {
+		return exitUsage, fmt.Errorf("--transmit-batch-lines must be positive, got %d", cfg.transmitBatchLines)
+	}
+	if cfg.transmitAttempts <= 0 {
+		return exitUsage, fmt.Errorf("--transmit-attempts must be at least 1, got %d", cfg.transmitAttempts)
+	}
+	if cfg.transmitTimeout <= 0 {
+		return exitUsage, fmt.Errorf("--transmit-timeout must be positive, got %s", cfg.transmitTimeout)
+	}
+	n, err := parseSize(cfg.transmitBatchBytes)
+	if err != nil {
+		return exitUsage, fmt.Errorf("--transmit-batch-bytes: %w", err)
+	}
+	if n <= 0 {
+		return exitUsage, fmt.Errorf("--transmit-batch-bytes must be positive, got %s", cfg.transmitBatchBytes)
+	}
+	cfg.transmitBatchBytesN = n
+
+	if cfg.transmitInsecure {
+		// Loud where it is used, not only where it is documented. A trial flag
+		// that survives into production is the normal outcome unless something
+		// says so on every run.
+		cfg.transmitInsecureWarned = true
+	}
+	return exitOK, nil
 }
 
 // parsePerm converts an octal permission string such as "0640" or "600" into
@@ -203,4 +274,18 @@ func registerFlags(fs *flag.FlagSet, cfg *config) {
 	fs.BoolVar(&cfg.quiet, "quiet", false, "suppress stderr status output")
 	fs.BoolVar(&cfg.verbose, "verbose", false, "per-stage timing to stderr")
 	fs.BoolVar(&cfg.showVersion, "version", false, "print version, commit, and Syft version, then exit")
+
+	// Transmission. File output is unaffected by every one of these: --transmit
+	// adds a destination, it does not replace one. An air-gapped site and a
+	// connected one run the same binary with the same output on disk.
+	fs.StringVar(&cfg.transmit, "transmit", "", "also POST this scan to a Riskability server, e.g. https://riskability.example/api/v1; the report files are still written")
+	fs.StringVar(&cfg.transmitTokenFile, "transmit-token-file", "", "read the bearer token from this file; or set "+transmitTokenEnv+". There is no flag for the token itself: a command line is readable by every user on the machine")
+	fs.StringVar(&cfg.transmitCert, "transmit-cert", "", "client certificate (PEM) to authenticate with, for an estate that runs a CA rather than distributing tokens")
+	fs.StringVar(&cfg.transmitKey, "transmit-key", "", "private key (PEM) for --transmit-cert")
+	fs.StringVar(&cfg.transmitCA, "transmit-ca", "", "CA bundle (PEM) to verify the server against, for an internal CA that is not in the system trust store")
+	fs.BoolVar(&cfg.transmitInsecure, "transmit-insecure", false, "do not verify the server's certificate; for a first-day trial against a self-signed endpoint, never for a deployment")
+	fs.IntVar(&cfg.transmitBatchLines, "transmit-batch-lines", transmit.DefaultBatchLines, "maximum records per request")
+	fs.StringVar(&cfg.transmitBatchBytes, "transmit-batch-bytes", "1MiB", "maximum uncompressed bytes per request; whichever of the two batch limits trips first ends the batch")
+	fs.IntVar(&cfg.transmitAttempts, "transmit-attempts", transmit.DefaultAttempts, "attempts per request, including the first, with exponential backoff and jitter between them")
+	fs.DurationVar(&cfg.transmitTimeout, "transmit-timeout", transmit.DefaultRequestTimeout, "deadline for one request, not for the whole upload")
 }

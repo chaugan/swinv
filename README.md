@@ -48,10 +48,12 @@ a virtual machine that no Windows API reaches. It is local kernel IPC with no
 address and no route, it reads the container list and files and nothing else -
 no create, no exec, no attach - and `--no-containers` turns it off.
 
-The one piece of network activity is an optional reverse-DNS lookup used to
-fill in the host's FQDN - ordinary name resolution against your configured
-resolver, carrying no inventory data. `--offline` turns it off, at which point
-the run performs no network activity at all.
+By default the one piece of network activity is an optional reverse-DNS lookup
+used to fill in the host's FQDN - ordinary name resolution against your
+configured resolver, carrying no inventory data. `--offline` turns it off, at
+which point the run performs no network activity at all. `--transmit` opts in
+to uploading the scan to one HTTPS endpoint; it is off unless you ask for it,
+and it never replaces the files on disk.
 
 Detection comes from [Syft](https://github.com/anchore/syft), imported as a
 library, which gives roughly 40 package ecosystems and a binary classifier
@@ -910,6 +912,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--since PATH` | - | Diff against a previous report |
 | `--heartbeat` | false | NDJSON: a digest every scan, components only when they change |
 | `--ndjson-include LIST` | - | NDJSON also carries `exposure`, `containers`, or `all` |
+| `--transmit URL` | - | Also POST the scan to a Riskability server; the files are still written |
 | `--hash` | false | Record a SHA-256 per component |
 | `--fast` | false | Scan at normal priority and full parallelism (see below) |
 | `--max-memory SIZE` | - | Soft memory limit, e.g. `1536MiB` |
@@ -990,8 +993,11 @@ swinv --out /var/lib/swinv --output-mode timestamped \
 
 Worth knowing before you roll this out fleet-wide:
 
-- **No inventory data is ever transmitted.** `swinv` opens no sockets to send
-  results anywhere. The single exception to "no network at all" is a
+- **No inventory data is transmitted unless you ask for it.** Without
+  `--transmit`, `swinv` opens no sockets to send results anywhere. With it, the
+  scan is POSTed to the single HTTPS endpoint you named, gzipped, authenticated
+  by a bearer token or a client certificate, and the report files are still
+  written locally. The other exception to "no network at all" is a
   best-effort reverse-DNS lookup that fills `host.fqdn` - a normal name
   resolution against your configured resolver, bounded to two seconds and never
   fatal. It carries no scan data, but it does tell that resolver the host

@@ -25,9 +25,12 @@ import (
 // Failure here is not failure of the inventory. A machine whose /proc cannot be
 // read still has an installed-software list worth writing, so problems become
 // warnings on the report and the component list is untouched.
-func listenSnapshot(ctx context.Context, cfg *config, meta *model.ScanMeta, logf func(string, ...any)) *service.Result {
+// The second return value is the manifest entry for this source: a scan that
+// could not read /proc and a host with nothing listening produce the same
+// empty list, and only this says which happened.
+func listenSnapshot(ctx context.Context, cfg *config, meta *model.ScanMeta, logf func(string, ...any)) (*service.Result, model.SourceStatus) {
 	if cfg.noServices || !service.Supported() {
-		return nil
+		return nil, serviceSourceStatus(cfg, nil, nil)
 	}
 	// --root pointed somewhere other than this machine: an image, a chroot, a
 	// mounted disk. The sockets open right now belong to the host, not to the
@@ -37,14 +40,14 @@ func listenSnapshot(ctx context.Context, cfg *config, meta *model.ScanMeta, logf
 		meta.AddWarning(fmt.Sprintf(
 			"services were not collected: --root is %s, and listening sockets describe "+
 				"the running machine rather than the tree being scanned", cfg.root))
-		return nil
+		return nil, serviceSourceStatus(cfg, nil, nil)
 	}
 
 	start := time.Now()
 	result, err := service.Collect(ctx, "")
 	if err != nil {
 		meta.AddWarning("could not enumerate listening sockets: " + err.Error())
-		return nil
+		return nil, serviceSourceStatus(cfg, nil, err)
 	}
 	for _, w := range result.Warnings {
 		meta.AddWarning(w)
@@ -53,7 +56,7 @@ func listenSnapshot(ctx context.Context, cfg *config, meta *model.ScanMeta, logf
 		logf("services: %d listening process(es) in %s",
 			len(result.Services), time.Since(start).Round(time.Millisecond))
 	}
-	return result
+	return result, serviceSourceStatus(cfg, result, nil)
 }
 
 // attributeServices joins the snapshot to the finished inventory and files the

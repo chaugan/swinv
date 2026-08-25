@@ -17,7 +17,9 @@ import (
 // 1.1 added Component.SHA256 (--hash) and Report.Delta (--since). Both are
 // additive and omitted when unused, so a 1.0 consumer still parses a 1.1
 // document.
-const SchemaVersion = "1.9"
+// 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
+// describing manifest (see the NDJSON heartbeat record). Also additive.
+const SchemaVersion = "1.10"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -188,6 +190,28 @@ type ScanMeta struct {
 	// document rather than only in the documentation is what makes it reach
 	// the ingest pipeline, which drops prose.
 	FirewallExamined bool `json:"firewall_examined"`
+
+	// ScanID identifies this run, and only this run.
+	//
+	// It is the idempotency key for transmission: every batch of this scan
+	// carries it, so a retry after a timeout cannot double-count a host, and a
+	// collector that died half way through can name what it was uploading and
+	// resume it. Written into the manifest record so the same identifier
+	// appears in the file an air-gapped site carries by hand.
+	ScanID string `json:"scan_id,omitempty"`
+
+	// Sources says what each enumeration source did: read, skipped, or failed.
+	//
+	// Components here counts what the source contributed to this scan's
+	// inventory. That is not always what the NDJSON stream carries: with
+	// --heartbeat an unchanged host sends no component records at all, so the
+	// manifest's counts drop to zero while these stay at what was found. The
+	// manifest carries inventory_unchanged so the receiver can tell the two
+	// cases apart instead of guessing.
+	//
+	// Empty means the sources were never determined, which is not the same as
+	// a machine with no sources.
+	Sources map[string]SourceStatus `json:"sources,omitempty"`
 
 	// ExposureBlindSpots names, in machine-readable form, the classes of
 	// exposure this scan could not observe.

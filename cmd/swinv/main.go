@@ -1,8 +1,10 @@
 // Command swinv scans the local machine, enumerates installed software, and
 // writes the inventory to local JSON and CSV files.
 //
-// It never transmits anything over the network. Files land on disk; collecting
-// them afterwards is somebody else's job.
+// By default it transmits nothing: files land on disk and collecting them
+// afterwards is somebody else's job. --transmit adds an upload to one HTTPS
+// endpoint without taking the files away, because the sites most likely to
+// want this product are the ones that move files by means they already trust.
 package main
 
 import (
@@ -60,6 +62,20 @@ const (
 	exitUsage      = 2 // bad flag, bad pattern, conflicting options
 	exitFatal      = 3 // could not construct the source or write output
 	exitTimeout    = 4 // whole-run deadline exceeded
+
+	// exitSourceFailed is the refusal to be quietly useless.
+	//
+	// A source that exists and could not be read produces a small, valid,
+	// perfectly healthy-looking inventory. Fifteen components from a host with
+	// four thousand is indistinguishable from a minimal machine, and every
+	// layer downstream will agree it is fine. Exiting 0 there is the bug; this
+	// code is the fix.
+	exitSourceFailed = 5
+
+	// exitTransmit is an upload that did not complete, or that completed and
+	// did not reconcile. The inventory files are still written: a failure to
+	// reach the server must never destroy the copy on disk.
+	exitTransmit = 6
 )
 
 // Output-mode names. The mode picks the default --name template; an explicit
@@ -126,6 +142,22 @@ type config struct {
 	verbose          bool
 	showVersion      bool
 
+	transmit            string
+	transmitTokenFile   string
+	transmitCert        string
+	transmitKey         string
+	transmitCA          string
+	transmitInsecure    bool
+	transmitBatchLines  int
+	transmitBatchBytes  string
+	transmitBatchBytesN int64
+	transmitAttempts    int
+	transmitTimeout     time.Duration
+
+	// transmitInsecureWarned makes the certificate-verification opt-out
+	// announce itself on every run rather than only in the help.
+	transmitInsecureWarned bool
+
 	nameSet         bool // whether --name was given explicitly
 	fullIntervalSet bool // whether --full-interval was given explicitly
 }
@@ -155,6 +187,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if !cfg.quiet {
 			fmt.Fprintf(stderr, "swinv: "+format+"\n", a...)
 		}
+	}
+
+	if cfg.transmitInsecureWarned {
+		// Not behind --quiet. --quiet is a promise about status output, not a
+		// licence to hide that this run is shipping an inventory of the
+		// machine to an unverified peer.
+		fmt.Fprintln(stderr, "swinv: WARNING: --transmit-insecure: the server's certificate is not "+
+			"being verified, so this upload can be intercepted and read")
 	}
 
 	if cfg.showVersion {
@@ -283,7 +323,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// --- what is listening, part one --------------------------------------
 	// Taken before the scan so the scan can be told which executables to
 	// resolve ownership for; see listenSnapshot.
-	listeners := listenSnapshot(ctx, cfg, &meta, logf)
+	listeners, servicesSource := listenSnapshot(ctx, cfg, &meta, logf)
 
 	// --- scan -------------------------------------------------------------
 	logf("scanning %s ...", scanTarget(cfg))
@@ -361,6 +401,20 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// serving traffic.
 	attributeServices(ctx, cfg, report, listeners, result.FileOwners, logf)
 
+	// --- manifest ---------------------------------------------------------
+	// Here, and not later, for two reasons. The component list is complete --
+	// the packages found inside containers have just joined it -- and it has
+	// not yet been trimmed by --delta-only, so the per-source counts describe
+	// the machine rather than the subset this run happens to be reporting.
+	failedSources := buildManifest(cfg, report, servicesSource)
+	if len(failedSources) > 0 {
+		report.Scan.Incomplete = true
+		for _, name := range failedSources {
+			report.Scan.AddWarning(fmt.Sprintf("source %s failed: %s",
+				name, report.Scan.Sources[name].Reason))
+		}
+	}
+
 	// --- delta against a previous report ----------------------------------
 	if baseline != nil {
 		delta := model.ComputeDelta(report.Components, baseline.Components)
@@ -425,6 +479,33 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return code
 	}
 
+	// --- transmit ---------------------------------------------------------
+	// After the files, deliberately. The copy on disk is the one an operator
+	// can still act on when the server is unreachable, so it is written first
+	// and is never conditional on the upload.
+	transmitCode := exitOK
+	if cfg.transmit != "" {
+		sendCtx, cancelSend := context.WithTimeout(context.Background(), transmitDeadline(cfg))
+		transmitCode = transmitReport(sendCtx, cfg, report, logf, stderr)
+		cancelSend()
+	}
+
+	// A source that failed outranks everything else here. A partial inventory
+	// that exits 0 is the failure this whole manifest exists to prevent, and
+	// an operator whose timer only checks the exit code has to see it.
+	if len(failedSources) > 0 {
+		fmt.Fprintf(stderr,
+			"swinv: %d of this host's inventory sources could not be read (%s); "+
+				"the inventory is INCOMPLETE and its component count is wrong by an unknown amount\n",
+			len(failedSources), strings.Join(failedSources, ", "))
+		for _, name := range failedSources {
+			fmt.Fprintf(stderr, "swinv:   %s: %s\n", name, report.Scan.Sources[name].Reason)
+		}
+		return exitSourceFailed
+	}
+	if transmitCode != exitOK {
+		return transmitCode
+	}
 	if report.Scan.Incomplete {
 		logf("this inventory is INCOMPLETE -- see the warnings above")
 		return exitIncomplete

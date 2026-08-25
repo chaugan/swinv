@@ -15,7 +15,7 @@ With no flags, swinv scans / - but not /home, and not network or virtual
 filesystems - and writes JSON and CSV into /var/lib/swinv. It runs at
 background priority, deliberately slower than it could be; --fast trades that
 for speed. The only network activity is a reverse-DNS lookup, which --offline
-disables. No inventory data leaves this machine.
+disables. No inventory data leaves this machine unless --transmit says so.
 `
 
 func helpSections() []helpSection {
@@ -50,6 +50,14 @@ func helpSections() []helpSection {
 			{"--heartbeat", "a digest per scan, components only on change"},
 			{"--force-full, --full-interval", "send in full anyway, or at least this often"},
 		}},
+		{"Transmitting to a server", []helpFlag{
+			{"--transmit URL", "also POST this scan; the files are still written"},
+			{"--transmit-token-file F", "bearer token file, or $SWINV_TRANSMIT_TOKEN"},
+			{"--transmit-cert, --transmit-key, --transmit-ca", "client certificate, its key, and the server's CA"},
+			{"--transmit-insecure", "do not verify the server certificate at all"},
+			{"--transmit-batch-lines, --transmit-batch-bytes", "request size; first limit to trip wins"},
+			{"--transmit-attempts, --transmit-timeout", "retries, and one request's deadline"},
+		}},
 		{"Resources", []helpFlag{
 			{"--fast", "normal priority, every CPU; fast but intrusive"},
 			{"--timeout DURATION", "whole-run deadline (default 30m, then exit 4)"},
@@ -83,7 +91,11 @@ Examples:
         but the processes behind them mostly are not.
 
 Exit codes:
-  0 complete    1 incomplete    2 usage error    3 failed    4 timed out
+  0 complete       1 incomplete      2 usage error     3 failed
+  4 timed out      5 source unreadable                 6 transmit failed
+
+Exit 5 means a package database is present and unreadable, so the inventory is
+short by an unknown amount - which looks exactly like a healthy minimal host.
 
 See also:
   man 8 swinv                   full reference, on this machine

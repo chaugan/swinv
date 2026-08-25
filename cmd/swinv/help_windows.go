@@ -16,7 +16,8 @@ With no flags, swinv reads the Windows uninstall registry - the records behind
 Add/Remove Programs - and writes JSON and CSV. That takes milliseconds and
 opens no files, but it sees only software that registers an uninstall entry.
 --full-scan also reads executables on disk, which takes minutes and needs an
-elevated prompt. No inventory data leaves this machine.
+elevated prompt. No inventory data leaves this machine unless --transmit
+says so.
 `
 
 func helpSections() []helpSection {
@@ -47,6 +48,14 @@ func helpSections() []helpSection {
 			{"--force-full, --full-interval", "send in full anyway, or at least this often"},
 			{"--since, --delta-only", "diff an earlier report; or only what changed"},
 			{"--hash", "record a SHA-256 per component"},
+		}},
+		{"Transmitting to a server", []helpFlag{
+			{"--transmit URL", "also POST this scan; the files are still written"},
+			{"--transmit-token-file F", "bearer token file, or $SWINV_TRANSMIT_TOKEN"},
+			{"--transmit-cert, --transmit-key, --transmit-ca", "client certificate, its key, and the server's CA"},
+			{"--transmit-insecure", "do not verify the server certificate at all"},
+			{"--transmit-batch-lines, --transmit-batch-bytes", "request size; first limit to trip wins"},
+			{"--transmit-attempts, --transmit-timeout", "retries, and one request's deadline"},
 		}},
 		{"Resources", []helpFlag{
 			{"--fast", "normal priority, every CPU; fast but intrusive"},
@@ -80,7 +89,11 @@ Examples:
         Skip asking the Docker engine what it runs.
 
 Exit codes:
-  0 complete    1 incomplete    2 usage error    3 failed    4 timed out
+  0 complete       1 incomplete      2 usage error     3 failed
+  4 timed out      5 source unreadable                 6 transmit failed
+
+Exit 5 means a package database is present and unreadable, so the inventory is
+short by an unknown amount - which looks exactly like a healthy minimal host.
 
 See also:
   docs\FLAGS.md                 canonical semantics and worked recipes

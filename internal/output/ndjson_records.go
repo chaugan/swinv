@@ -8,10 +8,12 @@ import (
 
 // NDJSON record types. A consumer that understands only component records can
 // skip anything carrying one of these, which is why they exist at all.
+// They take their values from internal/model so the collector and the server
+// that reconciles its counts cannot drift on the spelling.
 const (
-	recordHeartbeat = "heartbeat"
-	recordExposure  = "exposure"
-	recordContainer = "container"
+	recordHeartbeat = model.RecordHeartbeat
+	recordExposure  = model.RecordExposure
+	recordContainer = model.RecordContainer
 )
 
 // exposureLine is one (port, component) pair.

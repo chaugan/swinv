@@ -11,11 +11,22 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.9`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.10`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.9"
+"schema_version": "1.10"
 ```
+
+**1.9 → 1.10** added the self-describing scan manifest:
+
+| Addition | Appears in |
+|---|---|
+| `scan.scan_id` | JSON |
+| `scan.sources` | JSON |
+| `schema_version`, `scan_id`, `swinv_version`, `counts`, `sources`, `duration_ms` on the heartbeat record | NDJSON |
+
+Both are additive and omitted when never computed. See
+[the manifest](#the-manifest) below.
 
 **1.8 → 1.9** added the inventory heartbeat:
 
@@ -1100,9 +1111,10 @@ against many thousands of components.
 
 ### The heartbeat
 
-Schema 1.9, with `--heartbeat`. One extra record at the head of the stream,
-and - when the inventory has not changed since the last scan - the only record
-in it.
+Schema 1.9, with `--heartbeat` or `--transmit`. One extra record at the head of
+the stream, and - when the inventory has not changed since the last scan - the
+only record in it. Schema 1.10 turned it into a manifest; see
+[the manifest](#the-manifest).
 
 ```json
 {"record_type":"heartbeat","hostname":"web01","digest":"sha256:9f2c…",
@@ -1132,6 +1144,69 @@ statement about the machine; a heartbeat is a true one.
 "this package is no longer installed" is the fact that decides whether a
 vulnerability is fixed or merely unreported. Sending the whole list on change
 keeps that property while removing the volume.
+
+### The manifest
+
+Schema 1.10. The heartbeat record grew a description of what the stream it
+heads actually contains.
+
+```json
+{"record_type":"heartbeat","hostname":"web01","digest":"sha256:9f2c…",
+ "n_components":3993,"scanned_at":"2026-08-25T09:14:02Z",
+ "machine_id":"0123…","os_id":"ubuntu","os_version_id":"26.04","architecture":"amd64",
+ "schema_version":2,"scan_id":"6f423aa4-3fcc-4b11-ac7b-def75ba5a2e8",
+ "swinv_version":"0.7.0","duration_ms":8412,
+ "counts":{"component":3993,"exposure":50,"container":0},
+ "sources":{"dpkg":{"status":"ok","components":3218},
+            "javascript-package":{"status":"ok","components":512},
+            "rpm":{"status":"skipped","components":0,
+                   "reason":"no rpm package database on this host"}}}
+```
+
+**Why it exists.** A host whose collector wrote 3,993 components once arrived
+at its consumer as 15, and every layer in between reported success: the
+forwarder shipped the file, the indexer accepted the events, the matcher ran,
+the dashboard showed a host reporting. The matcher was right that fifteen
+packages contain no vulnerabilities. Nothing anywhere compared what arrived
+against what was sent. Diagnosis took a day.
+
+Two fields close that, and both are cheap.
+
+| Field | What it is for |
+|---|---|
+| `counts` | The records **in this stream**, by type. A receiver that stores fewer than this has lost data and can say so in the same minute. |
+| `sources` | What each enumeration source did: `ok`, `skipped` or `error`, with a `reason` for anything that is not `ok`. "Skipped because unreadable" and "found nothing" are different facts and were previously indistinguishable. |
+| `scan_id` | Identifies this run. The idempotency key for `--transmit`, and the thing a support conversation names. |
+| `schema_version` | `2` for this shape. Absent on the 1.9 heartbeat, so the two are told apart without a heuristic. |
+| `swinv_version`, `duration_ms` | Which collector, and how long it took. |
+
+**`counts.component` describes the stream; `n_components` describes the host.**
+They are the same number on an ordinary scan. They differ in exactly one case:
+`--heartbeat` on an unchanged host suppresses the component records, so
+`counts.component` is `0` while `n_components` still states the real total. The
+record then carries `"inventory_unchanged": true` and
+`"inventory_components": 3993` so a receiver reconciles against the right one
+instead of reporting a false discrepancy on every unchanged scan.
+
+**The per-source counts add up.** The sum of `sources[*].components` equals
+`n_components`. swinv checks this before writing and records a warning on the
+report if it ever fails; the receiver should check it too. A component whose
+source is not accounted for is a component whose disappearance nobody notices.
+
+**Source names.** A source that produced components is named after the
+cataloger that found it, with `-cataloger` trimmed: `javascript-package`,
+`linux-kernel`, `windows-registry`. The four package databases swinv probes for
+directly use short names - `dpkg`, `rpm`, `apk`, `portage` - and those are the
+only ones that can report `error`, because they are the only ones whose absence
+and unreadability can be told apart. `services` reports on the listening-socket
+snapshot and always contributes zero components. `unattributed` counts
+components that arrived with no `found_by`.
+
+**A source that errors exits 5.** See the exit codes in
+[FLAGS.md](FLAGS.md#exit-codes): a small valid inventory looks exactly like a
+healthy scan of a minimal host, so the exit code is the only thing left to say
+otherwise.
+
 
 #### What the digest is built from
 

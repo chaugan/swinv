@@ -479,6 +479,47 @@ Suppress status output on standard error.
 .It Fl -verbose
 Print per-stage timings - source construction, cataloging, writing - to
 standard error, so a performance regression is attributable.
+.It Fl -transmit Ar url
+Also POST this scan to a Riskability server, for example
+.Ql https://riskability.example/api/v1 .
+The report files under
+.Fl -out
+are written exactly as they would be without it: transmission adds a
+destination, it does not replace one.
+The NDJSON is spooled under
+.Pa <out>/.swinv-spool
+first, batched by
+.Fl -transmit-batch-lines
+and
+.Fl -transmit-batch-bytes
+(whichever trips first), gzipped, and removed only once the server has accepted
+and reconciled it - so a collector that dies mid-upload resumes rather than
+rescanning.
+Refused with
+.Fl -offline , -stdout
+and
+.Fl -delta-only .
+.It Fl -transmit-token-file Ar path
+Read the bearer token from this file, or set
+.Ev SWINV_TRANSMIT_TOKEN .
+There is deliberately no flag for the token itself: a command line is readable
+by every user on the machine.
+.It Fl -transmit-cert Ar path , Fl -transmit-key Ar path , Fl -transmit-ca Ar path
+Client certificate, its private key, and the CA bundle to verify the server
+against. Certificates and bearer tokens are both supported, and both may be
+used at once: some estates will not distribute tokens and some cannot run an
+internal CA.
+.It Fl -transmit-insecure
+Do not verify the server's certificate. Prints a warning on every run,
+.Fl -quiet
+included.
+.It Fl -transmit-batch-lines Ar n , Fl -transmit-batch-bytes Ar size
+Maximum records and maximum uncompressed bytes per request; default 2000 and
+1MiB. Whichever limit trips first ends the batch.
+.It Fl -transmit-attempts Ar n , Fl -transmit-timeout Ar duration
+Attempts per request including the first (default 5, exponential backoff with
+jitter), and the deadline for one request rather than for the whole upload
+(default 60s). 5xx and network failures are retried; 4xx are not, except 429.
 .It Fl -version
 Print the
 .Nm
@@ -504,6 +545,17 @@ written.
 The
 .Fl -timeout
 deadline was exceeded.
+.It 5
+A source could not be enumerated: a package database is present on this host
+and could not be read. The report is still written and
+.Ql scan.sources
+names the source and the reason, but the component count is wrong by an
+unknown amount - and a small valid inventory looks exactly like a healthy
+scan of a minimal machine, which is why this is not folded into 1.
+.It 6
+Transmission did not complete, or completed and the server's stored count
+disagreed with the manifest. The report files are written first and the
+spooled scan is kept, so this never costs the local copy.
 .El
 .Sh FILES
 .Bl -tag -width "/proc/self/mountinfo" -compact

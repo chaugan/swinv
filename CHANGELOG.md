@@ -7,6 +7,86 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Added
+
+- **`--transmit`**, an HTTPS destination alongside the files. swinv POSTs the
+  scan it already writes to one endpoint: `POST /api/v1/ingest/scan` with the
+  manifest, numbered NDJSON batches, then a close whose reconciliation verdict
+  the collector checks.
+
+  **File output stays first class.** `--transmit` adds a destination, it does
+  not replace one. Air-gapped sites are the likeliest audience for this and
+  they move files by means they already trust.
+
+  Batched by line count **and** byte size, whichever trips first, because line
+  count alone is not enough: a host with large attribute maps puts 2,000 lines
+  well past any sane request body. Bodies are gzipped, roughly 9:1 on this
+  data, which saves nothing on wall clock and a great deal on a metered link.
+
+  **Idempotent and resumable.** Every scan gets a `scan_id`, sent with every
+  batch, so a retry after a timeout cannot double-count a host. The NDJSON is
+  spooled to `<out>/.swinv-spool/` before the first request and removed only
+  once the server has accepted and reconciled it, so a collector that dies at
+  batch nine is finished by the next run rather than rescanning, and a server
+  that restarts mid-scan costs a few duplicate batches rather than the whole
+  upload. The resume point comes from `GET .../status`: the server is the only
+  party that knows what it stored. The batch boundaries are recorded in the
+  spool, so changing `--transmit-batch-lines` between runs cannot shift what
+  batch seven means.
+
+  **Bearer token and client certificate, both.** Some estates will not
+  distribute tokens; some cannot run an internal CA. There is deliberately no
+  `--transmit-token` flag: every process on the machine can read
+  `/proc/<pid>/cmdline`. `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` are
+  honoured. Retries are bounded, exponential, and jittered, because a fleet on
+  one systemd timer otherwise retries in lockstep. 5xx and network failures
+  retry; 4xx do not, except `429`, which is the one 4xx that says "later"
+  rather than "no".
+
+- **A self-describing scan manifest**, schema `2` on the heartbeat record. It
+  now states what the stream it heads actually contains: `scan_id`,
+  `swinv_version`, `duration_ms`, `counts` by record type, and `sources` -
+  one entry per enumeration source with `ok`/`skipped`/`error` and a reason.
+
+  This is the feature that would have prevented an entire day of debugging. A
+  host whose collector wrote 3,993 components once arrived as 15, and the
+  forwarder, the indexer, the matcher and the dashboard all reported success,
+  because nothing anywhere compared what arrived against what was sent. The
+  matcher was right that fifteen packages contain no vulnerabilities.
+
+  `counts.component` describes the stream and `n_components` describes the
+  host; they differ only when `--heartbeat` suppressed the components, and the
+  record then carries `inventory_unchanged` and `inventory_components` so a
+  receiver reconciles against the right one. `n_components` keeps its exact
+  previous meaning, so a server that predates this reads the record unchanged.
+  The NDJSON writer refuses to emit a stream whose manifest disagrees with the
+  records that followed it.
+
+  "Skipped because unreadable" and "found nothing" are now different facts:
+  swinv probes for the dpkg, rpm, apk and portage databases directly, so an
+  absent one is `skipped` with a reason and an unreadable one is `error`.
+
+- **Exit code 5**, a source that could not be enumerated, and **exit code 6**,
+  a transmission that did not complete or did not reconcile. Exit 5 exists
+  because a package database that is present and unreadable produces a small,
+  valid, perfectly healthy-looking inventory, and fifteen components from a
+  host with four thousand is indistinguishable from a minimal machine. The
+  report is still written and `scan.sources` names the source and the reason;
+  the exit code is what a timer checks. Exit 6 never destroys the local copy:
+  the files are written before anything is uploaded and the spool is kept.
+
+### Changed
+
+- **Schema `1.10`**: `scan.scan_id` and `scan.sources` on the JSON report. Both
+  are additive and omitted when never computed, so a `1.9` consumer parses a
+  `1.10` document.
+
+- `--transmit` implies the manifest record even without `--heartbeat`, because
+  the server opens a scan with it. `--heartbeat` still controls whether an
+  unchanged inventory suppresses its component records.
+
 ## [0.6.1] - 2026-08-23
 
 ### Added

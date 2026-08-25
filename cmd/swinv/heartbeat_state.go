@@ -90,12 +90,20 @@ func writeHeartbeatState(dir string, perm, dirPerm os.FileMode, state heartbeatS
 //     indefinitely. A day of staleness is recoverable; an indefinite one is
 //     not.
 func applyHeartbeat(cfg *config, report *model.Report, logf func(string, ...any)) {
-	if !cfg.heartbeat {
+	if !cfg.heartbeat && cfg.transmit == "" {
 		return
 	}
 
 	digest := model.InventoryDigest(report.Components)
 	report.Scan.InventoryDigest = digest
+
+	// --transmit computes the digest but does not suppress anything. The
+	// manifest record is what the server opens a scan with and reconciles
+	// against, so it has to exist on every transmitted stream; the volume
+	// reduction is a separate decision the operator makes with --heartbeat.
+	if !cfg.heartbeat {
+		return
+	}
 
 	host := report.Host.Hostname
 	if host == "" {
