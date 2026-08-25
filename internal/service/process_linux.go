@@ -35,7 +35,7 @@ func readProcess(procRoot string, pid int) Process {
 	if raw, err := os.ReadFile(filepath.Join(dir, "status")); err == nil {
 		p.User = uidFromStatus(raw)
 	}
-	p.Isolated = isolatedFrom(procRoot, dir)
+	p.Isolated = isolatedFrom(procRoot, dir, p.Exe)
 	return p
 }
 
@@ -48,7 +48,7 @@ func readProcess(procRoot string, pid int) Process {
 // processes reaching this without an answer are the scan's own, which are on
 // the host by definition. Defaulting the other way would drop the attribution
 // for every service on an unprivileged run that did resolve.
-func isolatedFrom(procRoot, dir string) bool {
+func isolatedFrom(procRoot, dir, exe string) bool {
 	self, err := os.Readlink(filepath.Join(dir, "ns", "mnt"))
 	if err != nil || self == "" {
 		return false
@@ -57,7 +57,28 @@ func isolatedFrom(procRoot, dir string) bool {
 	if err != nil || init == "" {
 		return false
 	}
-	return self != init
+	if self == init {
+		return false
+	}
+
+	// A different mount namespace is not, by itself, a different filesystem.
+	// systemd's sandboxing (ProtectSystem, PrivateTmp) gives a unit its own
+	// namespace over the same root -- on an Ubuntu 24.04 host that is
+	// systemd-resolved, networkd and chronyd, and treating them as isolated
+	// reported every core daemon on the machine as software nothing installed.
+	// So the executable itself is the tiebreak: if the path names the same
+	// file (device and inode) through the process's root as through the
+	// host's, joining it to host packages is joining the file that is
+	// actually running. A container's same-named path is a different inode
+	// and stays isolated, which is the case the guard exists for.
+	if exe != "" {
+		inProcess, err1 := os.Stat(filepath.Join(dir, "root", filepath.FromSlash(exe)))
+		onHost, err2 := os.Stat(filepath.FromSlash(exe))
+		if err1 == nil && err2 == nil && os.SameFile(inProcess, onHost) {
+			return false
+		}
+	}
+	return true
 }
 
 // uidFromStatus reads the real uid from /proc/<pid>/status, whose Uid line is

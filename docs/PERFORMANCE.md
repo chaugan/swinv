@@ -51,6 +51,24 @@ Two consequences worth planning around:
 - **`--timeout` needs headroom on Windows.** A limit tuned to a warm-cache run
   will kill a cold-cache one.
 
+### What the ELF link probe costs
+
+Measured against the released v0.6.1 on identical arguments, warm cache:
+
+| | time |
+|---|---|
+| v0.6.1, no probe | 14.1s |
+| new, `--elf-scope listening` (default) | 14.4s |
+| new, `--elf-scope off` | 14.4s |
+| new, `--elf-scope all`, warm | 20.4s |
+| new, `--elf-scope all`, cold | 80.1s |
+
+The default probe rides the existing pre-scan pass over a few dozen listening
+executables and adds nothing measurable. `all` walks the standard binary
+directories -- 5,845 ELF objects out of 228k files on the development host,
+most of the cold-cache minute being the walk itself -- and produces ~36,000
+link records against ~3,000 components on that scan shape.
+
 ### What an unchanged scan costs
 
 Components are over 99% of the stream on both, which is the entire argument for

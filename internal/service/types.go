@@ -35,8 +35,12 @@ type Process struct {
 	// User is the numeric uid the process runs as.
 	User string
 
-	// Isolated is true when the process does not share init's mount namespace,
-	// so Exe names a file in some other filesystem than this host's.
+	// Isolated is true when the process's executable is not the host's file:
+	// it runs in another mount namespace AND the path does not resolve to the
+	// same inode through the process's root as through the host's. The second
+	// half matters -- systemd's sandboxing gives core daemons their own
+	// namespace over the same root, and a namespace check alone reported
+	// every one of them as software nothing installed.
 	//
 	// This is the guard that does not depend on recognising anything. Deciding
 	// isolation from the cgroup means keeping up with every runtime's layout,
