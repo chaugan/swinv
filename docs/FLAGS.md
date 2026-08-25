@@ -153,13 +153,16 @@ See [docs/SERVER-ROLES.md](SERVER-ROLES.md) for the design, and
 
 ### `--ndjson-include`
 
-NDJSON carries one component per line. `exposure[]` and `containers[]` are in
-the JSON document and the CSV sidecars, but not in the one output shape built
-for streaming - so a forwarder tailing the `.ndjson` sees neither.
+NDJSON carries one component per line. `exposure[]`, `containers[]` and the
+shared-library links are in the JSON document and the CSV sidecars, but not in
+the one output shape built for streaming - so a forwarder tailing the `.ndjson`
+sees none of them.
 
 ```sh
-swinv --out /var/lib/swinv --format ndjson --ndjson-include exposure,containers
+swinv --out /var/lib/swinv --format ndjson --ndjson-include all
 ```
+
+The list takes `exposure`, `containers`, `links`, or `all`.
 
 Off by default because every line was a component before this existed. Each
 extra record carries a `record_type` an older consumer can skip; a line without
@@ -175,6 +178,12 @@ Both are small - on a 17-container host, 46 exposure and 16 container records
 against 2,715 components - so they are emitted even on an unchanged
 `--heartbeat` scan. What is listening changes while installed software does
 not.
+
+`links` is one record per (binary, library it loads), joined to the owning
+package. Unlike the other two it is derived from the installed software, so an
+unchanged heartbeat scan suppresses link records along with the components -
+a few hundred at the default `--elf-scope`, ~36,000 with `--elf-scope all`,
+resent on every scan, would undo what the heartbeat saves.
 
 See [docs/OUTPUT.md](OUTPUT.md#the-heartbeat) for the record shapes.
 

@@ -48,7 +48,7 @@ func helpSections() []helpSection {
 		{"Comparing against a previous run", []helpFlag{
 			{"--since, --delta-only", "diff an earlier report; or only what changed"},
 			{"--hash", "record a SHA-256 per component"},
-			{"--ndjson-include LIST", "NDJSON also carries: exposure, containers, all"},
+			{"--ndjson-include LIST", "NDJSON also carries: exposure, containers, links, all"},
 			{"--heartbeat", "a digest per scan, components only on change"},
 			{"--force-full, --full-interval", "send in full anyway, or at least this often"},
 		}},

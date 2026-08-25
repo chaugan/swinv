@@ -1090,7 +1090,8 @@ no `record_type` is a component.
 |---|---|---|
 | `exposure` | one record per open port **per package behind it** | `exposure` |
 | `containers` | one record per container, running or stopped | `container` |
-| `all` | both | |
+| `links` | one record per (binary, library it loads) | `link` |
+| `all` | all three | |
 
 Services are still not represented; `exposure` carries the same facts in the
 shape a stream consumer wants. Use JSON, the services CSV, or CycloneDX for the

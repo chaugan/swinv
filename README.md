@@ -488,11 +488,14 @@ It is never a delta. When anything changes the whole list is sent again, because
 a delta cannot express a removal - and "this package is no longer installed" is
 the fact that decides whether a vulnerability is fixed or merely unreported.
 
-**`--ndjson-include`** adds `exposure` and `container` records, so what is
-listening reaches the stream and not only the JSON document. Both are small - 46
-and 16 records against 2,715 components on a 17-container host - so they are
-sent even on an unchanged heartbeat scan: a port opening is exactly the kind of
-change that happens while installed software does not.
+**`--ndjson-include`** adds `exposure`, `container` and `link` records, so what
+is listening - and what it loads - reaches the stream and not only the JSON
+document. Exposure and container records are small - 46 and 16 against 2,715
+components on a 17-container host - so they are sent even on an unchanged
+heartbeat scan: a port opening is exactly the kind of change that happens while
+installed software does not. Link records follow the components instead: they
+are derived from the installed software, and an unchanged heartbeat scan
+suppresses both together.
 
 Every extra record carries a `record_type` an older consumer can skip, and a
 line without one is a component, so nothing that reads the stream today breaks.
