@@ -197,7 +197,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 ```jsonc
 {
-  "schema_version": "1.9",
+  "schema_version": "1.11",
   "tool": { "name": "swinv", "version": "dev", "syft_version": "v1.51.0" },
   "host": {
     "hostname": "web-01",
@@ -212,6 +212,8 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
     "duration_ms": 1383,
     "root": "testdata/rootfs",
     "catalogers": ["installed", "directory"],
+    "scan_id": "9f2c4b1a-7e83-4c1d-b2a6-0d5e8f3a1c72",
+    "sources": [{"source": "packages", "records": "components", "status": "ok", "count": 7}],
     "ran_as_root": false,
     "incomplete": false,
     "warnings": [
