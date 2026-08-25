@@ -11,11 +11,64 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.10`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.11`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.10"
+"schema_version": "1.11"
 ```
+
+**1.10 → 1.11** added shared-library linkage:
+
+| Addition | Appears in |
+|---|---|
+| `services[].links`, `containers[].services[].links` | JSON, services CSV column 21, CycloneDX dependency edges |
+| `Report.links` | JSON, with `--elf-scope all` |
+| a `record_type: "link"` record | NDJSON, with `--ndjson-include links` |
+
+Every ELF binary already carries a database of its own dependencies: the
+`DT_NEEDED` entries name the shared libraries it loads, and the dynamic symbol
+table names every function it imports, with versions. swinv reads both without
+executing anything and joins each library to the package that owns it - so a
+CVE in a common library can be ranked by which network-facing services
+actually load it, instead of flagging every machine that merely has it on
+disk.
+
+```jsonc
+"links": [
+  {"soname": "libcrypto.so.3",
+   "path": "/usr/lib/x86_64-linux-gnu/libcrypto.so.3",
+   "purl": "pkg:deb/ubuntu/libssl3t64@3.5.5-1ubuntu3.3?upstream=openssl",
+   "n_symbols": 120},
+  {"soname": "libz.so.1", "path": "/usr/lib/x86_64-linux-gnu/libz.so.1.3.1",
+   "purl": "pkg:deb/ubuntu/zlib1g@1.3.1", "transitive": true}
+]
+```
+
+Resolution follows `ld.so` without running it: `RPATH`/`RUNPATH` with
+`$ORIGIN`, `/etc/ld.so.conf`, then the standard directories - and symlinks are
+chased to the real file inside the probed filesystem, because the soname path
+is usually an ldconfig-made link no package ships, and for a container the
+chase must not escape to the host. A container's links resolve against that
+container's own libraries: nginx in an Alpine container links
+`pkg:apk/alpine/libcrypto3@3.3.3-r0`, not the host's openssl.
+
+**Three limits, stated in the data rather than discovered.** `DT_NEEDED` is
+link-time truth only - nginx modules, Python extensions, PAM and NSS arrive by
+`dlopen` and are invisible, and the service evidence says so. A symbol list
+names the API entry points the binary calls, not the code that runs; most CVEs
+live in internal functions that appear in no import table, so "loads the
+library" is the reliable signal and `--elf-symbols` output is supporting
+evidence, never a verdict. And a link with a `path` but no `purl` is a library
+nothing installed owns - for a CVE consumer the more interesting case, not the
+less.
+
+`--elf-scope` picks the population: `listening` (default - the executables
+behind open ports, milliseconds), `all` (every ELF under the standard binary
+directories: 5,845 binaries and ~36,000 link records on the development host,
+about a minute of walk), or `off`. With `--heartbeat`, link records are
+suppressed on an unchanged scan - they derive from the installed software,
+which is exactly what the digest tracks - while exposure and container records
+still flow.
 
 **1.9 → 1.10** added the self-describing scan manifest:
 

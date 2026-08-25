@@ -123,6 +123,8 @@ type config struct {
 	deltaOnly        bool
 	heartbeat        bool
 	ndjsonInclude    string
+	elfScope         string
+	elfSymbols       bool
 	forceFull        bool
 	fullInterval     time.Duration
 	catalogers       string
@@ -325,6 +327,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// resolve ownership for; see listenSnapshot.
 	listeners, servicesSource := listenSnapshot(ctx, cfg, &meta, logf)
 
+	// --- what those executables link --------------------------------------
+	// Also before the scan, for the same reason one level down: naming the
+	// package behind libcrypto.so.3 means asking the package databases about
+	// that exact path while they are being read.
+	elfProbe := probeELF(ctx, cfg, listeners, logf)
+
 	// --- scan -------------------------------------------------------------
 	logf("scanning %s ...", scanTarget(cfg))
 	stopHeartbeat := startHeartbeat(cfg.quiet, cfg.timeout, cfg.stacksAfter, cfg.out, logf)
@@ -339,7 +347,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			Parallelism:      parallelism,
 			Hash:             cfg.hash,
 			SkipNestedRootfs: cfg.skipNestedRootfs,
-			OwnerProbe:       listeners.ExePaths(),
+			OwnerProbe:       ownerProbePaths(listeners, elfProbe),
 			Verbose:          cfg.verbose && !cfg.quiet,
 		})
 	}
@@ -400,6 +408,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// services block: "what changed" is most interesting about the things
 	// serving traffic.
 	attributeServices(ctx, cfg, report, listeners, result.FileOwners, logf)
+
+	// Libraries onto services, and -- with --elf-scope all -- the full table.
+	attachLinks(cfg, report, elfProbe, result.FileOwners)
+	if len(elfProbe.byExe) > 0 {
+		logf("elf: %s", linkSummary(report))
+	}
 
 	// --- manifest ---------------------------------------------------------
 	// Here, and not later, for two reasons. The component list is complete --

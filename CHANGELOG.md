@@ -11,6 +11,38 @@ schema and cataloger coverage may still change between releases. See
 
 ### Added
 
+- **Shared-library linkage**, schema `1.11`. Every ELF binary already carries
+  a database of its own dependencies - the `DT_NEEDED` entries and the dynamic
+  symbol table - and swinv now reads both without executing anything and joins
+  each library to the package that owns it. `sshd` listening on `0.0.0.0:22`
+  links `libcrypto.so.3` from `libssl3t64@3.5.5` and imports 120 of its
+  functions: a CVE in a common library can be ranked by which network-facing
+  services actually load it, instead of flagging every machine that merely has
+  it on disk.
+
+  Resolution follows `ld.so` without running it, chases ldconfig's symlinks to
+  the file a package actually ships, and stays jailed inside the probed
+  filesystem - a container's links resolve against its own musl and apk
+  packages, never the host's glibc. Measured: 144 of 144 libraries across
+  every listening service on the development host resolved to an owning
+  package.
+
+  `--elf-scope` picks the population: `listening` (default, adds nothing
+  measurable to a scan), `all` (every ELF under the standard binary
+  directories; 5,845 binaries, +6s warm and +66s cold on the development
+  host), `off`. `--elf-symbols` adds the imported symbol lists, capped and
+  marked as supporting evidence: most CVEs live in internal functions that
+  appear in no import table, so "loads the library" is the reliable signal,
+  and `dlopen` is invisible by construction with the evidence saying so.
+
+  Output: `links` on services and container services, a `Report.links` table
+  under `--elf-scope all`, `soname=purl` pairs in services CSV column 21,
+  CycloneDX dependency edges from each service to its libraries' packages, and
+  a `link` NDJSON record via `--ndjson-include links`. With `--heartbeat`,
+  link records are suppressed on unchanged scans: they derive from installed
+  software, which is exactly what the digest tracks, and repeating 36,000 rows
+  hourly would undo the heartbeat.
+
 - **`--transmit`**, an HTTPS destination alongside the files. swinv POSTs the
   scan it already writes to one endpoint: `POST /api/v1/ingest/scan` with the
   manifest, numbered NDJSON batches, then a close whose reconciliation verdict

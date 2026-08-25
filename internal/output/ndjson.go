@@ -287,6 +287,7 @@ func writeExtraRecords(enc *json.Encoder, r *model.Report, scannedAt string) (ma
 		model.RecordComponent: 0,
 		model.RecordExposure:  0,
 		model.RecordContainer: 0,
+		model.RecordLink:      0,
 	}
 	if includes(r, recordExposure) {
 		for _, line := range exposureLines(r, scannedAt) {
@@ -302,6 +303,20 @@ func writeExtraRecords(enc *json.Encoder, r *model.Report, scannedAt string) (ma
 				return written, fmt.Errorf("output: writing ndjson container record: %w", err)
 			}
 			written[model.RecordContainer]++
+		}
+	}
+	// Links are derived from the installed software, which is exactly what
+	// the heartbeat digest tracks -- a binary's DT_NEEDED changes when the
+	// binary does. So unlike exposure and containers, which describe sockets
+	// that move while software stands still, an unchanged scan emits no link
+	// records: at --elf-scope all they are 36,000 rows on the development
+	// host, and repeating them hourly would undo the heartbeat entirely.
+	if includes(r, recordLink) && !r.Scan.InventoryUnchanged {
+		for _, line := range linkLines(r, scannedAt) {
+			if err := enc.Encode(line); err != nil {
+				return written, fmt.Errorf("output: writing ndjson link record: %w", err)
+			}
+			written[model.RecordLink]++
 		}
 	}
 	return written, nil

@@ -142,7 +142,9 @@ See [docs/SERVER-ROLES.md](SERVER-ROLES.md) for the design, and
 | Flag | Default | Meaning |
 |---|---|---|
 | `--hash` | `false` | Record a SHA-256 of each component's primary file |
-| `--ndjson-include LIST` | *(none)* | NDJSON also carries `exposure`, `containers`, or `all` |
+| `--elf-scope MODE` | `listening` | Whose shared-library links to read: `listening`, `all`, `off` |
+| `--elf-symbols` | `false` | Record imported symbol lists, not only counts |
+| `--ndjson-include LIST` | *(none)* | NDJSON also carries `exposure`, `containers`, `links`, or `all` |
 | `--heartbeat` | `false` | NDJSON: a digest every scan, components only when it changes |
 | `--force-full` | `false` | With `--heartbeat`, send the components anyway |
 | `--full-interval DUR` | `24h` | With `--heartbeat`, send in full at least this often (`0` = never force one) |

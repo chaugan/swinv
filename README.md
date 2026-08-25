@@ -911,7 +911,8 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--no-service-command` | false | Linux: keep the services block, drop the command lines |
 | `--since PATH` | - | Diff against a previous report |
 | `--heartbeat` | false | NDJSON: a digest every scan, components only when they change |
-| `--ndjson-include LIST` | - | NDJSON also carries `exposure`, `containers`, or `all` |
+| `--elf-scope MODE` | listening | Read shared-library links: `listening`, `all`, or `off` |
+| `--ndjson-include LIST` | - | NDJSON also carries `exposure`, `containers`, `links`, or `all` |
 | `--transmit URL` | - | Also POST the scan to a Riskability server; the files are still written |
 | `--hash` | false | Record a SHA-256 per component |
 | `--fast` | false | Scan at normal priority and full parallelism (see below) |

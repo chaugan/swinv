@@ -19,7 +19,7 @@ import (
 // document.
 // 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
 // describing manifest (see the NDJSON heartbeat record). Also additive.
-const SchemaVersion = "1.10"
+const SchemaVersion = "1.11"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -61,6 +61,11 @@ type Report struct {
 	// something published it, and that fact lives in Exposure, cross-linked
 	// from Service.PublishedAs.
 	Containers []Container `json:"containers,omitempty"`
+
+	// Links maps every probed executable to the shared libraries it loads.
+	// Filled only with --elf-scope all; the default scope attaches links to
+	// the listening services instead, where the exposure question is asked.
+	Links []BinaryLinks `json:"links,omitempty"`
 
 	// Exposure is every listening socket in the *host* network namespace, and
 	// nothing else.
@@ -703,6 +708,50 @@ func Identify(c Component) string {
 	return c.Name
 }
 
+// Link is one shared library a binary loads, joined to the package that
+// installed it.
+type Link struct {
+	// Soname is what the binary asks for: "libcrypto.so.3".
+	Soname string `json:"soname"`
+
+	// Path is where the dynamic linker finds it, resolved without executing
+	// anything. Empty means the library was not found on the filesystem the
+	// binary lives in -- which is itself a finding, not a formatting gap.
+	Path string `json:"path,omitempty"`
+
+	// PURL identifies the package owning the resolved path. Empty means
+	// nothing installed owns it: a vendored or hand-copied library, which for
+	// a CVE consumer is the more interesting case, not the less.
+	PURL string `json:"purl,omitempty"`
+
+	// Transitive marks a library reached through another one -- postgres
+	// needs libpq, libpq needs libssl -- rather than named by the binary
+	// itself. Both matter to "does this service load the vulnerable library",
+	// but they are different strengths of statement.
+	Transitive bool `json:"transitive,omitempty"`
+
+	// NSymbols counts the named functions the probed binary imports from this
+	// library; Symbols lists them (only with --elf-symbols, only for direct
+	// links, capped). A symbol list names the API entry points called, not
+	// the code that runs: most CVEs live in internal functions that appear in
+	// no import table, so "loads the library" is the reliable signal and
+	// these are supporting evidence, never a verdict.
+	NSymbols         int      `json:"n_symbols,omitempty"`
+	Symbols          []string `json:"symbols,omitempty"`
+	SymbolsTruncated bool     `json:"symbols_truncated,omitempty"`
+}
+
+// BinaryLinks is one executable and what it links, for --elf-scope all --
+// every ELF on the machine, not only the listening ones.
+type BinaryLinks struct {
+	Executable string `json:"executable"`
+
+	// PURL identifies the package owning the executable itself, when one does.
+	PURL string `json:"purl,omitempty"`
+
+	Links []Link `json:"links,omitempty"`
+}
+
 // BindScope describes how widely a socket is bound. It is a fact about the
 // bind, not a claim about reachability: swinv reads no firewall, no NAT table
 // and no cloud security group, and a field that implied otherwise would be the
@@ -973,6 +1022,16 @@ type Service struct {
 	// is one service on one socket, and reporting it as nine would misstate
 	// both what is running and how much of it.
 	Processes int `json:"processes,omitempty"`
+
+	// Links are the shared libraries this service's executable loads, each
+	// resolved to the installed package that owns it.
+	//
+	// This is the join that answers "a CVE landed in a common library -- which
+	// network-facing services actually load it". A package inventory says
+	// openssl is installed; this says sshd, listening on 0.0.0.0:22, loads
+	// libcrypto.so.3 from that package. Link-time truth only: dlopen'd
+	// modules, PAM and NSS are invisible here, and the evidence says so.
+	Links []Link `json:"links,omitempty"`
 
 	// PublishedAs lists the host endpoints that forward to this service, for a
 	// service inside a container. Empty means nothing was found publishing it,

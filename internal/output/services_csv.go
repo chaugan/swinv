@@ -44,6 +44,9 @@ var serviceCSVColumns = []string{
 	"processes",
 	"published_as",
 	"os_component",
+	// Appended in schema 1.10: the shared libraries the executable loads, as
+	// "soname=purl" pairs (soname alone where nothing owns the library).
+	"links",
 }
 
 // ServiceCSVColumns returns a copy of the services CSV header row, in order,
@@ -101,6 +104,7 @@ func WriteServicesCSV(w io.Writer, r *model.Report) error {
 		}
 		record[18] = strings.Join(s.PublishedAs, multiValueSep)
 		record[19] = strconv.FormatBool(s.OSComponent)
+		record[20] = joinLinks(s.Links)
 		if err := cw.Write(record); err != nil {
 			return fmt.Errorf("output: writing services csv row for pid %d: %w", s.PID, err)
 		}
@@ -111,4 +115,18 @@ func WriteServicesCSV(w io.Writer, r *model.Report) error {
 		return fmt.Errorf("output: flushing services csv: %w", err)
 	}
 	return nil
+}
+
+// joinLinks flattens links for the CSV: the full structure lives in JSON and
+// NDJSON, and a spreadsheet consumer gets the join key without the nesting.
+func joinLinks(links []model.Link) string {
+	parts := make([]string, 0, len(links))
+	for _, l := range links {
+		if l.PURL != "" {
+			parts = append(parts, l.Soname+"="+l.PURL)
+		} else {
+			parts = append(parts, l.Soname)
+		}
+	}
+	return strings.Join(parts, multiValueSep)
 }

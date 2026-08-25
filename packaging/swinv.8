@@ -27,6 +27,8 @@
 .Op Fl -hash
 .Op Fl -since Ar path
 .Op Fl -delta-only
+.Op Fl -elf-scope Ar mode
+.Op Fl -elf-symbols
 .Op Fl -ndjson-include Ar list
 .Op Fl -heartbeat
 .Op Fl -force-full
@@ -285,6 +287,25 @@ in the
 field.
 Requires
 .Fl -since .
+.It Fl -elf-scope Ar mode
+Which binaries get their shared-library links read:
+.Ql listening
+(the executables behind open ports, the default, costing nothing measurable),
+.Ql all
+(every ELF under the standard binary directories, about a minute of walking on
+a developer workstation), or
+.Ql off .
+Each library is resolved the way
+.Xr ld.so 8
+resolves it, without executing anything, and joined to the package that owns
+it \- so a CVE in a common library can be ranked by which listening services
+actually load it. Link-time truth only:
+.Xr dlopen 3
+modules, PAM and NSS are invisible, and the evidence says so.
+.It Fl -elf-symbols
+Record each linked library's imported symbol list, not only its count.
+Supporting evidence rather than a verdict: most CVEs live in internal
+functions that appear in no import table.
 .It Fl -ndjson-include Ar list
 Carry more than components in the NDJSON stream:
 .Ql exposure ,

@@ -540,6 +540,19 @@ func cdxServices(in []cdxService, byIdentity map[string]string) ([]cyclonedx.Ser
 				on = append(on, target)
 			}
 		}
+		// The shared libraries the service loads are dependencies in exactly
+		// CycloneDX's sense, and the packages behind them are already in
+		// components[] -- so a consumer walking the graph from a service now
+		// reaches libssl without knowing anything swinv-specific.
+		for _, l := range s.Links {
+			if l.PURL == "" {
+				continue
+			}
+			if target, ok := byIdentity[l.PURL]; ok {
+				on = append(on, target)
+			}
+		}
+		on = model.SortedSet(on)
 		if len(on) > 0 {
 			deps = append(deps, cyclonedx.Dependency{Ref: ref, Dependencies: &on})
 		}

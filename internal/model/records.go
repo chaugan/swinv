@@ -12,4 +12,5 @@ const (
 	RecordHeartbeat = "heartbeat"
 	RecordExposure  = "exposure"
 	RecordContainer = "container"
+	RecordLink      = "link"
 )

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/chaugan/swinv/internal/ctrpkg"
+	"github.com/chaugan/swinv/internal/elflink"
 	"github.com/chaugan/swinv/internal/model"
 )
 
@@ -64,12 +65,59 @@ func enrichOne(procRoot string, c Container, noCommand bool) model.Container {
 			exes = append(exes, s.Process.Exe)
 		}
 	}
-	owners := ctrpkg.Probe(root, exes, release)
+	// What each listening executable links, read from the container's own
+	// filesystem: the probe root keeps resolution inside the container, so an
+	// Alpine musl libc is never confused with the host's glibc.
+	linksByExe := make(map[string][]elflink.Link, len(exes))
+	libSet := map[string]bool{}
+	for _, exe := range exes {
+		links, err := elflink.Probe(exe, elflink.Options{Root: root})
+		if err != nil || len(links) == 0 {
+			continue
+		}
+		linksByExe[exe] = links
+		for _, l := range links {
+			if l.Path != "" {
+				libSet[l.Path] = true
+			}
+		}
+	}
+	libPaths := make([]string, 0, len(libSet))
+	for l := range libSet {
+		libPaths = append(libPaths, l)
+	}
+
+	owners := ctrpkg.Probe(root, append(append([]string{}, exes...), libPaths...), release)
 
 	for _, s := range c.Services {
-		out.Services = append(out.Services, containerService(s, owners, release, noCommand))
+		svc := containerService(s, owners, release, noCommand)
+		if links := linksByExe[s.Process.Exe]; len(links) > 0 {
+			svc.Links = containerLinks(links, owners)
+			svc.Evidence = append(svc.Evidence, fmt.Sprintf(
+				"links %d shared librarie(s) at link time; dlopen'd modules are not visible here",
+				len(links)))
+		}
+		out.Services = append(out.Services, svc)
 	}
 	out.Services = collapseWorkers(out.Services)
+	return out
+}
+
+// containerLinks joins probed links to the container's own package database.
+func containerLinks(links []elflink.Link, owners map[string]ctrpkg.Owner) []model.Link {
+	out := make([]model.Link, 0, len(links))
+	for _, l := range links {
+		ml := model.Link{
+			Soname:     l.Soname,
+			Path:       l.Path,
+			Transitive: !l.Direct,
+			NSymbols:   l.NSymbols,
+		}
+		if o, ok := owners[l.Path]; ok {
+			ml.PURL = o.PURL
+		}
+		out = append(out, ml)
+	}
 	return out
 }
 

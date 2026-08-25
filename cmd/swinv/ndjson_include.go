@@ -15,6 +15,7 @@ import (
 var ndjsonRecordTypes = map[string]string{
 	"exposure":   "exposure",
 	"containers": "container",
+	"links":      "link",
 }
 
 // validateNDJSONInclude checks a --ndjson-include list and returns the record
