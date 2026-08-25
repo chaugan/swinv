@@ -125,9 +125,10 @@ jobs:
           links="$(jq -r 'select(.record_type == "link")' "$f" | wc -l)"
           test "$links" -gt 0 || {
             echo "FAIL: no link records with --ndjson-include all" >&2
-            echo "--- services and their executables ---" >&2
-            jq -c 'select(.record_type == null) | empty' "$f" 2>/dev/null || true
-            ls -la /usr/lib/x86_64-linux-gnu/libc.so.6 >&2 || true
+            echo "--- what is listening, per the exposure records ---" >&2
+            jq -c 'select(.record_type == "exposure") | {port, executable, pid, confidence}' "$f" >&2 || true
+            echo "--- can this runner probe its own shell? ---" >&2
+            readelf -d /bin/sh 2>/dev/null | head -4 >&2 || true
             exit 1
           }
           jq -e 'select(.record_type == "link") | select(.soname == "libc.so.6")
