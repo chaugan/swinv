@@ -9,6 +9,19 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Added
+
+- **`root` on exposure and link NDJSON records**, schema `1.12` (#11). The
+  vocabulary is the one component records already use: `/` for the host, a
+  nested root such as `/snap/core20/2866`, or `container:<short id>`. A snap
+  base's libcrypto and the host's agree on every name and differ on every
+  version; without this field a consumer joining on `(hostname, package)`
+  attributes one install's library load to the other's inventory row. On a
+  link record `root` names the install the library belongs to; on an exposure
+  record, the install of the executable behind the port. `container_id` stays
+  for compatibility, but `root` is the join key that also covers snaps and
+  unpacked images.
+
 ### Fixed
 
 - **The NDJSON manifest never declared link records, and the reconciliation

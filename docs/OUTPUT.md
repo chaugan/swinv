@@ -11,11 +11,22 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.11`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.12`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.11"
+"schema_version": "1.12"
 ```
+
+**1.11 → 1.12** added `root` to the `exposure` and `link` NDJSON records, in
+the vocabulary component records already use: `/` for the host, a nested root
+such as `/snap/core20/2866`, or `container:<short id>`. A snap base's
+libcrypto and the host's agree on every name and differ on every version, and
+`root` is what keeps a consumer from joining one install's library load to
+the other's inventory row. `container_id` stays for compatibility, but `root`
+is the single field a consumer can join on uniformly - it is the only one
+that also covers snaps and unpacked images. On a link record it names the
+install the *library* belongs to, so a host binary loading a snap base's
+library carries the snap's root on exactly that record.
 
 **1.10 → 1.11** added shared-library linkage:
 
@@ -1104,7 +1115,7 @@ shape a stream consumer wants. Use JSON, the services CSV, or CycloneDX for the
  "address":"0.0.0.0","port":22,"protocol":"tcp","family":"ipv4","bind_scope":"wildcard",
  "purl":"pkg:deb/ubuntu/openssh-server@1%3A10.2p1-2ubuntu3.5?arch=amd64&distro=ubuntu-26.04",
  "executable":"/usr/sbin/sshd","unit":"ssh.service","user":"0","processes":2,
- "confidence":"high"}
+ "confidence":"high","root":"/"}
 ```
 
 **Denormalised on purpose**: a port served by three packages produces three
@@ -1117,6 +1128,9 @@ that is safe, and dropping it here would hide it completely.
 
 A published container port carries `container_id` and `container_name`, and its
 `executable` is the process **inside** the container rather than the forwarder.
+`root` names the install the executable belongs to in the components' own
+vocabulary - `/`, `/snap/...`, or `container:<short id>` - so the record joins
+to inventory rows on equality.
 `os_component` marks a listener that is part of the operating system, which on
 Windows is most of them - filter it before treating an unattributed port as
 interesting.

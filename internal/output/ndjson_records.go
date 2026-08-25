@@ -1,6 +1,7 @@
 package output
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/chaugan/swinv/internal/model"
@@ -58,6 +59,10 @@ type exposureLine struct {
 
 	ContainerID   string `json:"container_id,omitempty"`
 	ContainerName string `json:"container_name,omitempty"`
+
+	// Root plays the same role as on link records: which install the
+	// executable behind this port belongs to.
+	Root string `json:"root"`
 }
 
 // containerLine is one container, running or stopped.
@@ -127,13 +132,75 @@ type linkLine struct {
 	// container and its purl comes from that container's own database.
 	Listening   bool   `json:"listening,omitempty"`
 	ContainerID string `json:"container_id,omitempty"`
+
+	// Root is the filesystem root the library belongs to, in the same
+	// vocabulary component records use: "/", a nested root such as
+	// "/snap/core20/2866", or "container:<short id>". A snap base's
+	// libcrypto and the host's agree on every name and differ on every
+	// version; this is the field that keeps a consumer from joining one
+	// install's load to the other's inventory row.
+	Root string `json:"root"`
+}
+
+// recordRoots collects the nested filesystem roots the scan actually found
+// components in - snap bases, unpacked images - longest first, so a path can
+// be assigned to the most specific install that contains it. Container roots
+// are not in this list; a container record already knows its id.
+func recordRoots(r *model.Report) []string {
+	seen := map[string]bool{}
+	for _, c := range r.Components {
+		if c.Root == "" || c.Root == "/" || strings.HasPrefix(c.Root, "container:") {
+			continue
+		}
+		seen[c.Root] = true
+	}
+	roots := make([]string, 0, len(seen))
+	for root := range seen {
+		roots = append(roots, root)
+	}
+	sort.Slice(roots, func(i, j int) bool { return len(roots[i]) > len(roots[j]) })
+	return roots
+}
+
+// rootForPath names the install a path belongs to: the deepest nested root
+// containing it, or "/" for the host itself. The first non-empty path decides,
+// so a library with no resolved path falls back to its executable's root.
+func rootForPath(roots []string, paths ...string) string {
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		for _, root := range roots {
+			if p == root || strings.HasPrefix(p, root+"/") {
+				return root
+			}
+		}
+		return "/"
+	}
+	return "/"
+}
+
+// containerRoot spells a container's root the way component records already
+// do, short id and all, so the two join on equality.
+func containerRoot(id string) string {
+	if len(id) > 12 {
+		id = id[:12]
+	}
+	return "container:" + id
 }
 
 // linkLines flattens every link in the report.
 func linkLines(r *model.Report, scannedAt string) []linkLine {
+	roots := recordRoots(r)
 	var out []linkLine
 	add := func(exe, exePURL, containerID string, listening bool, links []model.Link) {
 		for _, l := range links {
+			root := ""
+			if containerID != "" {
+				root = containerRoot(containerID)
+			} else {
+				root = rootForPath(roots, l.Path, exe)
+			}
 			out = append(out, linkLine{
 				RecordType:       recordLink,
 				Hostname:         r.Host.Hostname,
@@ -149,6 +216,7 @@ func linkLines(r *model.Report, scannedAt string) []linkLine {
 				SymbolsTruncated: l.SymbolsTruncated,
 				Listening:        listening,
 				ContainerID:      containerID,
+				Root:             root,
 			})
 		}
 	}
@@ -190,6 +258,7 @@ func linkLines(r *model.Report, scannedAt string) []linkLine {
 // package, or one record with no package where nothing was attributed.
 func exposureLines(r *model.Report, scannedAt string) []exposureLine {
 	names := containerNames(r.Containers)
+	roots := recordRoots(r)
 
 	var out []exposureLine
 	for _, e := range r.Exposure {
@@ -216,6 +285,11 @@ func exposureLines(r *model.Report, scannedAt string) []exposureLine {
 			base.Executable = e.Backend.Executable
 		}
 		base.ContainerName = names[base.ContainerID]
+		if base.ContainerID != "" {
+			base.Root = containerRoot(base.ContainerID)
+		} else {
+			base.Root = rootForPath(roots, base.Executable)
+		}
 
 		if len(e.Components) == 0 {
 			out = append(out, base)

@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -162,5 +163,72 @@ func TestNDJSONLinksSuppressedOnUnchangedScan(t *testing.T) {
 	}
 	if n := len(recordsOfType(t, buf.Bytes(), "exposure")); n != 1 {
 		t.Errorf("exposure records were suppressed too: %d", n)
+	}
+}
+
+// TestRecordsCarryRoot closes issue #11: a snap base's libcrypto and the
+// host's agree on every name and differ on every version, and without a root
+// field a consumer joins one install's load to the other's inventory row.
+// Link and exposure records use the vocabulary components already use.
+func TestRecordsCarryRoot(t *testing.T) {
+	r := linkReport()
+	r.NDJSONInclude = []string{model.RecordExposure, model.RecordLink}
+	// The scan found a snap base with its own components; that is where the
+	// root vocabulary comes from.
+	r.Components = append(r.Components, model.Component{
+		Name: "libssl3", Version: "3.0.2", Type: "deb", Root: "/snap/core20/2866",
+	})
+	r.Services[0].Links = append(r.Services[0].Links, model.Link{
+		Soname: "libsnapcrypto.so.3",
+		Path:   "/snap/core20/2866/usr/lib/x86_64-linux-gnu/libcrypto.so.3",
+	})
+	r.Containers = []model.Container{{
+		ID: "354100fc9125deadbeef00112233445566778899aabbccddeeff001122334455",
+		Services: []model.Service{{
+			Executable: "/usr/sbin/nginx",
+			Components: []string{"pkg:apk/alpine/nginx@1.27.5-r1"},
+			Links: []model.Link{{Soname: "libcrypto.so.3",
+				Path: "/lib/libcrypto.so.3", PURL: "pkg:apk/alpine/libcrypto3@3.3.3-r0"}},
+		}},
+	}}
+	r.Exposure = []model.Exposure{
+		{Address: "0.0.0.0", Port: 22, Protocol: "tcp", BindScope: model.BindWildcard,
+			Executable: "/usr/sbin/sshd",
+			Components: []string{"pkg:deb/ubuntu/openssh-server@10.2p1"}},
+		{Address: "0.0.0.0", Port: 80, Protocol: "tcp", BindScope: model.BindWildcard,
+			Executable: "/usr/bin/docker-proxy",
+			Backend: &model.Backend{Address: "172.17.0.2", Port: 80,
+				Container: "354100fc9125", Executable: "/usr/sbin/nginx"}},
+	}
+
+	var buf bytes.Buffer
+	if err := WriteNDJSON(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+
+	linkRoots := map[string]string{}
+	for _, rec := range recordsOfType(t, buf.Bytes(), "link") {
+		linkRoots[rec["soname"].(string)+"|"+rec["executable"].(string)] = rec["root"].(string)
+	}
+	if got := linkRoots["libcrypto.so.3|/usr/sbin/sshd"]; got != "/" {
+		t.Errorf("host library root = %q, want /", got)
+	}
+	if got := linkRoots["libsnapcrypto.so.3|/usr/sbin/sshd"]; got != "/snap/core20/2866" {
+		t.Errorf("snap library root = %q, want /snap/core20/2866", got)
+	}
+	if got := linkRoots["libcrypto.so.3|/usr/sbin/nginx"]; got != "container:354100fc9125" {
+		t.Errorf("container library root = %q, want container:354100fc9125", got)
+	}
+
+	expRoots := map[string]string{}
+	for _, rec := range recordsOfType(t, buf.Bytes(), "exposure") {
+		port := rec["port"].(float64)
+		expRoots[strconv.Itoa(int(port))] = rec["root"].(string)
+	}
+	if got := expRoots["22"]; got != "/" {
+		t.Errorf("host exposure root = %q, want /", got)
+	}
+	if got := expRoots["80"]; got != "container:354100fc9125" {
+		t.Errorf("published-port exposure root = %q, want container:354100fc9125", got)
 	}
 }

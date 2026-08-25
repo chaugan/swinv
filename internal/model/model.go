@@ -19,7 +19,7 @@ import (
 // document.
 // 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
 // describing manifest (see the NDJSON heartbeat record). Also additive.
-const SchemaVersion = "1.11"
+const SchemaVersion = "1.12"
 
 // Report is the top-level document written as JSON.
 type Report struct {
