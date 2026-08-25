@@ -197,3 +197,95 @@ func TestReconcileRefusesAStreamThatWouldLie(t *testing.T) {
 		}
 	}
 }
+
+// TestManifestDeclaresLinkRecords closes issue #10: link records were written
+// but never declared, so a receiver losing every one of them reconciled clean.
+// The manifest must count them, and the count must survive a round trip
+// through the stream.
+func TestManifestDeclaresLinkRecords(t *testing.T) {
+	r := linkReport()
+	r.Scan.InventoryDigest = "sha256:9f2cabc"
+
+	var buf bytes.Buffer
+	if err := WriteNDJSON(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	manifest, counted := decodeStream(t, buf.Bytes())
+	declared := manifest["counts"].(map[string]any)
+	if declared["link"] != float64(4) {
+		t.Errorf("counts.link = %v, want 4", declared["link"])
+	}
+	if counted[model.RecordLink] != 4 {
+		t.Errorf("%d link records in the stream, want 4", counted[model.RecordLink])
+	}
+}
+
+// An unchanged heartbeat scan suppresses link records with the components,
+// and the manifest must say 0 rather than declare records it then withholds.
+func TestManifestCountsSuppressedLinksAsZero(t *testing.T) {
+	r := linkReport()
+	r.Scan.InventoryDigest = "sha256:9f2cabc"
+	r.Scan.InventoryUnchanged = true
+
+	var buf bytes.Buffer
+	if err := WriteNDJSON(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	manifest, counted := decodeStream(t, buf.Bytes())
+	declared := manifest["counts"].(map[string]any)
+	if declared["link"] != float64(0) {
+		t.Errorf("counts.link = %v, want 0 on an unchanged scan", declared["link"])
+	}
+	if counted[model.RecordLink] != 0 {
+		t.Errorf("%d link records written on an unchanged scan, want 0", counted[model.RecordLink])
+	}
+}
+
+// TestReconcileRefusesUndeclaredRecords is the class half of issue #10: a
+// record type the writer emits but the manifest never heard of must fail
+// loudly, not pass because zero of zero declared arrived.
+func TestReconcileRefusesUndeclaredRecords(t *testing.T) {
+	err := reconcileNDJSON(
+		map[string]int{model.RecordComponent: 2},
+		map[string]int{model.RecordComponent: 2, model.RecordLink: 7},
+	)
+	if err == nil {
+		t.Fatal("7 undeclared link records were accepted")
+	}
+	for _, want := range []string{"7", "link"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not name %q: %v", want, err)
+		}
+	}
+}
+
+// TestManifestKnowsEveryRecordType pins the invariant directly: for a report
+// that asks for everything, no record type the writer emits may be missing
+// from the planned counts. A new record type added to writeExtraRecords but
+// not to ndjsonCounts fails here before it fails in production.
+func TestManifestKnowsEveryRecordType(t *testing.T) {
+	r := linkReport()
+	r.NDJSONInclude = []string{model.RecordExposure, model.RecordContainer, model.RecordLink}
+	r.Scan.InventoryDigest = "sha256:9f2cabc"
+
+	planned := ndjsonCounts(r)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	written, err := writeExtraRecords(enc, r, "2026-08-25T00:00:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for kind, got := range written {
+		if _, declared := planned[kind]; !declared {
+			t.Errorf("the writer knows record type %q (%d written) and ndjsonCounts does not", kind, got)
+		}
+	}
+	for kind, want := range planned {
+		if kind == model.RecordComponent {
+			continue // components are written by the main loop, not writeExtraRecords
+		}
+		if got := written[kind]; got != want {
+			t.Errorf("planned %d %s record(s), wrote %d", want, kind, got)
+		}
+	}
+}

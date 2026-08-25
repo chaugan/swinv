@@ -7,6 +7,21 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Fixed
+
+- **The NDJSON manifest never declared link records, and the reconciliation
+  could not notice** (#10). `--ndjson-include links` wrote link records the
+  manifest did not count, and the writer-side check iterated the planned
+  counts only - so a receiver dropping every link record reconciled clean:
+  zero of zero declared arrived. The manifest now counts link records with
+  the same suppression rule the writer uses, reconciliation fails on any
+  record type written but never declared, and a test pins the invariant for
+  the next record type. Losing link records is the quiet kind of loss: it
+  reads as "no service loads the vulnerable library", which is reassuring
+  rather than alarming.
+
 ## [0.7.0] - 2026-08-25
 
 The transmit path, and what every binary actually loads.

@@ -220,6 +220,7 @@ func ndjsonCounts(r *model.Report) map[string]int {
 		model.RecordComponent: len(r.Components),
 		model.RecordExposure:  0,
 		model.RecordContainer: 0,
+		model.RecordLink:      0,
 	}
 	if r.Scan.InventoryDigest != "" && r.Scan.InventoryUnchanged {
 		counts[model.RecordComponent] = 0
@@ -229,6 +230,13 @@ func ndjsonCounts(r *model.Report) map[string]int {
 	}
 	if includes(r, recordContainer) {
 		counts[model.RecordContainer] = len(r.Containers)
+	}
+	// The condition must mirror writeExtraRecords exactly: link records are
+	// suppressed with the components on an unchanged heartbeat scan, and a
+	// manifest that declared them anyway would report its own suppression as
+	// data loss.
+	if includes(r, recordLink) && !r.Scan.InventoryUnchanged {
+		counts[model.RecordLink] = len(linkLines(r, ""))
 	}
 	return counts
 }
@@ -275,6 +283,17 @@ func reconcileNDJSON(planned, written map[string]int) error {
 			return fmt.Errorf(
 				"output: ndjson manifest declared %d %s record(s) and %d were written; "+
 					"the stream would have been silently wrong", want, kind, got)
+		}
+	}
+	// The loop above visits planned keys only, so a record type the writer
+	// emits but ndjsonCounts never heard of would pass it untouched - which
+	// is the most likely future mistake: a new record type whose author
+	// forgot the manifest.
+	for kind, got := range written {
+		if _, declared := planned[kind]; !declared && got != 0 {
+			return fmt.Errorf(
+				"output: %d %s record(s) were written that the manifest never declared; "+
+					"a receiver losing all of them would reconcile clean", got, kind)
 		}
 	}
 	return nil
