@@ -7,7 +7,9 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
-## [Unreleased]
+## [0.7.0] - 2026-08-25
+
+The transmit path, and what every binary actually loads.
 
 ### Added
 
@@ -118,6 +120,20 @@ schema and cataloger coverage may still change between releases. See
 - `--transmit` implies the manifest record even without `--heartbeat`, because
   the server opens a scan with it. `--heartbeat` still controls whether an
   unchanged inventory suppresses its component records.
+
+### Fixed
+
+- **Sandboxed system daemons were reported as unmanaged software.** The guard
+  that stops a container's executable being joined to host packages keyed on
+  the mount namespace alone - and systemd's sandboxing (`ProtectSystem`,
+  `PrivateTmp`) gives a unit its own namespace over the same root. On Ubuntu
+  24.04 that is `systemd-resolved`, `networkd` and `chronyd`: every one
+  reported as "software nothing installed", none probed for libraries. The
+  guard now judges by file identity - same device and inode through the
+  process's root as through the host's - which clears sandboxed daemons and
+  still refuses containers, whose same-named paths are different inodes.
+  Found by the CI link assertion on a 24.04 runner; the development host runs
+  26.04, which does not sandbox resolved, and never showed it.
 
 ## [0.6.1] - 2026-08-23
 
@@ -899,7 +915,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/chaugan/swinv/releases/tag/v0.7.0
 [0.6.1]: https://github.com/chaugan/swinv/releases/tag/v0.6.1
 [0.6.0]: https://github.com/chaugan/swinv/releases/tag/v0.6.0
 [0.5.2]: https://github.com/chaugan/swinv/releases/tag/v0.5.2

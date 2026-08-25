@@ -89,6 +89,7 @@ fetched over a network, and nothing is left running afterwards.
 │ /proc/<pid>/{fd,exe,cgroup,status}  │ iphlpapi  sockets with owning pid   │
 │ /proc/<pid>/ns/{net,mnt}            │ QueryFullProcessImageName           │
 │ /proc/self/mountinfo                │                                     │
+│ ELF DT_NEEDED · dynamic symbols     │                                     │
 ├─────────────────────────────────────┼─────────────────────────────────────┤
 │ CONTAINERS   running + stopped      │ MACHINE IDENTITY                    │
 ├─────────────────────────────────────┼─────────────────────────────────────┤
@@ -116,6 +117,7 @@ fetched over a network, and nothing is left running afterwards.
 │ services[]     what is listening, and what installed it                   │
 │ exposure[]     one row per open port on this host                         │
 │ containers[]   each container, its OS and its software                    │
+│ links          what each binary loads, joined to owning packages          │
 │ scan           what was skipped, and what could not be seen               │
 ├───────────────────────────────────────────────────────────────────────────┤
 │ written as     JSON · CSV · NDJSON · CycloneDX                            │
@@ -142,12 +144,12 @@ so in `scan.exposure_blind_spots`, because "looked and found nothing" and
 ## Quickstart
 
 ```sh
-sudo dpkg -i swinv_0.6.1-1_amd64.deb   # or: sudo rpm -i swinv-0.6.1-1.x86_64.rpm
+sudo dpkg -i swinv_0.7.0-1_amd64.deb   # or: sudo rpm -i swinv-0.7.0-1.x86_64.rpm
 swinv --out /tmp/inv                   # scan /, write JSON + CSV
 ```
 
 No package? The binary is static and has no dependencies, so
-`install -m0755 swinv-v0.6.1-linux-amd64 /usr/bin/swinv` is equally fine, as is
+`install -m0755 swinv-v0.7.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
 That writes timestamped files plus `-latest` symlinks - and, run as root with
@@ -493,6 +495,46 @@ Every extra record carries a `record_type` an older consumer can skip, and a
 line without one is a component, so nothing that reads the stream today breaks.
 
 **[Record shapes and the streaming gotchas →](docs/OUTPUT.md#the-heartbeat)**
+
+#### What each binary actually loads
+
+Every ELF binary already carries a database of its own dependencies - the
+`DT_NEEDED` entries name the shared libraries it loads, and the dynamic symbol
+table names every function it imports, with versions. swinv reads both without
+executing anything and joins each library to the package that owns it:
+
+```jsonc
+{ "executable": "/usr/sbin/sshd",
+  "links": [
+    {"soname": "libcrypto.so.3",
+     "path": "/usr/lib/x86_64-linux-gnu/libcrypto.so.3",
+     "purl": "pkg:deb/ubuntu/libssl3t64@3.5.5-1ubuntu3.3?upstream=openssl",
+     "n_symbols": 120},
+    {"soname": "libz.so.1", "purl": "pkg:deb/ubuntu/zlib1g@1.3.1", "transitive": true}
+  ] }
+```
+
+This is what turns "a CVE landed in openssl" from *flag every machine that has
+it on disk* into *rank the hosts where a network-facing service actually loads
+it* - and `--elf-symbols` adds the imported function lists
+(`RSA_set0_key@OPENSSL_3.0.0`) as supporting evidence. Resolution follows
+`ld.so` without running it, chases ldconfig's symlinks to the file a package
+actually ships, and stays jailed inside a container's own filesystem, so nginx
+in an Alpine container links Alpine's `libcrypto3`, never the host's openssl.
+Measured on this machine: 144 of 144 libraries across every listening service
+resolved to an owning package.
+
+Three limits, stated in the data rather than discovered: `dlopen`'d modules
+(nginx modules, Python extensions, PAM, NSS) are invisible to `DT_NEEDED` and
+the evidence says so; a symbol list names the API entry points called, not the
+code that runs - most CVEs live in internal functions that appear in no import
+table, so "loads the library" is the reliable signal; and a library with a
+path but no `purl` is one nothing installed owns, which for a CVE consumer is
+the more interesting case.
+
+`--elf-scope all` extends the probe from the listening executables to every
+ELF under the standard binary directories - 5,845 binaries in about a minute
+on the machine this was developed on.
 
 **[Full schema, NDJSON, CycloneDX and SQL loading →](docs/OUTPUT.md)**
 
@@ -842,14 +884,17 @@ is a tool that walks the whole way, on one host, in one pass, offline:
   → forwards to container 9d5a98d0dc04
   → /usr/sbin/nginx inside it
   → pkg:apk/alpine/nginx@1.27.5-r1  (Alpine 3.21.3, on an Ubuntu host)
+  → which links libcrypto.so.3 from pkg:apk/alpine/libcrypto3@3.3.3-r0
 ```
 
-That last line is a coordinate Grype and Trivy match today. Getting to it means
-crossing three boundaries most tools stop at: **socket to process**, **host to
-container**, and **executable to the package that installed it**. Package
-scanners do the third and know nothing of the first; port scanners and osquery
-do the first and cannot do the third; image scanners live entirely on the other
-side of the second.
+Those last lines are coordinates Grype and Trivy match today. Getting to them
+means crossing four boundaries most tools stop at: **socket to process**,
+**host to container**, **executable to the package that installed it**, and
+**binary to the shared libraries it actually loads**. Package scanners do the
+third and know nothing of the first; port scanners and osquery do the first
+and cannot do the third; image scanners live entirely on the other side of the
+second; and the fourth is usually the job of an eBPF agent running resident on
+the host, not of a one-shot binary reading ELF headers offline.
 
 Three more things follow from taking that seriously, and I have not seen them
 together elsewhere either:
@@ -912,6 +957,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--since PATH` | - | Diff against a previous report |
 | `--heartbeat` | false | NDJSON: a digest every scan, components only when they change |
 | `--elf-scope MODE` | listening | Read shared-library links: `listening`, `all`, or `off` |
+| `--elf-symbols` | false | Record imported symbol lists, not only counts |
 | `--ndjson-include LIST` | - | NDJSON also carries `exposure`, `containers`, `links`, or `all` |
 | `--transmit URL` | - | Also POST the scan to a Riskability server; the files are still written |
 | `--hash` | false | Record a SHA-256 per component |
