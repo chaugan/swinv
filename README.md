@@ -30,6 +30,7 @@ exact package inside the container serving it:
 ```
 0.0.0.0:80  →  docker-proxy  →  container 9d5a98d0dc04  →  /usr/sbin/nginx
             →  pkg:apk/alpine/nginx@1.27.5-r1  (Alpine 3.21.3, on an Ubuntu host)
+            →  linking libcrypto.so.3 from pkg:apk/alpine/libcrypto3@3.3.3-r0
 ```
 
 That is the question an inventory of packages cannot answer on its own, and
@@ -122,7 +123,7 @@ fetched over a network, and nothing is left running afterwards.
 ├───────────────────────────────────────────────────────────────────────────┤
 │ written as     JSON · CSV · NDJSON · CycloneDX                            │
 │                + services and exposure CSV sidecars                       │
-│ streamed as    heartbeat · exposure · container records                   │
+│ streamed as    heartbeat · exposure · container · link records            │
 │                for a log forwarder, on request                            │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
