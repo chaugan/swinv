@@ -134,6 +134,26 @@ func attributeOne(s Service, fileOwners map[string][]string, owners map[string][
 		return out
 	}
 
+	// An operating-system component. Not "software nothing installed": it came
+	// with the operating system, which swinv represents by the installed
+	// servicing updates rather than file by file.
+	//
+	// Checked BEFORE the containing-directory rung, deliberately. Registry
+	// entries sometimes yield a recovered location under C:\Windows - a real
+	// machine's "Application Compatibility Fix Database" did - and the
+	// longest-prefix match then awarded that product ntdll.dll, wininit.exe
+	// and everything else the OS ships. A file inside the Windows directory
+	// is the operating system's; only a component that recorded that exact
+	// file path (the rung above) may say otherwise.
+	if IsOSComponent(s.Process.Exe) {
+		out.OSComponent = true
+		out.Confidence = model.ConfidenceMedium
+		out.Evidence = append(out.Evidence,
+			"an operating-system component, which this inventory represents by the "+
+				"installed updates rather than file by file, so no component owns it")
+		return out
+	}
+
 	// Then the directory a product was installed into. A Windows registry
 	// entry records InstallLocation -- "C:\Program Files\7-Zip" -- and never
 	// the executables under it, so nothing above can ever match on Windows
@@ -147,18 +167,6 @@ func attributeOne(s Service, fileOwners map[string][]string, owners map[string][
 		out.Confidence = model.ConfidenceMedium
 		out.Evidence = append(out.Evidence, fmt.Sprintf(
 			"installed under %s, which belongs to %s", dir, strings.Join(ids, ", ")))
-		return out
-	}
-
-	// An operating-system component. Not "software nothing installed": it came
-	// with the operating system, which swinv represents by the installed
-	// servicing updates rather than file by file.
-	if IsOSComponent(s.Process.Exe) {
-		out.OSComponent = true
-		out.Confidence = model.ConfidenceMedium
-		out.Evidence = append(out.Evidence,
-			"an operating-system component, which this inventory represents by the "+
-				"installed updates rather than file by file, so no component owns it")
 		return out
 	}
 
@@ -256,8 +264,14 @@ func (ix *OwnerIndex) Owners(path string) (ids []string, osComponent bool) {
 		}
 		return model.SortedSet(ids), false
 	}
+	// OS territory before the containing-directory rung, same order and same
+	// reason as service attribution: a registry product with a recovered
+	// location under C:\Windows must not own ntdll.dll by prefix.
+	if IsOSComponent(path) {
+		return nil, true
+	}
 	if ids, _ := containingProduct(path, ix.owners); len(ids) > 0 {
 		return ids, false
 	}
-	return nil, IsOSComponent(path)
+	return nil, false
 }
