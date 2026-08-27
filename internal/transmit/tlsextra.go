@@ -107,21 +107,20 @@ func SPKIPin(cert *x509.Certificate) string {
 	return base64.StdEncoding.EncodeToString(sum[:])
 }
 
-// pinVerifier verifies the peer by public key alone.
+// pinVerifier verifies the peer by public key alone, as a VerifyConnection
+// callback - not VerifyPeerCertificate, which a resumed TLS session skips.
+// VerifyConnection runs on resumptions too, so the pin holds on every
+// connection rather than only the first.
 //
 // Any certificate in the presented chain may match, so a site can pin its
 // internal CA's key and rotate leaves freely. Chain validation is deliberately
 // not also required: the flag exists precisely for the site whose CA cannot be
 // made valid on this host, and "pin AND a chain you cannot have" would send
 // them straight back to --transmit-insecure.
-func pinVerifier(pins [][32]byte) func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+func pinVerifier(pins [][32]byte) func(tls.ConnectionState) error {
+	return func(cs tls.ConnectionState) error {
 		var observed []string
-		for _, raw := range rawCerts {
-			cert, err := x509.ParseCertificate(raw)
-			if err != nil {
-				continue
-			}
+		for _, cert := range cs.PeerCertificates {
 			sum := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
 			for _, pin := range pins {
 				if sum == pin {

@@ -42,9 +42,10 @@ func buildHTTPClient(opts Options) (*http.Client, error) {
 		// Pin-based verification replaces chain verification rather than
 		// adding to it - the flag exists for the site whose CA cannot be made
 		// valid on this host. InsecureSkipVerify here only disables the chain
-		// check; VerifyPeerCertificate still runs and still refuses.
+		// check; VerifyConnection still runs - on resumed sessions too, which
+		// is why it is not VerifyPeerCertificate - and still refuses.
 		tlsCfg.InsecureSkipVerify = true // #nosec G402 -- verification happens in pinVerifier
-		tlsCfg.VerifyPeerCertificate = pinVerifier(pins)
+		tlsCfg.VerifyConnection = pinVerifier(pins)
 	}
 
 	if opts.ClientCertFile != "" {

@@ -34,6 +34,7 @@ const transmitKeyPassEnv = "SWINV_TRANSMIT_KEY_PASSPHRASE"
 // transmitKeyCredential is the systemd credential name the packaged unit
 // loads. LoadCredentialEncrypted= seals it to the TPM on modern hosts, which
 // is the correct place for a passphrase on a machine that scans unattended.
+// #nosec G101 -- the name of the credential, not the credential
 const transmitKeyCredential = "swinv.key-passphrase"
 
 // transmitKeyPassphrase resolves the key passphrase, strongest source first,
@@ -43,7 +44,7 @@ const transmitKeyCredential = "swinv.key-passphrase"
 func transmitKeyPassphrase(cfg *config, logf func(string, ...any)) ([]byte, error) {
 	if dir := os.Getenv("CREDENTIALS_DIRECTORY"); dir != "" {
 		path := filepath.Join(dir, transmitKeyCredential)
-		raw, err := os.ReadFile(path) // #nosec G304 -- the path systemd provides
+		raw, err := os.ReadFile(path) // #nosec G304 G703 -- $CREDENTIALS_DIRECTORY is set by systemd, plus a constant name
 		if err == nil {
 			logf("transmit: key passphrase from the systemd credential %s", transmitKeyCredential)
 			return bytes.TrimSpace(raw), nil
