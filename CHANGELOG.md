@@ -11,6 +11,32 @@ schema and cataloger coverage may still change between releases. See
 
 ### Added
 
+- **The configuration surface**, schema `1.13` (#13, first slice): the
+  persistence and privilege mechanisms MITRE ATT&CK is largely made of, all
+  collected as local reads. Linux: cron (system, cron.d, periodic
+  directories, per-user spools), systemd timers and services (/etc shadowing
+  /run shadowing /usr/lib), SUID/SGID binaries. Windows: Scheduled Tasks
+  (task-store XML read directly, UTF-16 and all) and Run/RunOnce plus the
+  Startup folder. Each entry names the executable it runs, joined to its
+  owning package through the same probe the listening services use, the
+  user and schedule where stated, whether the executable is world-writable,
+  and the ATT&CK technique the mechanism is the surface for. New
+  `config_surface[]` report section, `record_type: "config"` under
+  `--ndjson-include config`, and `--config-scope standard|all|off`.
+  `--no-service-command` redacts the command lines here too. A cron job is
+  not a finding; a root cron job whose script is world-writable, or a SUID
+  binary no package owns, is a join away.
+
+### Fixed
+
+- **Two ownership-probe misses found while joining config entries.** A file
+  asked about under two spellings (/bin/mount from a unit file,
+  /usr/bin/mount from the SUID walk) answered only the later asker - the
+  probe map now keeps every spelling. And a probed path that is a symlink
+  (Ubuntu's coreutils transition makes /usr/bin/rm one) never matched dpkg's
+  md5sums, which cannot list symlinks - the probe now also asks about the
+  file the link resolves to, chased inside the scan root.
+
 - **Transmit mode grew its deployment surface** (#9), the flags an estate
   with real certificate handling and real network policy needs:
   - `--transmit-key` now accepts PKCS#8 encrypted private keys (PBES2, the

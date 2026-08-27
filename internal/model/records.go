@@ -13,4 +13,5 @@ const (
 	RecordExposure  = "exposure"
 	RecordContainer = "container"
 	RecordLink      = "link"
+	RecordConfig    = "config"
 )

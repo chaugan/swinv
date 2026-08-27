@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chaugan/swinv/internal/configsurface"
 	"github.com/chaugan/swinv/internal/transmit"
 )
 
@@ -94,6 +95,9 @@ func parseFlags(args []string, stdout, stderr io.Writer) (*config, int, error) {
 			return nil, exitUsage, fmt.Errorf("--max-memory: %w", err)
 		}
 		cfg.maxMemoryBytes = n
+	}
+	if err := configsurface.ValidateScope(cfg.configScope); err != nil {
+		return nil, exitUsage, err
 	}
 	if err := validateELFScope(cfg.elfScope); err != nil {
 		return nil, exitUsage, err
@@ -296,6 +300,7 @@ func registerFlags(fs *flag.FlagSet, cfg *config) {
 	fs.StringVar(&cfg.since, "since", "", "path to a previous swinv JSON report; adds a delta of added/removed/changed components")
 	fs.BoolVar(&cfg.deltaOnly, "delta-only", false, "with --since, emit only the changed components instead of the full inventory")
 	fs.StringVar(&cfg.elfScope, "elf-scope", "listening", "which binaries get their shared-library links read: `listening` (the executables behind open ports), all (every ELF under the standard binary directories, slower), or off")
+	fs.StringVar(&cfg.configScope, "config-scope", "standard", "how much configuration surface to read: standard (cron, systemd units and timers, SUID under the standard binary directories; on Windows scheduled tasks and autoruns), all (SUID over the whole filesystem), or off")
 	fs.BoolVar(&cfg.elfSymbols, "elf-symbols", false, "record each linked library's imported symbol list, not only the count; large, and supporting evidence rather than a verdict")
 	fs.StringVar(&cfg.ndjsonInclude, "ndjson-include", "", "comma-separated extra record types for the NDJSON stream: exposure, containers, or all. Off by default, because a consumer that reads every line as a component predates them")
 	fs.BoolVar(&cfg.heartbeat, "heartbeat", false, "in NDJSON, emit a one-line digest of the inventory every scan and the component records only when that digest changes; the other formats are unaffected")

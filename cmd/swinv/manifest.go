@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/chaugan/swinv/internal/configsurface"
 	"github.com/chaugan/swinv/internal/model"
 	"github.com/chaugan/swinv/internal/service"
 )
@@ -70,6 +71,14 @@ func buildManifest(cfg *config, report *model.Report, services model.SourceStatu
 		// ports are open" and "the sockets could not be read" are opposite
 		// conclusions from an identical empty list.
 		sources["services"] = services
+	}
+	if cfg.configScope == configsurface.ScopeOff {
+		// Same contract as the other sources: "off by choice" must stay
+		// distinguishable from "found nothing".
+		sources["config-surface"] = model.SourceStatus{
+			Status: model.SourceSkipped,
+			Reason: "--config-scope off",
+		}
 	}
 	if cfg.noContainers {
 		// Only when skipped. When containers ARE inspected their packages join

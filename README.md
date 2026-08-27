@@ -91,6 +91,8 @@ fetched over a network, and nothing is left running afterwards.
 │ /proc/<pid>/ns/{net,mnt}            │ QueryFullProcessImageName           │
 │ /proc/self/mountinfo                │                                     │
 │ ELF DT_NEEDED · dynamic symbols     │                                     │
+│ cron · systemd units · SUID bits    │ scheduled tasks  XML, no COM        │
+│                                     │ Run keys · Startup folder           │
 ├─────────────────────────────────────┼─────────────────────────────────────┤
 │ CONTAINERS   running + stopped      │ MACHINE IDENTITY                    │
 ├─────────────────────────────────────┼─────────────────────────────────────┤
@@ -119,6 +121,7 @@ fetched over a network, and nothing is left running afterwards.
 │ exposure[]     one row per open port on this host                         │
 │ containers[]   each container, its OS and its software                    │
 │ links          what each binary loads, joined to owning packages          │
+│ config[]       cron, timers, services, SUID, autoruns, with ATT&CK ids    │
 │ scan           what was skipped, and what could not be seen               │
 ├───────────────────────────────────────────────────────────────────────────┤
 │ written as     JSON · CSV · NDJSON · CycloneDX                            │
@@ -963,6 +966,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--since PATH` | - | Diff against a previous report |
 | `--heartbeat` | false | NDJSON: a digest every scan, components only when they change |
 | `--elf-scope MODE` | listening | Read shared-library links: `listening`, `all`, or `off` |
+| `--config-scope MODE` | standard | Collect cron, systemd units, SUID, tasks, autoruns |
 | `--elf-symbols` | false | Record imported symbol lists, not only counts |
 | `--ndjson-include LIST` | - | NDJSON also carries `exposure`, `containers`, `links`, or `all` |
 | `--transmit URL` | - | Also POST the scan to a Riskability server; the files are still written |

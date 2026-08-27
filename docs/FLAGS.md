@@ -162,7 +162,7 @@ sees none of them.
 swinv --out /var/lib/swinv --format ndjson --ndjson-include all
 ```
 
-The list takes `exposure`, `containers`, `links`, or `all`.
+The list takes `exposure`, `containers`, `links`, `config`, or `all`.
 
 Off by default because every line was a component before this existed. Each
 extra record carries a `record_type` an older consumer can skip; a line without
@@ -460,6 +460,29 @@ patterns are ignored there, so those paths are still lstat-ed during the
 preflight walk. That is the safe direction to be wrong in - over-skipping would
 let through exactly the symlink the pass exists to catch, and extra lstat calls
 are cheap where a lost scan is not.
+
+## `--config-scope`
+
+What configuration surface to read: `standard` (default), `all`, or `off`.
+
+The standard scope is the cheap, high-signal set, all of it local reads: cron
+(`/etc/crontab`, `/etc/cron.d`, the periodic directories, per-user spools),
+systemd timers and services (with `/etc` shadowing `/run` shadowing
+`/usr/lib`, the way systemd resolves them), and SUID/SGID binaries under the
+standard binary directories - the same population the ELF probe walks. On
+Windows: Scheduled Tasks (read from the task store's XML directly, no COM)
+and the machine Run/RunOnce keys plus the all-users Startup folder. `all`
+extends the SUID walk to the whole filesystem, which is what finds the one
+dropped in `/var/tmp` and costs a filesystem walk to do it.
+
+Each entry's executable is joined to the package that installed it through
+the same ownership probe the listening services use, so `purl` is filled
+where a package owns the program and conspicuously absent where nothing does.
+`--no-service-command` drops the command lines here too - a cron line carries
+credentials as often as a service command line does - while keeping the
+executable path, which is joinable and carries no secrets.
+
+See [docs/OUTPUT.md](OUTPUT.md) for the record shape and the ATT&CK framing.
 
 ## `--hash`
 

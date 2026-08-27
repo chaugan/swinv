@@ -40,6 +40,7 @@ func helpSections() []helpSection {
 		}},
 		{"What is listening", []helpFlag{
 			{"--no-services, --no-containers", "skip listening sockets, or containers"},
+			{"--config-scope MODE", "config surface: standard, all, off"},
 			{"--no-service-command", "omit command lines; they can carry passwords"},
 		}},
 		{"Comparing against a previous run", []helpFlag{

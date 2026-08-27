@@ -221,6 +221,7 @@ func ndjsonCounts(r *model.Report) map[string]int {
 		model.RecordExposure:  0,
 		model.RecordContainer: 0,
 		model.RecordLink:      0,
+		model.RecordConfig:    0,
 	}
 	if r.Scan.InventoryDigest != "" && r.Scan.InventoryUnchanged {
 		counts[model.RecordComponent] = 0
@@ -237,6 +238,9 @@ func ndjsonCounts(r *model.Report) map[string]int {
 	// data loss.
 	if includes(r, recordLink) && !r.Scan.InventoryUnchanged {
 		counts[model.RecordLink] = len(linkLines(r, ""))
+	}
+	if includes(r, recordConfig) {
+		counts[model.RecordConfig] = len(r.ConfigSurface)
 	}
 	return counts
 }
@@ -307,6 +311,7 @@ func writeExtraRecords(enc *json.Encoder, r *model.Report, scannedAt string) (ma
 		model.RecordExposure:  0,
 		model.RecordContainer: 0,
 		model.RecordLink:      0,
+		model.RecordConfig:    0,
 	}
 	if includes(r, recordExposure) {
 		for _, line := range exposureLines(r, scannedAt) {
@@ -336,6 +341,18 @@ func writeExtraRecords(enc *json.Encoder, r *model.Report, scannedAt string) (ma
 				return written, fmt.Errorf("output: writing ndjson link record: %w", err)
 			}
 			written[model.RecordLink]++
+		}
+	}
+	// Config records are emitted even on an unchanged heartbeat scan, like
+	// exposure and containers: the inventory digest tracks installed
+	// software, not configuration, so a new cron job on an unchanged host is
+	// exactly the record suppression would hide.
+	if includes(r, recordConfig) {
+		for _, line := range configLines(r, scannedAt) {
+			if err := enc.Encode(line); err != nil {
+				return written, fmt.Errorf("output: writing ndjson config record: %w", err)
+			}
+			written[model.RecordConfig]++
 		}
 	}
 	return written, nil

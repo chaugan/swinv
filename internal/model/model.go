@@ -19,7 +19,7 @@ import (
 // document.
 // 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
 // describing manifest (see the NDJSON heartbeat record). Also additive.
-const SchemaVersion = "1.12"
+const SchemaVersion = "1.13"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -66,6 +66,11 @@ type Report struct {
 	// Filled only with --elf-scope all; the default scope attaches links to
 	// the listening services instead, where the exposure question is asked.
 	Links []BinaryLinks `json:"links,omitempty"`
+
+	// ConfigSurface is the host's persistence and privilege configuration:
+	// cron jobs, systemd timers and services, SUID binaries, scheduled tasks
+	// and autoruns. See ConfigEntry.
+	ConfigSurface []ConfigEntry `json:"config_surface,omitempty"`
 
 	// Exposure is every listening socket in the *host* network namespace, and
 	// nothing else.
@@ -751,6 +756,79 @@ type BinaryLinks struct {
 
 	Links []Link `json:"links,omitempty"`
 }
+
+// ConfigEntry is one element of the host's configuration surface: a
+// mechanism that runs code, grants privilege, or persists across reboots.
+//
+// This is a second class of fact alongside the installed-software inventory,
+// and it exists because the techniques that fill an ATT&CK matrix are mostly
+// not software defects - they are configurations, and the only honest way to
+// reach them is to collect them. Everything here is a local file or registry
+// read: no execution, no probing, no network.
+//
+// Collecting an entry is not a finding. The findings fall out of joins a
+// consumer makes against the rest of the report: a root cron job whose
+// script is world-writable, a SUID binary no package owns, a unit whose
+// ExecStart points outside every package-owned path. The fields carry the
+// facts those joins need and no verdicts.
+type ConfigEntry struct {
+	// Kind is one of the ConfigKind* constants below.
+	Kind string `json:"kind"`
+
+	// Name identifies the entry within its kind: the unit file name, the
+	// task path, the autorun value name, the crontab line's position.
+	Name string `json:"name,omitempty"`
+
+	// Path is the file or registry key the entry was read from.
+	Path string `json:"path,omitempty"`
+
+	// User is who the entry runs as, when the mechanism states it.
+	User string `json:"user,omitempty"`
+
+	// Schedule is when it runs, in the mechanism's own vocabulary: a cron
+	// spec, an OnCalendar expression, "@daily".
+	Schedule string `json:"schedule,omitempty"`
+
+	// Command is the full command line. Omitted under --no-service-command,
+	// for the same reason that flag exists: command lines carry passwords
+	// and tokens, and an inventory file is usually copied somewhere else.
+	Command string `json:"command,omitempty"`
+
+	// Executable is the resolved program path, kept even when Command is
+	// redacted: a path is joinable and carries no secrets.
+	Executable string `json:"executable,omitempty"`
+
+	// PURL identifies the package owning the executable, when one does.
+	// An entry with an Executable and no PURL is a mechanism running code
+	// nothing installed - for a consumer, the more interesting case.
+	PURL string `json:"purl,omitempty"`
+
+	// Attack is the MITRE ATT&CK technique this mechanism is the surface
+	// for - the surface, not evidence of use.
+	Attack string `json:"attack,omitempty"`
+
+	// Mode is the octal file mode, recorded for suid entries.
+	Mode   string `json:"mode,omitempty"`
+	SetUID bool   `json:"setuid,omitempty"`
+	SetGID bool   `json:"setgid,omitempty"`
+
+	// WorldWritable is set when the executable this entry runs can be
+	// rewritten by any local user - the joinable half of "a root cron job
+	// anyone can edit".
+	WorldWritable bool `json:"world_writable,omitempty"`
+
+	Evidence []string `json:"evidence,omitempty"`
+}
+
+// The configuration-surface kinds, each with the ATT&CK technique it maps to.
+const (
+	ConfigKindCron           = "cron"            // T1053.003
+	ConfigKindSystemdTimer   = "systemd-timer"   // T1053.006
+	ConfigKindSystemdService = "systemd-service" // T1543.002
+	ConfigKindSUID           = "suid"            // T1548.001
+	ConfigKindScheduledTask  = "scheduled-task"  // T1053.005
+	ConfigKindAutorun        = "autorun"         // T1547.001
+)
 
 // BindScope describes how widely a socket is bound. It is a fact about the
 // bind, not a claim about reachability: swinv reads no firewall, no NAT table

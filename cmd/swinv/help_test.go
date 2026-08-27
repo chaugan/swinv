@@ -99,11 +99,11 @@ func TestHelpFitsATerminal(t *testing.T) {
 	// heading and two more exit codes are a genuinely new surface rather than
 	// description creep, and the page is still grouped.
 	//
-	// Raised to 108 when transmission grew its deployment surface (issue #9):
-	// encrypted keys, pinning, preflight and the sendless run modes are nine
-	// more flags compressed into six added rows. Anything that pushes past
-	// this should be a `man 8 swinv` entry instead.
-	if len(lines) > 108 {
+	// Raised to 110 when transmission grew its deployment surface (issue #9,
+	// nine flags compressed into six rows) and the configuration surface
+	// arrived (issue #13, one row). Anything that pushes past this should be
+	// a `man 8 swinv` entry instead.
+	if len(lines) > 110 {
 		t.Errorf("help is %d lines; it is meant to be scannable, not a manual", len(lines))
 	}
 }

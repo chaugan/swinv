@@ -267,6 +267,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		byID := make(map[artifact.ID]int)
 		canonPath := pathnorm.UsrMerge(absRoot)
 		probe := probeSet(opts.OwnerProbe, canonPath)
+		expandProbeSymlinks(probe, absRoot, canonPath)
 		ownerHits := make(map[string][]int)
 		if s.Artifacts.Packages != nil {
 			// Enumerate feeds from a goroutine; drain it completely so that

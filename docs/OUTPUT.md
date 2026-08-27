@@ -11,11 +11,32 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.12`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.13`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.12"
+"schema_version": "1.13"
 ```
+
+**1.12 → 1.13** added the configuration surface: `config_surface[]` in the
+JSON report, and a `record_type: "config"` NDJSON record with
+`--ndjson-include config` (or `all`). One entry per persistence or privilege
+mechanism - cron jobs, systemd timers and services, SUID/SGID binaries on
+Linux; Scheduled Tasks and Run-key/Startup autoruns on Windows - each with
+the executable it runs, the package that owns that executable (`purl`), the
+user and schedule where the mechanism states them, and the MITRE ATT&CK
+technique the mechanism is the surface for (`attack`). The claim is
+deliberately narrow: a CVE mapping says "you have a defect that enables this
+technique"; a config record says "this technique has a surface here"; neither
+says "you are compromised". Collecting an entry is not a finding - the
+findings are joins: a root cron job whose script is `world_writable`, a SUID
+binary with no `purl`, a unit whose `ExecStart` points outside every
+package-owned path. Command lines are dropped under `--no-service-command`
+for the reason that flag exists; executable paths stay, because a path is
+joinable and carries no secrets. Config records are emitted even on an
+unchanged `--heartbeat` scan: the inventory digest tracks installed software,
+not configuration, and a new cron job on an unchanged host is exactly what
+suppression would hide. `--config-scope` picks the depth (`standard`
+default, `all` extends the SUID walk to the whole filesystem, `off`).
 
 **1.11 → 1.12** added `root` to the `exposure` and `link` NDJSON records, in
 the vocabulary component records already use: `/` for the host, a nested root

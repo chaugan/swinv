@@ -12,7 +12,7 @@ func TestValidateNDJSONInclude(t *testing.T) {
 		"containers":              {"container"},
 		"exposure,containers":     {"container", "exposure"},
 		" Exposure , Containers ": {"container", "exposure"},
-		"all":                     {"container", "exposure", "link"},
+		"all":                     {"config", "container", "exposure", "link"},
 		"exposure,exposure":       {"exposure"},
 	}
 	for in, want := range cases {

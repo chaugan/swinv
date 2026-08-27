@@ -302,6 +302,17 @@ it \- so a CVE in a common library can be ranked by which listening services
 actually load it. Link-time truth only:
 .Xr dlopen 3
 modules, PAM and NSS are invisible, and the evidence says so.
+.It Fl -config-scope Ar mode
+How much configuration surface to read:
+.Ql standard
+(default: cron, systemd timers and units, SUID/SGID under the standard
+binary directories; on Windows, Scheduled Tasks and autoruns),
+.Ql all
+(extend the SUID walk to the whole filesystem), or
+.Ql off .
+Each entry's executable is joined to its owning package;
+.Fl -no-service-command
+drops the command lines here too.
 .It Fl -elf-symbols
 Record each linked library's imported symbol list, not only its count.
 Supporting evidence rather than a verdict: most CVEs live in internal
@@ -311,6 +322,7 @@ Carry more than components in the NDJSON stream:
 .Ql exposure ,
 .Ql containers ,
 .Ql links ,
+.Ql config ,
 or
 .Ql all .
 .Pp

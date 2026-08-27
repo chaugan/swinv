@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chaugan/swinv/internal/configsurface"
 	"github.com/chaugan/swinv/internal/hostfacts"
 	"github.com/chaugan/swinv/internal/model"
 	"github.com/chaugan/swinv/internal/output"
@@ -125,6 +126,7 @@ type config struct {
 	ndjsonInclude    string
 	elfScope         string
 	elfSymbols       bool
+	configScope      string
 	forceFull        bool
 	fullInterval     time.Duration
 	catalogers       string
@@ -352,6 +354,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// that exact path while they are being read.
 	elfProbe := probeELF(ctx, cfg, listeners, logf)
 
+	configRoot := cfg.root
+	if configRoot == "" {
+		configRoot = "/"
+	}
+	configEntries := configsurface.Collect(ctx, configsurface.Options{
+		Root:            configRoot,
+		Scope:           cfg.configScope,
+		IncludeCommands: !cfg.noServiceCommand,
+	})
+	if len(configEntries) > 0 {
+		logf("config surface: %d entr(ies) collected", len(configEntries))
+	}
+
 	// --- scan -------------------------------------------------------------
 	logf("scanning %s ...", scanTarget(cfg))
 	stopHeartbeat := startHeartbeat(cfg.quiet, cfg.timeout, cfg.stacksAfter, cfg.out, logf)
@@ -366,7 +381,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			Parallelism:      parallelism,
 			Hash:             cfg.hash,
 			SkipNestedRootfs: cfg.skipNestedRootfs,
-			OwnerProbe:       ownerProbePaths(listeners, elfProbe),
+			OwnerProbe:       append(ownerProbePaths(listeners, elfProbe), configsurface.ExecutablePaths(configEntries)...),
 			Verbose:          cfg.verbose && !cfg.quiet,
 		})
 	}
@@ -430,6 +445,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	// Libraries onto services, and -- with --elf-scope all -- the full table.
 	attachLinks(cfg, report, elfProbe, result.FileOwners)
+	configsurface.AttachOwners(configEntries, result.FileOwners)
+	report.ConfigSurface = configEntries
 	if len(elfProbe.byExe) > 0 {
 		logf("elf: %s", linkSummary(report))
 	}

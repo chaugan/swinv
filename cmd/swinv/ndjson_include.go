@@ -16,6 +16,7 @@ var ndjsonRecordTypes = map[string]string{
 	"exposure":   "exposure",
 	"containers": "container",
 	"links":      "link",
+	"config":     "config",
 }
 
 // validateNDJSONInclude checks a --ndjson-include list and returns the record

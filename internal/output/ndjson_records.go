@@ -13,6 +13,7 @@ import (
 // that reconciles its counts cannot drift on the spelling.
 const (
 	recordHeartbeat = model.RecordHeartbeat
+	recordConfig    = model.RecordConfig
 	recordExposure  = model.RecordExposure
 	recordContainer = model.RecordContainer
 	recordLink      = model.RecordLink
@@ -140,6 +141,68 @@ type linkLine struct {
 	// version; this is the field that keeps a consumer from joining one
 	// install's load to the other's inventory row.
 	Root string `json:"root"`
+}
+
+// configLine is one configuration-surface entry, flattened for a stream
+// consumer: a cron job, a systemd unit or timer, a SUID binary, a scheduled
+// task, an autorun. The kind field carries the vocabulary; the attack field
+// carries the ATT&CK technique this mechanism is the surface for - the
+// surface, never evidence of use.
+type configLine struct {
+	RecordType string `json:"record_type"`
+	Hostname   string `json:"hostname"`
+	ScannedAt  string `json:"scanned_at"`
+
+	Kind     string `json:"kind"`
+	Name     string `json:"name,omitempty"`
+	Path     string `json:"path,omitempty"`
+	User     string `json:"user,omitempty"`
+	Schedule string `json:"schedule,omitempty"`
+
+	Command    string `json:"command,omitempty"`
+	Executable string `json:"executable,omitempty"`
+	PURL       string `json:"purl,omitempty"`
+	Attack     string `json:"attack,omitempty"`
+
+	Mode          string `json:"mode,omitempty"`
+	SetUID        bool   `json:"setuid,omitempty"`
+	SetGID        bool   `json:"setgid,omitempty"`
+	WorldWritable bool   `json:"world_writable,omitempty"`
+
+	EvidenceText string `json:"evidence_text,omitempty"`
+	NEvidence    int    `json:"n_evidence"`
+
+	Root string `json:"root"`
+}
+
+// configLines flattens the configuration surface.
+func configLines(r *model.Report, scannedAt string) []configLine {
+	roots := recordRoots(r)
+	out := make([]configLine, 0, len(r.ConfigSurface))
+	for _, e := range r.ConfigSurface {
+		out = append(out, configLine{
+			RecordType:    recordConfig,
+			Hostname:      r.Host.Hostname,
+			ScannedAt:     scannedAt,
+			Kind:          e.Kind,
+			Name:          e.Name,
+			Path:          e.Path,
+			User:          e.User,
+			Schedule:      e.Schedule,
+			Command:       e.Command,
+			Executable:    e.Executable,
+			PURL:          e.PURL,
+			Attack:        e.Attack,
+			Mode:          e.Mode,
+			SetUID:        e.SetUID,
+			SetGID:        e.SetGID,
+			WorldWritable: e.WorldWritable,
+			EvidenceText:  strings.Join(e.Evidence, multiValueSep),
+			NEvidence:     len(e.Evidence),
+			Root:          rootForPath(roots, e.Path),
+		})
+	}
+	return out
 }
 
 // recordRoots collects the nested filesystem roots the scan actually found
