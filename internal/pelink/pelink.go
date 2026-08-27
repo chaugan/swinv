@@ -107,6 +107,13 @@ type prober struct {
 	mu    sync.Mutex
 	cache map[string]parsed
 
+	// ctx, when set, stops NEW parses after the deadline without stopping
+	// cache reads: thirty minutes of completed parsing must not be thrown
+	// away because the thirty-first would be too many. A real run probed
+	// 42,411 of 46,325 files and then reported zero, because the assembly
+	// loop obeyed the same expired context as the work it was assembling.
+	ctx context.Context
+
 	// firstErr keeps the first parse failure verbatim. When a whole machine
 	// produces zero links, the difference between "every open failed with
 	// ERROR_ACCESS_DENIED" and "these are not PE files" is the entire
@@ -132,6 +139,11 @@ func (p *prober) imports(path string) ([]module, uint16, bool) {
 	entry, ok := p.cache[key]
 	p.mu.Unlock()
 	if !ok {
+		if p.ctx != nil && p.ctx.Err() != nil {
+			// Past the deadline: answer from the cache only. Not cached as
+			// not-PE, because that would be recording a fact nobody checked.
+			return nil, 0, false
+		}
 		mods, machine, err := parseImports(path)
 		entry = parsed{mods: mods, machine: machine, notPE: err != nil}
 		p.mu.Lock()
@@ -306,9 +318,10 @@ func systemDir(machine uint16) string {
 // Stats says what a ProbeAll actually did, so a surprising result is a
 // diagnosis rather than a guessing game.
 type Stats struct {
-	// Files is how many paths were probed; PE how many parsed as PE
+	// Files is how many paths were asked about; Probed how many were
+	// actually parsed before any deadline; PE how many parsed as PE
 	// binaries; Linked how many carried at least one import.
-	Files, PE, Linked int
+	Files, Probed, PE, Linked int
 
 	// FirstError is the first parse failure verbatim, nil when every file
 	// parsed. One representative error names the class of problem.
@@ -349,6 +362,7 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 	}
 
 	p := newProber()
+	p.ctx = ctx
 
 	var done int64
 	queue := make(chan string)
@@ -398,13 +412,13 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 	wg.Wait()
 	close(progressDone)
 
-	stats := Stats{Files: len(paths)}
+	// Assembly runs to completion REGARDLESS of the deadline: everything
+	// expensive already happened, this is cache lookups, and the deadline
+	// only stops the prober from starting new parses for transitive
+	// resolution. The links from every file parsed in time are delivered.
+	stats := Stats{Files: len(paths), Probed: int(atomic.LoadInt64(&done))}
 	out := make(map[string][]Link)
 	for _, path := range paths {
-		if ctx.Err() != nil {
-			stats.Aborted = true
-			break
-		}
 		if _, _, isPE := p.imports(path); isPE {
 			stats.PE++
 		}
@@ -414,9 +428,7 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 		}
 		out[path] = links
 	}
-	if ctx.Err() != nil {
-		stats.Aborted = true
-	}
+	stats.Aborted = ctx.Err() != nil
 	stats.Linked = len(out)
 	stats.FirstError = p.firstErr
 	return out, stats

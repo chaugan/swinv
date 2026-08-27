@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/chaugan/swinv/internal/model"
@@ -35,10 +36,13 @@ func attachPELinks(cfg *config, report *model.Report, result *scan.Result, logf 
 	seen := map[string]bool{}
 	var paths []string
 	add := func(p string) {
-		if p != "" && !seen[p] {
-			seen[p] = true
-			paths = append(paths, p)
+		// The kernel pseudo-process reports "System" for an image path, and
+		// a probe list is for files: require something path-shaped.
+		if p == "" || !strings.Contains(p, `\`) || seen[p] {
+			return
 		}
+		seen[p] = true
+		paths = append(paths, p)
 	}
 	for i := range report.Services {
 		if report.Services[i].Container == "" {
@@ -85,7 +89,7 @@ func attachPELinks(cfg *config, report *model.Report, result *scan.Result, logf 
 	}, cfg.parallelism)
 	if stats.Aborted {
 		msg := fmt.Sprintf("pe: the probe hit its %s deadline after %d of %d file(s); "+
-			"the link records are PARTIAL", cfg.timeout, stats.PE, stats.Files)
+			"the link records are PARTIAL", cfg.timeout, stats.Probed, stats.Files)
 		logf("%s", msg)
 		report.Scan.AddWarning(msg)
 	}
