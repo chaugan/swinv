@@ -445,7 +445,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	// Libraries onto services, and -- with --elf-scope all -- the full table.
 	attachLinks(cfg, report, elfProbe, result.FileOwners)
-	attachPELinks(cfg, report, logf)
+	attachPELinks(ctx, cfg, report, result, logf)
 	configsurface.AttachOwners(configEntries, result.FileOwners)
 	report.ConfigSurface = configEntries
 	if len(elfProbe.byExe) > 0 {

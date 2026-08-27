@@ -142,3 +142,48 @@ func TestIsAPISet(t *testing.T) {
 		t.Error("kernel32 is not an API set")
 	}
 }
+
+// ProbeAll shares one parse cache across every binary. Two copies of the
+// same PE must both produce links, and the fixture planted as their shared
+// dependency is parsed once, not once per binary.
+func TestProbeAllSharesTheCache(t *testing.T) {
+	exe := buildPE(t)
+	dir := t.TempDir()
+	fixture, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := filepath.Join(dir, "a.exe")
+	b := filepath.Join(dir, "b.exe")
+	sysDir := t.TempDir()
+	for _, p := range []string{a, b, filepath.Join(sysDir, "kernel32.dll")} {
+		if err := os.WriteFile(p, fixture, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := ProbeAll(t.Context(), []string{a, b, filepath.Join(dir, "not-pe.txt")},
+		Options{SystemDir: sysDir}, 2)
+	if len(got) != 2 {
+		t.Fatalf("got links for %d of 2 binaries: %v", len(got), keys(got))
+	}
+	for _, path := range []string{a, b} {
+		found := false
+		for _, l := range got[path] {
+			if strings.EqualFold(l.Name, "kernel32.dll") && l.Path != "" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: kernel32.dll not resolved: %+v", path, got[path])
+		}
+	}
+}
+
+func keys(m map[string][]Link) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}

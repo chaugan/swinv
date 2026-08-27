@@ -3,61 +3,113 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"sort"
+	"time"
 
 	"github.com/chaugan/swinv/internal/model"
 	"github.com/chaugan/swinv/internal/pelink"
+	"github.com/chaugan/swinv/internal/scan"
 	"github.com/chaugan/swinv/internal/service"
 )
 
-// attachPELinks is the Windows half of --elf-scope: every listening
-// executable's PE import table, resolved application-directory-first, joined
-// to the products the inventory already identified. The flag keeps its ELF
-// name so one timer unit works on both platforms; the help says what it
-// means here.
+// attachPELinks is the Windows half of --elf-scope: PE import tables,
+// resolved application-directory-first, joined to the products the inventory
+// already identified. The flag keeps its ELF name so one timer unit works on
+// both platforms; the help says what it means here.
+//
+// listening probes the executables behind open ports. all probes every
+// executable file the MFT enumeration saw - which needs --full-scan, because
+// the enumeration is the index and walking the filesystem a second time to
+// rebuild it would be absurd.
 //
 // It runs after attribution because the join needs the finished component
 // list, where the ELF probe runs before the scan because its join rides the
 // package databases' file lists - two roads to the same record shape.
-func attachPELinks(cfg *config, report *model.Report, logf func(string, ...any)) {
+func attachPELinks(ctx context.Context, cfg *config, report *model.Report, result *scan.Result, logf func(string, ...any)) {
 	if cfg.elfScope == elfScopeOff {
 		return
 	}
+
+	seen := map[string]bool{}
+	var paths []string
+	add := func(p string) {
+		if p != "" && !seen[p] {
+			seen[p] = true
+			paths = append(paths, p)
+		}
+	}
+	for i := range report.Services {
+		if report.Services[i].Container == "" {
+			add(report.Services[i].Executable)
+		}
+	}
+
+	allScope := false
 	if cfg.elfScope == elfScopeAll {
-		logf("elf-scope all: the PE walk is not built; probing the listening executables")
+		if len(result.WinExecutables) > 0 {
+			allScope = true
+			for _, p := range result.WinExecutables {
+				add(p)
+			}
+		} else {
+			logf("elf-scope all needs --full-scan on Windows (the MFT enumeration is the " +
+				"index of the machine's binaries); probing the listening executables only")
+		}
+	}
+	if len(paths) == 0 {
+		return
+	}
+
+	start := time.Now()
+	byExe := pelink.ProbeAll(ctx, paths, pelink.Options{Symbols: cfg.elfSymbols}, cfg.parallelism)
+	if len(byExe) == 0 {
+		return
 	}
 
 	ix := service.NewOwnerIndex(report.Components)
-	cache := map[string][]model.Link{}
-	probed, nlinks := 0, 0
+	nlinks := 0
 	for i := range report.Services {
 		s := &report.Services[i]
-		if s.Executable == "" || s.Container != "" {
+		links, ok := byExe[s.Executable]
+		if !ok || s.Container != "" {
 			continue
 		}
-		links, ok := cache[s.Executable]
-		if !ok {
-			raw, err := pelink.Probe(s.Executable, pelink.Options{Symbols: cfg.elfSymbols})
-			if err != nil || len(raw) == 0 {
-				cache[s.Executable] = nil
-				continue
-			}
-			links = peModelLinks(raw, ix)
-			cache[s.Executable] = links
-			probed++
-			nlinks += len(links)
-		}
-		if len(links) == 0 {
-			continue
-		}
-		s.Links = links
+		s.Links = peModelLinks(links, ix)
 		s.Evidence = append(s.Evidence, fmt.Sprintf(
 			"links %d DLL(s) via the import table; LoadLibrary'd and delay-loaded "+
 				"modules are not visible here", len(links)))
 	}
-	if probed > 0 {
-		logf("pe: %d binarie(s) probed, %d DLL link(s)", probed, nlinks)
+
+	if allScope {
+		// Every probed binary, sorted so two runs of an unchanged machine
+		// produce identical output. linkLines dedups the listeners out of
+		// this list when it streams.
+		probed := make([]string, 0, len(byExe))
+		for exe := range byExe {
+			probed = append(probed, exe)
+		}
+		sort.Strings(probed)
+		report.Links = make([]model.BinaryLinks, 0, len(probed))
+		for _, exe := range probed {
+			entry := model.BinaryLinks{
+				Executable: exe,
+				Links:      peModelLinks(byExe[exe], ix),
+			}
+			if ids, _ := ix.Owners(exe); len(ids) > 0 {
+				entry.PURL = ids[0]
+			}
+			report.Links = append(report.Links, entry)
+			nlinks += len(entry.Links)
+		}
+	} else {
+		for _, links := range byExe {
+			nlinks += len(links)
+		}
 	}
+	logf("pe: %d of %d executable file(s) carry an import table, %d DLL link(s) in %s",
+		len(byExe), len(paths), nlinks, time.Since(start).Round(time.Second))
 }
 
 func peModelLinks(links []pelink.Link, ix *service.OwnerIndex) []model.Link {

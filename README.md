@@ -547,12 +547,15 @@ the more interesting case.
 ELF under the standard binary directories - 5,845 binaries in about a minute
 on the machine this was developed on.
 
-The same question gets answered on Windows: each listening executable's **PE
-import table** names the DLLs it loads and the functions it imports, resolved
-the way the loader searches (application directory first - the order that
-makes DLL planting a technique - then System32), and joined to the products
-the inventory identified. System DLLs carry `os_component` instead of an
-owner, so `KERNEL32.dll` does not masquerade as the interesting unowned case.
+The same question gets answered on Windows: a binary's **PE import table**
+names the DLLs it loads and the functions it imports, resolved the way the
+loader searches (application directory first - the order that makes DLL
+planting a technique - then System32), and joined to the products the
+inventory identified. System DLLs carry `os_component` instead of an owner,
+so `KERNEL32.dll` does not masquerade as the interesting unowned case.
+`--elf-scope all` with `--full-scan` extends the probe from the listeners to
+**every executable file the MFT enumeration saw** - the enumeration is
+already the index of the machine's binaries, so no second walk is paid for.
 LoadLibrary and delay-loaded imports are the Windows `dlopen`: invisible, and
 the evidence says so.
 

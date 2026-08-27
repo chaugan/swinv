@@ -288,13 +288,18 @@ field.
 Requires
 .Fl -since .
 .It Fl -elf-scope Ar mode
-Which binaries get their shared-library links read:
+Which binaries get their library links read:
 .Ql listening
 (the executables behind open ports, the default, costing nothing measurable),
 .Ql all
-(every ELF under the standard binary directories, about a minute of walking on
-a developer workstation), or
+(on Linux, every ELF under the standard binary directories, about a minute of
+walking on a developer workstation; on Windows, every executable file the MFT
+enumeration saw, which needs
+.Fl -full-scan ) ,
+or
 .Ql off .
+On Windows this reads the PE import table rather than ELF headers; the flag
+keeps one name so one scheduled command works on both platforms.
 Each library is resolved the way
 .Xr ld.so 8
 resolves it, without executing anything, and joined to the package that owns

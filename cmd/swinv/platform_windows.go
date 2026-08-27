@@ -41,10 +41,11 @@ func platformScan(ctx context.Context, cfg *config, logf func(string, ...any)) (
 	}
 
 	out := &scan.Result{
-		Components: model.Normalize(res.Components),
-		Catalogers: catalogers,
-		Warnings:   res.Warnings,
-		Incomplete: res.Incomplete,
+		Components:     model.Normalize(res.Components),
+		Catalogers:     catalogers,
+		Warnings:       res.Warnings,
+		Incomplete:     res.Incomplete,
+		WinExecutables: res.Executables,
 	}
 
 	if !cfg.fullScan {

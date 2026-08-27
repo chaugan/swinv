@@ -145,6 +145,9 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 			if e.Path == "" {
 				continue
 			}
+			if isExecutable(e.Name) {
+				res.Executables = append(res.Executables, e.Path)
+			}
 			if OSOrStoreTerritory(e.Path, volume) {
 				osOrStore++
 				continue

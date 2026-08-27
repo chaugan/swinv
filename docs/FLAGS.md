@@ -142,7 +142,7 @@ See [docs/SERVER-ROLES.md](SERVER-ROLES.md) for the design, and
 | Flag | Default | Meaning |
 |---|---|---|
 | `--hash` | `false` | Record a SHA-256 of each component's primary file |
-| `--elf-scope MODE` | `listening` | Whose library links to read: `listening`, `all`, `off`. On Windows this reads PE import tables of the listeners (`all` behaves as `listening`) |
+| `--elf-scope MODE` | `listening` | Whose library links to read: `listening`, `all`, `off`. On Windows this reads PE import tables; `all` covers every executable the MFT enumeration saw and needs `--full-scan` |
 | `--elf-symbols` | `false` | Record imported symbol lists, not only counts |
 | `--ndjson-include LIST` | *(none)* | NDJSON also carries `exposure`, `containers`, `links`, or `all` |
 | `--heartbeat` | `false` | NDJSON: a digest every scan, components only when it changes |

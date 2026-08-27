@@ -129,6 +129,11 @@ type Result struct {
 	// missing an ecosystem. The caller should exit 1.
 	Incomplete bool
 
+	// WinExecutables is Windows only: every executable file the MFT
+	// enumeration saw, for the PE import-table probe. Empty elsewhere and
+	// without --full-scan.
+	WinExecutables []string
+
 	// QuarantinedSymlinks are exclusion patterns the symlink preflight added
 	// on top of the configured Excludes, so the caller can record the full
 	// effective exclusion list in ScanMeta.Excluded.

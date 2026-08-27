@@ -41,7 +41,7 @@ func helpSections() []helpSection {
 		{"What is listening", []helpFlag{
 			{"--no-services, --no-containers", "skip listening sockets, or containers"},
 			{"--config-scope MODE", "config surface: standard, all, off"},
-			{"--elf-scope MODE", "read import tables of listeners: listening, off"},
+			{"--elf-scope MODE", "import tables: listening, all (with --full-scan), off"},
 			{"--elf-symbols", "record imported function lists, not only counts"},
 			{"--no-service-command", "omit command lines; they can carry passwords"},
 		}},

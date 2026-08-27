@@ -24,9 +24,14 @@ schema and cataloger coverage may still change between releases. See
   never a guess. LoadLibrary and delay-loaded imports are the Windows
   dlopen, invisible to the import table and said so in the evidence.
   `--elf-scope` and `--elf-symbols` now appear on the Windows help page and
-  do what they say there; `all` behaves as `listening` until a PE walk
-  exists. Proved against real import tables: the tests cross-compile a PE
-  and read kernel32.dll's actual imports rather than a synthetic.
+  do what they say there. `--elf-scope all` probes **every executable file
+  the MFT enumeration saw** - the full-scope equivalent of the Linux ELF
+  walk, riding the index `--full-scan` already builds instead of walking
+  the filesystem twice, with one shared parse cache so the machine's
+  ten-thousand imports of kernel32.dll cost one open. Without `--full-scan`
+  it degrades to `listening` and says so. Proved against real import
+  tables: the tests cross-compile a PE and read kernel32.dll's actual
+  imports rather than a synthetic.
 
 ### Changed
 

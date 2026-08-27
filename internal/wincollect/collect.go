@@ -63,6 +63,14 @@ type Result struct {
 	Warnings   []string
 	Stats      Stats
 
+	// Executables is every executable file the MFT enumeration saw - exe,
+	// dll, sys, ocx, cpl, drv - regardless of whether it was attributed,
+	// opened, or skipped as OS territory. It exists for the PE import-table
+	// probe: the enumeration is the index of the machine's binaries, and
+	// walking the filesystem a second time to rebuild it would be absurd.
+	// Filled only under FullScan, because only the enumeration fills it.
+	Executables []string
+
 	// Incomplete is set when the caller asked for work that could not be
 	// done -- --full-scan on a volume that could not be enumerated, for
 	// instance. The registry inventory is still returned and still correct;

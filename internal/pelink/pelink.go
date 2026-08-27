@@ -11,11 +11,14 @@
 package pelink
 
 import (
+	"context"
 	"debug/pe"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 )
 
 // Link is one DLL a binary loads.
@@ -78,13 +81,52 @@ type module struct {
 // (nil, nil): the caller probes everything that listens, and a script with a
 // port open is not an error.
 func Probe(exe string, opts Options) ([]Link, error) {
+	return newProber().probe(exe, opts)
+}
+
+// prober carries a parse cache across binaries. The machine's executables
+// overwhelmingly import the same system DLLs, and probing them all without
+// a cache would re-open kernel32.dll once per binary on the machine.
+type prober struct {
+	mu    sync.Mutex
+	cache map[string]parsed
+}
+
+type parsed struct {
+	mods    []module
+	machine uint16
+	notPE   bool
+}
+
+func newProber() *prober {
+	return &prober{cache: map[string]parsed{}}
+}
+
+// imports parses one file through the cache. Keyed case-insensitively,
+// because NTFS is.
+func (p *prober) imports(path string) ([]module, uint16, bool) {
+	key := strings.ToLower(path)
+	p.mu.Lock()
+	entry, ok := p.cache[key]
+	p.mu.Unlock()
+	if !ok {
+		mods, machine, err := parseImports(path)
+		entry = parsed{mods: mods, machine: machine, notPE: err != nil}
+		p.mu.Lock()
+		p.cache[key] = entry
+		p.mu.Unlock()
+	}
+	return entry.mods, entry.machine, !entry.notPE
+}
+
+func (p *prober) probe(exe string, opts Options) ([]Link, error) {
 	depth := opts.MaxDepth
 	if depth <= 0 {
 		depth = defaultDepth
 	}
 
-	direct, machine, err := imports(exe)
-	if err != nil {
+	direct, machine, ok := p.imports(exe)
+	if !ok {
 		return nil, nil // not a PE binary
 	}
 	if len(direct) == 0 {
@@ -137,8 +179,8 @@ func Probe(exe string, opts Options) ([]Link, error) {
 		if l.Path == "" || it.hop >= depth {
 			continue
 		}
-		next, _, err := imports(l.Path)
-		if err != nil {
+		next, _, peOK := p.imports(l.Path)
+		if !peOK {
 			continue // resolved to something that is not a PE binary; record, do not descend
 		}
 		for _, m := range next {
@@ -148,11 +190,12 @@ func Probe(exe string, opts Options) ([]Link, error) {
 	return out, nil
 }
 
-// imports reads one PE file's import table, grouped per DLL in table order.
+// parseImports reads one PE file's import table, grouped per DLL in table
+// order.
 //
 // debug/pe surfaces the imports as "Symbol:DLL.dll" strings; the grouping
 // preserves the DLL order the binary declared.
-func imports(path string) ([]module, uint16, error) {
+func parseImports(path string) ([]module, uint16, error) {
 	f, err := pe.Open(path)
 	if err != nil {
 		return nil, 0, err
@@ -228,4 +271,57 @@ func systemDir(machine uint16) string {
 		}
 	}
 	return filepath.Join(root, "System32")
+}
+
+// ProbeAll probes every path, sharing one parse cache across all of them -
+// the Windows equivalent of the ELF walk's ProbeAll, except the caller hands
+// in the file list the MFT enumeration already built instead of walking
+// anything twice.
+//
+// The parse phase runs in parallel because on a machine with real-time
+// antivirus every file open is intercepted, and that interception dominates
+// the runtime; the per-binary resolution afterwards is pure map lookups.
+// Parallelism 0 means a quarter of the CPUs, the politeness default the
+// extractor uses for the same reason.
+func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int) map[string][]Link {
+	if parallelism <= 0 {
+		if parallelism = runtime.NumCPU() / 4; parallelism < 1 {
+			parallelism = 1
+		}
+	}
+
+	p := newProber()
+
+	queue := make(chan string)
+	var wg sync.WaitGroup
+	for w := 0; w < parallelism; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range queue {
+				p.imports(path)
+			}
+		}()
+	}
+	for _, path := range paths {
+		if ctx.Err() != nil {
+			break
+		}
+		queue <- path
+	}
+	close(queue)
+	wg.Wait()
+
+	out := make(map[string][]Link)
+	for _, path := range paths {
+		if ctx.Err() != nil {
+			break
+		}
+		links, err := p.probe(path, opts)
+		if err != nil || len(links) == 0 {
+			continue
+		}
+		out[path] = links
+	}
+	return out
 }
