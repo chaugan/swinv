@@ -63,7 +63,14 @@ func attachPELinks(ctx context.Context, cfg *config, report *model.Report, resul
 	}
 
 	start := time.Now()
-	byExe := pelink.ProbeAll(ctx, paths, pelink.Options{Symbols: cfg.elfSymbols}, cfg.parallelism)
+	byExe := pelink.ProbeAll(ctx, paths, pelink.Options{
+		Symbols: cfg.elfSymbols,
+		// The politeness contract is the scan's, not only the scheduler's:
+		// every open is scanned by the antivirus at its own priority, so an
+		// unpaced probe over 100k files makes the AV a foreground workload
+		// no background-mode flag can soften. --fast means now, as always.
+		Polite: !cfg.fast,
+	}, cfg.parallelism)
 	if len(byExe) == 0 {
 		return
 	}

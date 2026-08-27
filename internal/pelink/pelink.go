@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Link is one DLL a binary loads.
@@ -56,6 +57,15 @@ type Options struct {
 	// %SystemRoot%\System32, or SysWOW64 for a 32-bit binary on a 64-bit
 	// OS. Tests set it; nothing else should need to.
 	SystemDir string
+
+	// Polite paces the probe: one worker, and after each file a pause as
+	// long as the parse took (bounded). The process being in background
+	// priority is not enough, because the probe's cost is not its own CPU:
+	// every open is scanned by the antivirus at ITS priority, so a probe
+	// that opens files as fast as it can turns the AV into a foreground
+	// workload on 100k files. Measured consequence before this existed:
+	// "almost killing the computer it is running on". --fast turns it off.
+	Polite bool
 }
 
 const (
@@ -290,6 +300,12 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 		}
 	}
 
+	if opts.Polite {
+		// Politeness beats parallelism: the duty cycle only means anything
+		// when one worker owns the whole budget.
+		parallelism = 1
+	}
+
 	p := newProber()
 
 	queue := make(chan string)
@@ -299,7 +315,11 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 		go func() {
 			defer wg.Done()
 			for path := range queue {
+				start := time.Now()
 				p.imports(path)
+				if opts.Polite {
+					pause(ctx, politePause(time.Since(start)))
+				}
 			}
 		}()
 	}
@@ -324,4 +344,31 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 		out[path] = links
 	}
 	return out
+}
+
+// politePause matches the rest to the work: a pause as long as the parse
+// took gives everything else on the machine - the antivirus included - half
+// the wall clock. Bounded below so a cached parse still yields the CPU, and
+// above so one slow file cannot stall the probe for seconds.
+func politePause(parse time.Duration) time.Duration {
+	const (
+		floor = 200 * time.Microsecond
+		cap   = 25 * time.Millisecond
+	)
+	if parse < floor {
+		return floor
+	}
+	if parse > cap {
+		return cap
+	}
+	return parse
+}
+
+func pause(ctx context.Context, d time.Duration) {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
 }

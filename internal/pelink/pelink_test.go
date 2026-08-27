@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // buildPE cross-compiles a minimal real PE binary. Go's own linker gives the
@@ -186,4 +187,16 @@ func keys(m map[string][]Link) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+func TestPolitePauseBounds(t *testing.T) {
+	if politePause(0) != 200*time.Microsecond {
+		t.Error("a cached parse must still yield the floor")
+	}
+	if politePause(2*time.Millisecond) != 2*time.Millisecond {
+		t.Error("the pause should match the work")
+	}
+	if politePause(3*time.Second) != 25*time.Millisecond {
+		t.Error("one slow file must not stall the probe for seconds")
+	}
 }
