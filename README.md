@@ -131,10 +131,12 @@ fetched over a network, and nothing is left running afterwards.
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-The two kinds of source answer different questions and neither knows the
-other. A package database is authoritative about what it installed; a
-listening socket is authoritative about what is bound right now. Joining them
-is the work, and it is what the rest of this document is about.
+The kinds of source answer different questions and none knows the others. A
+package database is authoritative about what it installed; a listening socket
+is authoritative about what is bound right now; a crontab or a unit file is
+authoritative about what the machine will run next, whether or not anything
+installed it. Joining them is the work, and it is what the rest of this
+document is about.
 
 The bottom row is the one most inventory tools leave out. A port published by
 a netfilter rule has no socket to find, so a host running Kubernetes NodePort
@@ -201,7 +203,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 ```jsonc
 {
-  "schema_version": "1.11",
+  "schema_version": "1.13",
   "tool": { "name": "swinv", "version": "dev", "syft_version": "v1.51.0" },
   "host": {
     "hostname": "web-01",
@@ -491,9 +493,9 @@ It is never a delta. When anything changes the whole list is sent again, because
 a delta cannot express a removal - and "this package is no longer installed" is
 the fact that decides whether a vulnerability is fixed or merely unreported.
 
-**`--ndjson-include`** adds `exposure`, `container` and `link` records, so what
-is listening - and what it loads - reaches the stream and not only the JSON
-document. Exposure and container records are small - 46 and 16 against 2,715
+**`--ndjson-include`** adds `exposure`, `container`, `link` and `config`
+records, so what is listening - what it loads, and what the machine is
+configured to run - reaches the stream and not only the JSON document. Exposure and container records are small - 46 and 16 against 2,715
 components on a 17-container host - so they are sent even on an unchanged
 heartbeat scan: a port opening is exactly the kind of change that happens while
 installed software does not. Link records follow the components instead: they
@@ -544,6 +546,40 @@ the more interesting case.
 `--elf-scope all` extends the probe from the listening executables to every
 ELF under the standard binary directories - 5,845 binaries in about a minute
 on the machine this was developed on.
+
+#### What the machine is configured to run
+
+Installed software and listening sockets still miss a third class of fact:
+the persistence and privilege mechanisms MITRE ATT&CK is largely made of.
+Those are configurations, not software defects - no CVE feed will ever list
+them - so `swinv` collects them the same way it collects everything else,
+as local reads. Cron jobs, systemd timers and services, SUID/SGID binaries
+on Linux; Scheduled Tasks and Run-key autoruns on Windows. Each entry names
+the executable it runs, joined to the package that installed it, and the
+ATT&CK technique the mechanism is the surface for:
+
+```jsonc
+{ "record_type": "config", "kind": "cron",
+  "path": "/etc/cron.d/e2scrub_all", "user": "root", "schedule": "10 3 * * *",
+  "executable": "/sbin/e2scrub_all",
+  "purl": "pkg:deb/ubuntu/e2fsprogs@1.47.2-3ubuntu2", "attack": "T1053.003" }
+```
+
+Collecting an entry is not a finding, and the record claims nothing beyond
+the surface - "this technique has a surface here" is a different sentence
+from "you are compromised", and the data keeps them apart. The findings are
+joins a consumer makes: a **root cron job whose script is `world_writable`**,
+a **SUID binary with no `purl`**, a **unit whose `ExecStart` points outside
+every package-owned path**. The first real run of this feature found two of
+those on the machine it was developed on.
+
+osquery and Wazuh collect several of these tables too, as resident agents
+with a server behind them; what `swinv` adds is the same one-shot, offline,
+no-daemon shape as the rest of the report, with the package join and the
+technique id already on every row. `--config-scope all` extends the SUID
+walk to the whole filesystem; `--no-service-command` drops the command lines
+here for the same reason it exists at all, keeping the joinable executable
+paths.
 
 **[Full schema, NDJSON, CycloneDX and SQL loading →](docs/OUTPUT.md)**
 
@@ -968,7 +1004,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--elf-scope MODE` | listening | Read shared-library links: `listening`, `all`, or `off` |
 | `--config-scope MODE` | standard | Collect cron, systemd units, SUID, tasks, autoruns |
 | `--elf-symbols` | false | Record imported symbol lists, not only counts |
-| `--ndjson-include LIST` | - | NDJSON also carries `exposure`, `containers`, `links`, or `all` |
+| `--ndjson-include LIST` | - | NDJSON also carries `exposure`, `containers`, `links`, `config`, or `all` |
 | `--transmit URL` | - | Also POST the scan to a Riskability server; the files are still written |
 | `--hash` | false | Record a SHA-256 per component |
 | `--fast` | false | Scan at normal priority and full parallelism (see below) |
@@ -1053,8 +1089,15 @@ Worth knowing before you roll this out fleet-wide:
 - **No inventory data is transmitted unless you ask for it.** Without
   `--transmit`, `swinv` opens no sockets to send results anywhere. With it, the
   scan is POSTed to the single HTTPS endpoint you named, gzipped, authenticated
-  by a bearer token or a client certificate, and the report files are still
-  written locally. The other exception to "no network at all" is a
+  by a bearer token or a client certificate - including passphrase-protected
+  PKCS#8 keys, with the passphrase from a TPM-sealable systemd credential
+  rather than a flag. Verification is the system trust store, your own CA
+  bundle, or a pinned public key (`--transmit-pin`) for the estate whose CA
+  cannot reach the trust store; `--transmit-check` validates endpoint, auth,
+  TLS and clock in one command before any scan runs; and a scan whose sources
+  failed is not transmitted at all by default, because a partial inventory on
+  a server reads as a healthy small host. The report files are still
+  written locally in every case. The other exception to "no network at all" is a
   best-effort reverse-DNS lookup that fills `host.fqdn` - a normal name
   resolution against your configured resolver, bounded to two seconds and never
   fatal. It carries no scan data, but it does tell that resolver the host
@@ -1081,8 +1124,10 @@ Worth knowing before you roll this out fleet-wide:
   listening process's `argv`, and command lines are where secrets end up - a
   `--password` on a daemon's ExecStart, a connection string with credentials in
   it. Anything visible in `ps` can therefore reach an inventory file that gets
-  copied elsewhere. **`--no-service-command`** drops that one field;
-  **`--no-services`** drops the section.
+  copied elsewhere. **`--no-service-command`** drops that field - and the
+  command lines in the configuration surface (cron lines, `ExecStart`) with
+  it, keeping the joinable executable paths; **`--no-services`** drops the
+  services section.
 - **Protect the output directory.** `--out` is created `0755` and files `0644`,
   so an inventory is world-readable by default. Tighten it if your threat model
   needs that.

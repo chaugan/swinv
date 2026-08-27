@@ -29,16 +29,6 @@ What the machine is configured to run, and a transmit path fit for a real estate
   not a finding; a root cron job whose script is world-writable, or a SUID
   binary no package owns, is a join away.
 
-### Fixed
-
-- **Two ownership-probe misses found while joining config entries.** A file
-  asked about under two spellings (/bin/mount from a unit file,
-  /usr/bin/mount from the SUID walk) answered only the later asker - the
-  probe map now keeps every spelling. And a probed path that is a symlink
-  (Ubuntu's coreutils transition makes /usr/bin/rm one) never matched dpkg's
-  md5sums, which cannot list symlinks - the probe now also asks about the
-  file the link resolves to, chased inside the scan root.
-
 - **Transmit mode grew its deployment surface** (#9), the flags an estate
   with real certificate handling and real network policy needs:
   - `--transmit-key` now accepts PKCS#8 encrypted private keys (PBES2, the
@@ -67,6 +57,24 @@ What the machine is configured to run, and a transmit path fit for a real estate
   - `--transmit-tls-min` (1.2 default, can only be raised),
     `--transmit-compress auto|always|never`, and `--transmit-rate-limit`
     for metered links.
+
+### Fixed
+
+- **Two ownership-probe misses, found the first time config entries were
+  joined on a real host.** A file asked about under two spellings
+  (`/bin/mount` from a snapd unit, `/usr/bin/mount` from the SUID walk)
+  answered only the later asker, so mount reported as an unowned SUID binary
+  on a host where the mount package plainly owns it - the probe map now
+  keeps every spelling. And a probed path that is a symlink could never
+  match dpkg's md5sums, which cannot list symlinks; Ubuntu's coreutils
+  transition makes `/usr/bin/rm` exactly that, so the probe now also asks
+  about the file the link resolves to, chased inside the scan root. Both
+  fixes sharpen service attribution too, not only config records.
+
+- **Pin verification runs in `VerifyConnection`, not
+  `VerifyPeerCertificate`** - a resumed TLS session skips the latter, and a
+  pinned connection must not be resumable past its pin. Caught by gosec
+  before it shipped anywhere.
 
 ## [0.7.1] - 2026-08-25
 
