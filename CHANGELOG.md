@@ -7,7 +7,9 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
-## [Unreleased]
+## [0.8.0] - 2026-08-27
+
+What the machine is configured to run, and a transmit path fit for a real estate.
 
 ### Added
 
@@ -1004,7 +1006,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/chaugan/swinv/releases/tag/v0.8.0
 [0.7.1]: https://github.com/chaugan/swinv/releases/tag/v0.7.1
 [0.7.0]: https://github.com/chaugan/swinv/releases/tag/v0.7.0
 [0.6.1]: https://github.com/chaugan/swinv/releases/tag/v0.6.1
