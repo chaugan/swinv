@@ -11,11 +11,31 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.13`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.14`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.13"
+"schema_version": "1.14"
 ```
+
+**1.13 → 1.14** brought the linkage to Windows, and one field with it:
+
+- On Windows, `--elf-scope listening` (the default; the flag keeps its ELF
+  name so one timer unit works on both platforms) reads each listening
+  executable's **PE import table** - the DLLs it names and the functions it
+  imports from each - resolved the way the loader searches: the importing
+  object's directory, the application's directory, then System32 (SysWOW64
+  for a 32-bit binary). The same `link` records come out: `soname` carries
+  the DLL name, `purl` carries the owning product's identity the way
+  `services[].components` does (a PURL when one exists, `Name@Version`
+  otherwise). API set names (`api-ms-win-*`) are virtual and carry no path;
+  LoadLibrary and delay-loaded imports are the Windows `dlopen`, invisible
+  to the import table and said so in the evidence. PATH and SxS resolution
+  are not attempted - a miss is an empty `path`, never a guess.
+- `os_component` on link records marks a library the operating system ships
+  (a System32 DLL), which the inventory represents by the installed updates
+  rather than file by file. Without it every `KERNEL32.dll` would read as
+  "nothing installed owns it" - the interesting-case signal pointed at the
+  least interesting files.
 
 **1.12 → 1.13** added the configuration surface: `config_surface[]` in the
 JSON report, and a `record_type: "config"` NDJSON record with

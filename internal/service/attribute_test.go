@@ -210,3 +210,30 @@ func TestExePathsSkipsWhatCannotBeJoined(t *testing.T) {
 		t.Errorf("ExePaths() = %v, want [/usr/sbin/sshd]", got)
 	}
 }
+
+// OwnerIndex climbs the same ladder attribution climbs, for DLL paths: an
+// exact recorded location first, then the product installed above it.
+func TestOwnerIndex(t *testing.T) {
+	ix := NewOwnerIndex([]model.Component{
+		{Name: "OpenSSL", Version: "3.2.1", Type: "windows",
+			Locations: []string{`C:\Program Files\OpenSSL`}},
+		{Name: "vendored", PURL: "pkg:generic/libthing@2.0",
+			Locations: []string{`C:\App\libthing.dll`}},
+	})
+
+	ids, osc := ix.Owners(`C:\App\libthing.dll`)
+	if len(ids) != 1 || ids[0] != "pkg:generic/libthing@2.0" || osc {
+		t.Errorf("exact match = %v, %v", ids, osc)
+	}
+
+	ids, _ = ix.Owners(`C:\Program Files\OpenSSL\libcrypto-3-x64.dll`)
+	if len(ids) != 1 || ids[0] != "OpenSSL@3.2.1" {
+		t.Errorf("containing product = %v; the services convention is Name@Version when no purl exists", ids)
+	}
+
+	ids, osc = ix.Owners(`C:\nowhere\else.dll`)
+	if len(ids) != 0 {
+		t.Errorf("an unknown path found owners: %v", ids)
+	}
+	_ = osc // IsOSComponent is false on non-Windows by construction
+}

@@ -314,7 +314,10 @@ Each entry's executable is joined to its owning package;
 .Fl -no-service-command
 drops the command lines here too.
 .It Fl -elf-symbols
-Record each linked library's imported symbol list, not only its count.
+Record each linked library's imported symbol list, not only its count. On
+Windows this applies to the PE import table probe, whose scope
+.Fl -elf-scope
+controls the same way.
 Supporting evidence rather than a verdict: most CVEs live in internal
 functions that appear in no import table.
 .It Fl -ndjson-include Ar list

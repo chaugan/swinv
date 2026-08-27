@@ -228,3 +228,36 @@ func indexByLocation(components []model.Component) map[string][]model.Component 
 	}
 	return out
 }
+
+// OwnerIndex answers which installed component(s) own a file, climbing the
+// same ladder service attribution climbs: an exact recorded location, then
+// the product installed above it, then the OS-component verdict. Built once
+// per report so probing tens of thousands of DLL paths stays cheap.
+type OwnerIndex struct {
+	owners map[string][]model.Component
+}
+
+// NewOwnerIndex indexes the inventory's recorded locations.
+func NewOwnerIndex(components []model.Component) *OwnerIndex {
+	return &OwnerIndex{owners: indexByLocation(components)}
+}
+
+// Owners resolves one path. ids follow the services convention: a PURL when
+// the component has one, "Name@Version" otherwise. osComponent marks a file
+// the operating system ships, which the inventory represents by the
+// installed updates rather than file by file.
+func (ix *OwnerIndex) Owners(path string) (ids []string, osComponent bool) {
+	if path == "" {
+		return nil, false
+	}
+	if matches := ix.owners[lookupKey(path)]; len(matches) > 0 {
+		for _, c := range matches {
+			ids = append(ids, model.Identify(c))
+		}
+		return model.SortedSet(ids), false
+	}
+	if ids, _ := containingProduct(path, ix.owners); len(ids) > 0 {
+		return ids, false
+	}
+	return nil, IsOSComponent(path)
+}

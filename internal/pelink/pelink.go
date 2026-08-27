@@ -1,0 +1,231 @@
+// Package pelink reads what a Windows binary loads: the DLLs named in its PE
+// import table, and the functions it imports from each, without executing
+// anything.
+//
+// This is the Windows sibling of internal/elflink, and it exists for the same
+// sentence: "a CVE landed in this library" is answered better by "these
+// network-facing binaries actually load it" than by "it is on disk
+// somewhere". The import table is load-time truth only - LoadLibrary calls
+// and delay-loaded imports are the Windows dlopen, invisible here and said
+// so in the evidence.
+package pelink
+
+import (
+	"debug/pe"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// Link is one DLL a binary loads.
+type Link struct {
+	// Name is the DLL as the import table spells it, e.g. WS2_32.dll.
+	Name string
+
+	// Path is where the loader would find it, resolved application directory
+	// first, then the system directory - the order Windows itself uses for
+	// anything not already loaded. Empty for API set names (api-ms-win-*),
+	// which are virtual and satisfied by the OS, and for DLLs found in
+	// neither place, which at load time would mean a missing dependency and
+	// at inventory time usually means a PATH or SxS resolution this probe
+	// does not attempt.
+	Path string
+
+	// Direct marks a first-hop import; the rest arrived transitively.
+	Direct bool
+
+	NSymbols int
+	Symbols  []string
+	// SymbolsTruncated notes that the list was cut at maxSymbols.
+	SymbolsTruncated bool
+}
+
+// Options configures a probe.
+type Options struct {
+	// Symbols keeps the imported function names, not only their count.
+	Symbols bool
+
+	// MaxDepth bounds the transitive walk. 0 means defaultDepth.
+	MaxDepth int
+
+	// SystemDir overrides where system DLLs are looked for. Empty means
+	// %SystemRoot%\System32, or SysWOW64 for a 32-bit binary on a 64-bit
+	// OS. Tests set it; nothing else should need to.
+	SystemDir string
+}
+
+const (
+	// maxSymbols caps one module's recorded import list, same bound as the
+	// ELF probe: enough for evidence, not enough to bloat a report.
+	maxSymbols = 5000
+
+	// defaultDepth: direct imports, theirs, and one more hop. The same
+	// shape as the ELF probe; system DLL graphs are deep and repetitive,
+	// and three hops names every library that matters for the CVE join.
+	defaultDepth = 3
+)
+
+// module is one binary's direct imports, grouped per DLL.
+type module struct {
+	name      string
+	symbols   []string
+	truncated bool
+}
+
+// Probe reads exe's import table and resolves each DLL the way the loader
+// would, application directory first. A file that is not a PE binary returns
+// (nil, nil): the caller probes everything that listens, and a script with a
+// port open is not an error.
+func Probe(exe string, opts Options) ([]Link, error) {
+	depth := opts.MaxDepth
+	if depth <= 0 {
+		depth = defaultDepth
+	}
+
+	direct, machine, err := imports(exe)
+	if err != nil {
+		return nil, nil // not a PE binary
+	}
+	if len(direct) == 0 {
+		return nil, nil
+	}
+
+	sysDir := opts.SystemDir
+	if sysDir == "" {
+		sysDir = systemDir(machine)
+	}
+	appDir := filepath.Dir(exe)
+
+	var out []Link
+	seen := map[string]bool{}
+
+	type item struct {
+		mod  module
+		from string // directory of the importing object
+		hop  int
+	}
+	queue := make([]item, 0, len(direct))
+	for _, m := range direct {
+		queue = append(queue, item{mod: m, from: appDir, hop: 1})
+	}
+
+	for len(queue) > 0 {
+		it := queue[0]
+		queue = queue[1:]
+		key := strings.ToLower(it.mod.name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		l := Link{
+			Name:     it.mod.name,
+			Direct:   it.hop == 1,
+			NSymbols: len(it.mod.symbols),
+		}
+		if opts.Symbols {
+			l.Symbols = it.mod.symbols
+			l.SymbolsTruncated = it.mod.truncated
+		}
+
+		if !isAPISet(it.mod.name) {
+			l.Path = resolve(it.mod.name, it.from, appDir, sysDir)
+		}
+		out = append(out, l)
+
+		if l.Path == "" || it.hop >= depth {
+			continue
+		}
+		next, _, err := imports(l.Path)
+		if err != nil {
+			continue // resolved to something that is not a PE binary; record, do not descend
+		}
+		for _, m := range next {
+			queue = append(queue, item{mod: m, from: filepath.Dir(l.Path), hop: it.hop + 1})
+		}
+	}
+	return out, nil
+}
+
+// imports reads one PE file's import table, grouped per DLL in table order.
+//
+// debug/pe surfaces the imports as "Symbol:DLL.dll" strings; the grouping
+// preserves the DLL order the binary declared.
+func imports(path string) ([]module, uint16, error) {
+	f, err := pe.Open(path)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = f.Close() }()
+
+	syms, err := f.ImportedSymbols()
+	if err != nil {
+		return nil, f.Machine, fmt.Errorf("pelink: reading imports of %s: %w", path, err)
+	}
+
+	index := map[string]int{}
+	var mods []module
+	for _, s := range syms {
+		name, dll, ok := strings.Cut(s, ":")
+		if !ok || dll == "" {
+			continue
+		}
+		i, exists := index[strings.ToLower(dll)]
+		if !exists {
+			i = len(mods)
+			index[strings.ToLower(dll)] = i
+			mods = append(mods, module{name: dll})
+		}
+		if len(mods[i].symbols) >= maxSymbols {
+			mods[i].truncated = true
+			continue
+		}
+		mods[i].symbols = append(mods[i].symbols, name)
+	}
+	return mods, f.Machine, nil
+}
+
+// isAPISet reports a virtual API set name - a contract the OS satisfies via
+// apisetschema.dll, with no file of that name on disk. Resolving one means
+// reimplementing the apiset map; naming it and moving on is the honest
+// bound.
+func isAPISet(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.HasPrefix(lower, "api-ms-") || strings.HasPrefix(lower, "ext-ms-")
+}
+
+// resolve finds a DLL the way the loader's default search does for the cases
+// this probe attempts: the importing object's directory, the application's
+// directory, then the system directory. PATH and SxS redirection are
+// deliberately out of scope - both depend on an environment this probe does
+// not have - and a miss is recorded as a nameless path rather than guessed.
+func resolve(name, objDir, appDir, sysDir string) string {
+	for _, dir := range []string{objDir, appDir, sysDir} {
+		if dir == "" {
+			continue
+		}
+		p := filepath.Join(dir, name)
+		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
+			return p
+		}
+	}
+	return ""
+}
+
+// systemDir picks System32 or SysWOW64 by the binary's machine type: a
+// 32-bit process on a 64-bit OS is redirected to SysWOW64, and handing it
+// System32's 64-bit DLLs would name files it cannot load.
+func systemDir(machine uint16) string {
+	root := os.Getenv("SystemRoot")
+	if root == "" {
+		return ""
+	}
+	if machine == pe.IMAGE_FILE_MACHINE_I386 {
+		wow := filepath.Join(root, "SysWOW64")
+		if fi, err := os.Stat(wow); err == nil && fi.IsDir() { // #nosec G703 -- %SystemRoot% plus a constant
+			return wow
+		}
+	}
+	return filepath.Join(root, "System32")
+}

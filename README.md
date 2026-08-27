@@ -90,7 +90,7 @@ fetched over a network, and nothing is left running afterwards.
 │ /proc/<pid>/{fd,exe,cgroup,status}  │ iphlpapi  sockets with owning pid   │
 │ /proc/<pid>/ns/{net,mnt}            │ QueryFullProcessImageName           │
 │ /proc/self/mountinfo                │                                     │
-│ ELF DT_NEEDED · dynamic symbols     │                                     │
+│ ELF DT_NEEDED · dynamic symbols     │ PE import tables of listeners       │
 │ cron · systemd units · SUID bits    │ scheduled tasks  XML, no COM        │
 │                                     │ Run keys · Startup folder           │
 ├─────────────────────────────────────┼─────────────────────────────────────┤
@@ -546,6 +546,15 @@ the more interesting case.
 `--elf-scope all` extends the probe from the listening executables to every
 ELF under the standard binary directories - 5,845 binaries in about a minute
 on the machine this was developed on.
+
+The same question gets answered on Windows: each listening executable's **PE
+import table** names the DLLs it loads and the functions it imports, resolved
+the way the loader searches (application directory first - the order that
+makes DLL planting a technique - then System32), and joined to the products
+the inventory identified. System DLLs carry `os_component` instead of an
+owner, so `KERNEL32.dll` does not masquerade as the interesting unowned case.
+LoadLibrary and delay-loaded imports are the Windows `dlopen`: invisible, and
+the evidence says so.
 
 #### What the machine is configured to run
 

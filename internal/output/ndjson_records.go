@@ -119,10 +119,11 @@ type linkLine struct {
 	Executable     string `json:"executable"`
 	ExecutablePURL string `json:"executable_purl,omitempty"`
 
-	Soname     string `json:"soname"`
-	Path       string `json:"path,omitempty"`
-	PURL       string `json:"purl,omitempty"`
-	Transitive bool   `json:"transitive,omitempty"`
+	Soname      string `json:"soname"`
+	Path        string `json:"path,omitempty"`
+	PURL        string `json:"purl,omitempty"`
+	Transitive  bool   `json:"transitive,omitempty"`
+	OSComponent bool   `json:"os_component,omitempty"`
 
 	NSymbols         int    `json:"n_symbols,omitempty"`
 	SymbolsText      string `json:"symbols_text,omitempty"`
@@ -274,6 +275,7 @@ func linkLines(r *model.Report, scannedAt string) []linkLine {
 				Path:             l.Path,
 				PURL:             l.PURL,
 				Transitive:       l.Transitive,
+				OSComponent:      l.OSComponent,
 				NSymbols:         l.NSymbols,
 				SymbolsText:      strings.Join(l.Symbols, multiValueSep),
 				SymbolsTruncated: l.SymbolsTruncated,

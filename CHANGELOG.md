@@ -7,6 +7,33 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Added
+
+- **PE import table reading on Windows**, schema `1.14`: the Windows sibling
+  of the ELF linkage. Each listening executable's import table names the
+  DLLs it loads and the functions it imports from each, resolved the way
+  the loader searches - the importing object's directory, the application's
+  directory (the order that makes DLL planting a technique), then System32
+  or SysWOW64 by the binary's machine type - and joined to the products the
+  inventory identified, `Name@Version` where no PURL exists, the services
+  convention. New `os_component` on link records keeps System32 DLLs from
+  reading as "nothing installed owns it". API sets carry no path by design;
+  PATH and SxS resolution are not attempted - a miss is an empty path,
+  never a guess. LoadLibrary and delay-loaded imports are the Windows
+  dlopen, invisible to the import table and said so in the evidence.
+  `--elf-scope` and `--elf-symbols` now appear on the Windows help page and
+  do what they say there; `all` behaves as `listening` until a PE walk
+  exists. Proved against real import tables: the tests cross-compile a PE
+  and read kernel32.dll's actual imports rather than a synthetic.
+
+### Changed
+
+- The MFT walk's log line names what it keeps (exe, dll, sys, ocx, cpl,
+  drv): an operator read "114287 executables" and reasonably concluded the
+  walk was exe-only, when DLLs are most of what it finds.
+
 ## [0.8.0] - 2026-08-27
 
 What the machine is configured to run, and a transmit path fit for a real estate.

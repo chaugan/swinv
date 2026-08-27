@@ -19,7 +19,7 @@ import (
 // document.
 // 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
 // describing manifest (see the NDJSON heartbeat record). Also additive.
-const SchemaVersion = "1.13"
+const SchemaVersion = "1.14"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -716,7 +716,9 @@ func Identify(c Component) string {
 // Link is one shared library a binary loads, joined to the package that
 // installed it.
 type Link struct {
-	// Soname is what the binary asks for: "libcrypto.so.3".
+	// Soname is what the binary asks for: "libcrypto.so.3" on Linux; on
+	// Windows the DLL name from the import table, "WS2_32.dll". The field
+	// keeps its ELF name because a consumer joins on one field, not two.
 	Soname string `json:"soname"`
 
 	// Path is where the dynamic linker finds it, resolved without executing
@@ -726,8 +728,17 @@ type Link struct {
 
 	// PURL identifies the package owning the resolved path. Empty means
 	// nothing installed owns it: a vendored or hand-copied library, which for
-	// a CVE consumer is the more interesting case, not the less.
+	// a CVE consumer is the more interesting case, not the less. On Windows
+	// it carries the owning product's identity the way services[].components
+	// does - a PURL when one exists, "Name@Version" otherwise.
 	PURL string `json:"purl,omitempty"`
+
+	// OSComponent marks a library that is part of the operating system - on
+	// Windows, a System32 DLL, which the inventory represents by the
+	// installed updates rather than file by file. Without this flag every
+	// KERNEL32.dll would read as "nothing installed owns it", which is the
+	// interesting-case signal pointed at the least interesting files.
+	OSComponent bool `json:"os_component,omitempty"`
 
 	// Transitive marks a library reached through another one -- postgres
 	// needs libpq, libpq needs libssl -- rather than named by the binary
