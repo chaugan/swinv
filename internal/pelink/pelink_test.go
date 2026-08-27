@@ -163,10 +163,16 @@ func TestProbeAllSharesTheCache(t *testing.T) {
 		}
 	}
 
-	got := ProbeAll(t.Context(), []string{a, b, filepath.Join(dir, "not-pe.txt")},
+	got, stats := ProbeAll(t.Context(), []string{a, b, filepath.Join(dir, "not-pe.txt")},
 		Options{SystemDir: sysDir}, 2)
 	if len(got) != 2 {
 		t.Fatalf("got links for %d of 2 binaries: %v", len(got), keys(got))
+	}
+	if stats.Files != 3 || stats.PE != 2 || stats.Linked != 2 {
+		t.Errorf("stats = %+v, want 3 files, 2 PE, 2 linked", stats)
+	}
+	if stats.FirstError == nil {
+		t.Error("the non-PE file's parse error was swallowed; a zero-link machine needs it")
 	}
 	for _, path := range []string{a, b} {
 		found := false

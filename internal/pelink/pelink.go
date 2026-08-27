@@ -100,6 +100,12 @@ func Probe(exe string, opts Options) ([]Link, error) {
 type prober struct {
 	mu    sync.Mutex
 	cache map[string]parsed
+
+	// firstErr keeps the first parse failure verbatim. When a whole machine
+	// produces zero links, the difference between "every open failed with
+	// ERROR_ACCESS_DENIED" and "these are not PE files" is the entire
+	// diagnosis, and a probe that swallows it forces a guessing game.
+	firstErr error
 }
 
 type parsed struct {
@@ -123,6 +129,9 @@ func (p *prober) imports(path string) ([]module, uint16, bool) {
 		mods, machine, err := parseImports(path)
 		entry = parsed{mods: mods, machine: machine, notPE: err != nil}
 		p.mu.Lock()
+		if err != nil && p.firstErr == nil {
+			p.firstErr = fmt.Errorf("%s: %w", path, err)
+		}
 		p.cache[key] = entry
 		p.mu.Unlock()
 	}
@@ -283,6 +292,18 @@ func systemDir(machine uint16) string {
 	return filepath.Join(root, "System32")
 }
 
+// Stats says what a ProbeAll actually did, so a surprising result is a
+// diagnosis rather than a guessing game.
+type Stats struct {
+	// Files is how many paths were probed; PE how many parsed as PE
+	// binaries; Linked how many carried at least one import.
+	Files, PE, Linked int
+
+	// FirstError is the first parse failure verbatim, nil when every file
+	// parsed. One representative error names the class of problem.
+	FirstError error
+}
+
 // ProbeAll probes every path, sharing one parse cache across all of them -
 // the Windows equivalent of the ELF walk's ProbeAll, except the caller hands
 // in the file list the MFT enumeration already built instead of walking
@@ -293,7 +314,7 @@ func systemDir(machine uint16) string {
 // the runtime; the per-binary resolution afterwards is pure map lookups.
 // Parallelism 0 means a quarter of the CPUs, the politeness default the
 // extractor uses for the same reason.
-func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int) map[string][]Link {
+func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int) (map[string][]Link, Stats) {
 	if parallelism <= 0 {
 		if parallelism = runtime.NumCPU() / 4; parallelism < 1 {
 			parallelism = 1
@@ -332,10 +353,14 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 	close(queue)
 	wg.Wait()
 
+	stats := Stats{Files: len(paths)}
 	out := make(map[string][]Link)
 	for _, path := range paths {
 		if ctx.Err() != nil {
 			break
+		}
+		if _, _, isPE := p.imports(path); isPE {
+			stats.PE++
 		}
 		links, err := p.probe(path, opts)
 		if err != nil || len(links) == 0 {
@@ -343,7 +368,9 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 		}
 		out[path] = links
 	}
-	return out
+	stats.Linked = len(out)
+	stats.FirstError = p.firstErr
+	return out, stats
 }
 
 // politePause matches the rest to the work: a pause as long as the parse

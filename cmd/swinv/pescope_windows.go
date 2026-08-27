@@ -62,8 +62,10 @@ func attachPELinks(ctx context.Context, cfg *config, report *model.Report, resul
 		return
 	}
 
+	logf("pe: probing %d executable(s), %s scope%s", len(paths), cfg.elfScope,
+		map[bool]string{true: "", false: " (--fast: unpaced)"}[!cfg.fast])
 	start := time.Now()
-	byExe := pelink.ProbeAll(ctx, paths, pelink.Options{
+	byExe, stats := pelink.ProbeAll(ctx, paths, pelink.Options{
 		Symbols: cfg.elfSymbols,
 		// The politeness contract is the scan's, not only the scheduler's:
 		// every open is scanned by the antivirus at its own priority, so an
@@ -72,6 +74,15 @@ func attachPELinks(ctx context.Context, cfg *config, report *model.Report, resul
 		Polite: !cfg.fast,
 	}, cfg.parallelism)
 	if len(byExe) == 0 {
+		// Zero links from a machine full of binaries is a finding about the
+		// probe, not about the machine, and it must never pass silently.
+		msg := fmt.Sprintf("pe: 0 of %d executable(s) produced links (%d parsed as PE)",
+			stats.Files, stats.PE)
+		if stats.FirstError != nil {
+			msg += fmt.Sprintf("; first parse error: %v", stats.FirstError)
+		}
+		logf("%s", msg)
+		report.Scan.AddWarning(msg)
 		return
 	}
 
