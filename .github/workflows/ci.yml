@@ -109,7 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           out="$(mktemp -d)"
-          sudo ./bin/swinv --out "$out" --catalogers os --fast --timeout 6m \
+          sudo ./bin/swinv --out "$out" --catalogers os --fast --timeout 12m \
             --format ndjson --ndjson-include all \
             --exclude './usr/local/**' --exclude './usr/share/**' \
             --exclude './opt/**' --exclude './snap/**' --exclude './mnt/**' \
@@ -264,7 +264,7 @@ jobs:
           # is where os-release lives, and losing it costs every PURL.
           run() {
             out="$1"; shift
-            sudo ./bin/swinv --out "$out" --catalogers os --fast --timeout 6m \
+            sudo ./bin/swinv --out "$out" --catalogers os --fast --timeout 12m \
               --format json,csv \
               --exclude './usr/local/**' --exclude './usr/share/**' \
               --exclude './usr/src/**' --exclude './usr/lib/jvm/**' \
