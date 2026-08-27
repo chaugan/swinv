@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -58,14 +59,19 @@ type Options struct {
 	// OS. Tests set it; nothing else should need to.
 	SystemDir string
 
-	// Polite paces the probe: one worker, and after each file a pause as
-	// long as the parse took (bounded). The process being in background
-	// priority is not enough, because the probe's cost is not its own CPU:
-	// every open is scanned by the antivirus at ITS priority, so a probe
-	// that opens files as fast as it can turns the AV into a foreground
-	// workload on 100k files. Measured consequence before this existed:
-	// "almost killing the computer it is running on". --fast turns it off.
+	// Polite paces the probe: after each file, each worker pauses as long
+	// as the parse took (bounded), giving everything else half the wall
+	// clock. The process being in background priority is not enough,
+	// because the probe's cost is not its own CPU: every open is scanned by
+	// the antivirus at ITS priority, so a probe that opens files as fast as
+	// it can turns the AV into a foreground workload on 100k files.
+	// Measured consequence before this existed: "almost killing the
+	// computer it is running on". --fast turns it off.
 	Polite bool
+
+	// Logf receives progress, so a probe measured in minutes is visibly
+	// alive rather than indistinguishable from a hang. May be nil.
+	Logf func(string, ...any)
 }
 
 const (
@@ -302,6 +308,11 @@ type Stats struct {
 	// FirstError is the first parse failure verbatim, nil when every file
 	// parsed. One representative error names the class of problem.
 	FirstError error
+
+	// Aborted is set when the context expired before every path was
+	// probed. The links gathered so far are still returned: partial truth
+	// beats silence, but the caller must say the truth is partial.
+	Aborted bool
 }
 
 // ProbeAll probes every path, sharing one parse cache across all of them -
@@ -321,14 +332,9 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 		}
 	}
 
-	if opts.Polite {
-		// Politeness beats parallelism: the duty cycle only means anything
-		// when one worker owns the whole budget.
-		parallelism = 1
-	}
-
 	p := newProber()
 
+	var done int64
 	queue := make(chan string)
 	var wg sync.WaitGroup
 	for w := 0; w < parallelism; w++ {
@@ -338,12 +344,34 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 			for path := range queue {
 				start := time.Now()
 				p.imports(path)
+				atomic.AddInt64(&done, 1)
 				if opts.Polite {
 					pause(ctx, politePause(time.Since(start)))
 				}
 			}
 		}()
 	}
+
+	// A probe over a whole machine is minutes of wall clock; a minutes-long
+	// silence is indistinguishable from a hang, and an operator who cannot
+	// tell the difference kills the run.
+	progressDone := make(chan struct{})
+	if opts.Logf != nil && len(paths) > 1000 {
+		go func() {
+			tick := time.NewTicker(30 * time.Second)
+			defer tick.Stop()
+			for {
+				select {
+				case <-progressDone:
+					return
+				case <-tick.C:
+					opts.Logf("pe: still probing (%d of %d files)",
+						atomic.LoadInt64(&done), len(paths))
+				}
+			}
+		}()
+	}
+
 	for _, path := range paths {
 		if ctx.Err() != nil {
 			break
@@ -352,11 +380,13 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 	}
 	close(queue)
 	wg.Wait()
+	close(progressDone)
 
 	stats := Stats{Files: len(paths)}
 	out := make(map[string][]Link)
 	for _, path := range paths {
 		if ctx.Err() != nil {
+			stats.Aborted = true
 			break
 		}
 		if _, _, isPE := p.imports(path); isPE {
@@ -367,6 +397,9 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 			continue
 		}
 		out[path] = links
+	}
+	if ctx.Err() != nil {
+		stats.Aborted = true
 	}
 	stats.Linked = len(out)
 	stats.FirstError = p.firstErr

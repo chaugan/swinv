@@ -7,6 +7,37 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Fixed
+
+- **The Windows all-scope probe could burn twenty minutes and then vanish
+  without a trace.** Three causes, all found by the first real run on a
+  laptop: the probe shared the scan's --timeout context, which was already
+  nearly spent, so every loop quietly obeyed the expired deadline and the
+  output carried link: 0 with no error anywhere; the probe list included
+  ~50,000 System32 DLLs the inventory's own rule says to represent by the
+  installed updates, not file by file; and it ran unpaced at quarter-CPU,
+  which turned the antivirus - which scans every open at its own priority -
+  into a foreground workload ("almost killing the computer"). Now: the
+  probe gets its own deadline (the transmitDeadline precedent), OS and
+  Store territory is excluded from the probe list (system DLLs still
+  appear as links, marked os_component, when something loads them), each
+  worker pauses as long as its last parse took unless --fast, progress is
+  logged every 30 seconds, and a deadline hit lands in scan.warnings as
+  "the link records are PARTIAL" instead of silence.
+- **A registry product with a recovered location under C:\Windows owned
+  the operating system.** The "Application Compatibility Fix Database"
+  entry's longest-prefix match claimed ntdll.dll, WS2_32.dll and
+  wininit.exe on a real machine, and os_component never fired because the
+  wrong owner answered first. The OS-territory check now outranks the
+  containing-directory rung in both attribution ladders; only a component
+  that recorded the exact file path may claim a file inside the Windows
+  directory.
+- **A zero-link probe result is a stated finding, not a silence**: the
+  probe reports files probed, PE-parsed and linked, plus the first parse
+  error verbatim, into the log and scan.warnings.
+
 ## [0.9.0] - 2026-08-27
 
 The import table: what every Windows binary loads.

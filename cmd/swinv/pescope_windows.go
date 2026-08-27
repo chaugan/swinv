@@ -27,7 +27,7 @@ import (
 // It runs after attribution because the join needs the finished component
 // list, where the ELF probe runs before the scan because its join rides the
 // package databases' file lists - two roads to the same record shape.
-func attachPELinks(ctx context.Context, cfg *config, report *model.Report, result *scan.Result, logf func(string, ...any)) {
+func attachPELinks(cfg *config, report *model.Report, result *scan.Result, logf func(string, ...any)) {
 	if cfg.elfScope == elfScopeOff {
 		return
 	}
@@ -64,15 +64,31 @@ func attachPELinks(ctx context.Context, cfg *config, report *model.Report, resul
 
 	logf("pe: probing %d executable(s), %s scope%s", len(paths), cfg.elfScope,
 		map[bool]string{true: "", false: " (--fast: unpaced)"}[!cfg.fast])
+
+	// The probe's own deadline, deliberately not the scan's. --timeout is
+	// normally already spent by the time this runs - the first real all-scope
+	// run burned twenty minutes of probing and then vanished without a trace,
+	// because the shared context had expired and every loop quietly obeyed
+	// it. Same reasoning as transmitDeadline, same shape.
+	probeCtx, cancel := context.WithTimeout(context.Background(), cfg.timeout)
+	defer cancel()
+
 	start := time.Now()
-	byExe, stats := pelink.ProbeAll(ctx, paths, pelink.Options{
+	byExe, stats := pelink.ProbeAll(probeCtx, paths, pelink.Options{
 		Symbols: cfg.elfSymbols,
 		// The politeness contract is the scan's, not only the scheduler's:
 		// every open is scanned by the antivirus at its own priority, so an
 		// unpaced probe over 100k files makes the AV a foreground workload
 		// no background-mode flag can soften. --fast means now, as always.
 		Polite: !cfg.fast,
+		Logf:   logf,
 	}, cfg.parallelism)
+	if stats.Aborted {
+		msg := fmt.Sprintf("pe: the probe hit its %s deadline after %d of %d file(s); "+
+			"the link records are PARTIAL", cfg.timeout, stats.PE, stats.Files)
+		logf("%s", msg)
+		report.Scan.AddWarning(msg)
+	}
 	if len(byExe) == 0 {
 		// Zero links from a machine full of binaries is a finding about the
 		// probe, not about the machine, and it must never pass silently.

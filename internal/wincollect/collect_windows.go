@@ -145,7 +145,13 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 			if e.Path == "" {
 				continue
 			}
-			if isExecutable(e.Name) {
+			// OS and Store territory is deliberately left out of the
+			// import-probe list, by the same rule the extractor applies: the
+			// operating system is represented by its updates, not file by
+			// file, and probing 50,000 System32 DLLs answers no question a
+			// consumer asks. They still appear as links - resolved, marked
+			// os_component - whenever a product's binary actually loads one.
+			if isExecutable(e.Name) && !OSOrStoreTerritory(e.Path, volume) {
 				res.Executables = append(res.Executables, e.Path)
 			}
 			if OSOrStoreTerritory(e.Path, volume) {
