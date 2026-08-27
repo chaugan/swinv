@@ -1,21 +1,17 @@
 # Windows support - design
 
-> **Status: proposed. None of this is implemented.**
+> **Status: this was the design brief, and it has since been built.** The
+> registry cataloger, Store/MSIX packages, servicing state, the MFT
+> enumeration behind `--full-scan`, socket attribution, containers over the
+> named pipe, PE import-table linkage (`--elf-scope`) and the configuration
+> surface (`--config-scope`) all ship today - see the
+> [README](../README.md#windows), [docs/OUTPUT.md](OUTPUT.md) and
+> [docs/FLAGS.md](FLAGS.md) for what the shipped behaviour actually is.
 >
-> Every other document in `docs/` describes behaviour that ships and has been
-> run. This one does not: there is no registry cataloger, no MSI or Appx
-> support, and no USN or MFT enumeration. Not one line of it exists in the tree.
->
-> What *has* happened since this was written is that the existing Linux
-> collector, cross-compiled unchanged, was run on a real Windows 11 machine.
-> That found five defects and produced the measurements now marked **Measured**
-> throughout. Those sections are evidence; everything else is still reasoning.
->
-> The distinction matters when reading the performance discussion below. A
-> `swinv.exe` that walks `C:\Program Files` today is the Linux strategy running
-> on a platform it was not designed for - it finds files by walking directories,
-> because that is where Linux keeps its truth. It is not what this document
-> proposes.
+> The document is kept as the design record: why the registry rather than
+> `Win32_Product`, why the MFT rather than a directory walk, what was
+> measured before a line was written, and which alternatives were rejected.
+> Where it disagrees with the shipped docs, the shipped docs win.
 
 Part of the [swinv](../README.md) documentation.
 

@@ -203,7 +203,7 @@ Status goes to stderr; only `--stdout` data goes to stdout. The JSON:
 
 ```jsonc
 {
-  "schema_version": "1.13",
+  "schema_version": "1.14",
   "tool": { "name": "swinv", "version": "dev", "syft_version": "v1.51.0" },
   "host": {
     "hostname": "web-01",
@@ -827,6 +827,8 @@ sources.
 | package repository | Store and MSIX apps |
 | component store | Windows servicing state - cumulative update, servicing stack, .NET rollup |
 | `iphlpapi` | what is listening, with the process holding each socket |
+| PE import tables | what each binary loads, joined to installed products (`--elf-scope`) |
+| task store and Run keys | scheduled tasks and autoruns, with ATT&CK ids (`--config-scope`) |
 | the container runtime | containers, their images and their packages |
 
 The same run produces `services[]`, `exposure[]` and `containers[]` - see
