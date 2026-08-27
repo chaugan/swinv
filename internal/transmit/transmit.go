@@ -71,14 +71,38 @@ type Options struct {
 	ClientCertFile string
 	ClientKeyFile  string
 
+	// KeyPassphrase decrypts ClientKeyFile when the estate hands out
+	// passphrase-protected keys, which any estate running a CA does.
+	KeyPassphrase []byte
+
 	// CAFile is a PEM bundle to verify the server against, for an internal CA
 	// that is not in the system trust store.
 	CAFile string
+
+	// Pins verifies the server by public key instead of by chain: each entry
+	// is the base64 SHA-256 of a SubjectPublicKeyInfo. Repeatable so a key
+	// rotation is two pins for a while rather than a flag day. Mutually
+	// exclusive with InsecureSkipVerify.
+	Pins []string
+
+	// TLSMinVersion raises the TLS floor. Zero means 1.2; there is no value
+	// that lowers it.
+	TLSMinVersion uint16
 
 	// InsecureSkipVerify disables server certificate verification. It exists
 	// for a first-day trial against a self-signed endpoint and is loud
 	// everywhere it appears.
 	InsecureSkipVerify bool
+
+	// Compress controls the request bodies: "auto" (the default - gzip when
+	// it helps), "always", or "never". "never" exists to diagnose the proxy
+	// or WAF that mangles gzipped bodies, a real failure mode that is
+	// miserable to chase when compression cannot be turned off.
+	Compress string
+
+	// RateLimitBytesPerSec caps upload throughput for metered links.
+	// Zero is unlimited.
+	RateLimitBytesPerSec int64
 
 	BatchLines     int
 	BatchBytes     int
@@ -132,6 +156,16 @@ func New(opts Options) (*Client, error) {
 	}
 	if opts.Token == "" && opts.ClientCertFile == "" {
 		return nil, fmt.Errorf("transmit: no credentials; supply a bearer token or a client certificate")
+	}
+	if len(opts.Pins) > 0 && opts.InsecureSkipVerify {
+		// An error, not a precedence rule: whichever one the operator meant,
+		// the other one in the unit file is a mistake worth stopping for.
+		return nil, fmt.Errorf("transmit: a pinned key and --transmit-insecure contradict each other; remove one")
+	}
+	switch opts.Compress {
+	case "", "auto", "always", "never":
+	default:
+		return nil, fmt.Errorf("transmit: compress mode %q is not auto, always or never", opts.Compress)
 	}
 
 	hc := opts.HTTPClient
@@ -310,26 +344,41 @@ func (c *Client) closeScan(ctx context.Context, scanID string) (*CloseVerdict, e
 func (c *Client) do(ctx context.Context, method, url, scanID string, body []byte, gzipBody bool, out any) error {
 	payload := body
 	encoding := ""
-	if gzipBody && len(body) > 0 {
+	if gzipBody && len(body) > 0 && c.opts.Compress != "never" {
 		compressed, err := gzipBytes(body)
 		if err != nil {
 			return err
 		}
-		// Only when it actually helps. It always does on this data -- NDJSON
-		// of package records compresses about 9:1 -- but a batch that grew
-		// under compression would be a strange thing to insist on.
-		if len(compressed) < len(body) {
+		// Auto compresses only when it actually helps. It always does on this
+		// data -- NDJSON of package records compresses about 9:1 -- but a
+		// batch that grew under compression would be a strange thing to
+		// insist on. "always" insists anyway, for the operator who wants the
+		// unit file to state what is on the wire.
+		if len(compressed) < len(body) || c.opts.Compress == "always" {
 			payload, encoding = compressed, "gzip"
 		}
 	}
 
 	return retry(ctx, c.opts.Attempts, c.opts.Logf, func(attempt int) error {
-		reqCtx, cancel := context.WithTimeout(ctx, c.opts.RequestTimeout)
+		timeout := c.opts.RequestTimeout
+		if c.opts.RateLimitBytesPerSec > 0 && payload != nil {
+			// A deliberately slow upload must not trip the per-request
+			// deadline that assumes full speed. Twice the paced duration,
+			// floored at the normal timeout, keeps the deadline meaningful.
+			paced := time.Duration(int64(len(payload))*int64(time.Second)/c.opts.RateLimitBytesPerSec) * 2
+			if paced > timeout {
+				timeout = paced
+			}
+		}
+		reqCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
 		var rdr io.Reader
 		if payload != nil {
 			rdr = bytes.NewReader(payload)
+			if c.opts.RateLimitBytesPerSec > 0 {
+				rdr = &throttledReader{r: rdr, bps: c.opts.RateLimitBytesPerSec, ctx: reqCtx}
+			}
 		}
 		req, err := http.NewRequestWithContext(reqCtx, method, url, rdr)
 		if err != nil {

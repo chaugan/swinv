@@ -8,6 +8,7 @@ require (
 	github.com/anchore/go-rpmdb v0.2.0
 	github.com/anchore/syft v1.51.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
+	golang.org/x/crypto v0.54.0
 	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.55.0
 )
@@ -258,7 +259,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect
-	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.57.0 // indirect

@@ -7,6 +7,39 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Added
+
+- **Transmit mode grew its deployment surface** (#9), the flags an estate
+  with real certificate handling and real network policy needs:
+  - `--transmit-key` now accepts PKCS#8 encrypted private keys (PBES2, the
+    format `openssl pkcs8 -topk8 -v2 aes-256-cbc` writes), decrypted
+    in-process with no dependency added. The passphrase comes from a systemd
+    credential (`swinv.key-passphrase`, TPM-sealed via
+    `LoadCredentialEncrypted=`), `--transmit-key-passphrase-file` (refused
+    unless mode 0600), or `$SWINV_TRANSMIT_KEY_PASSPHRASE`, in that order,
+    each logged when used. The legacy RFC 1423 format is refused with the
+    command that re-wraps it. No interactive prompt: this runs from a timer.
+  - `--transmit-pin` verifies the server by public key (base64 SHA-256 of
+    the SubjectPublicKeyInfo; repeatable for rotation), for the site whose
+    CA cannot reach the trust store and should not be pushed to
+    `--transmit-insecure`. A mismatch prints the pins the server presented.
+  - `--transmit-check` validates endpoint, auth, TLS, certificate expiry,
+    proxy and clock skew in one command, one greppable line per check,
+    without scanning - so a bad token no longer takes a 30-minute scan to
+    diagnose.
+  - `--transmit-only` flushes the spooled backlog without scanning;
+    `--transmit-from` sends an existing NDJSON file (relay hosts, backfill),
+    refused when its manifest disagrees with its contents.
+  - `--transmit-require-complete` (on by default) withholds the upload when
+    an inventory source failed: a partial inventory on the server reads as a
+    healthy small host, and the refusal belongs where the exit code is
+    visible.
+  - `--transmit-tls-min` (1.2 default, can only be raised),
+    `--transmit-compress auto|always|never`, and `--transmit-rate-limit`
+    for metered links.
+
 ## [0.7.1] - 2026-08-25
 
 Records that say where they belong, and a manifest that cannot be silently short.

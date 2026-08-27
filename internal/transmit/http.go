@@ -23,17 +23,34 @@ import (
 // pointed at the egress path, and a collector that ignored them would be the
 // one thing an operator has to special-case in the firewall.
 func buildHTTPClient(opts Options) (*http.Client, error) {
-	tlsCfg := &tls.Config{
+	minVersion := opts.TLSMinVersion
+	if minVersion == 0 {
 		// TLS 1.2 floor: the server contract is HTTPS and anything below this
 		// has no business carrying an inventory of a machine's software.
-		MinVersion:         tls.VersionTLS12,
+		minVersion = tls.VersionTLS12
+	}
+	tlsCfg := &tls.Config{
+		MinVersion:         minVersion,
 		InsecureSkipVerify: opts.InsecureSkipVerify, // #nosec G402 -- opt-in, and refused unless asked for
 	}
 
-	if opts.ClientCertFile != "" {
-		cert, err := tls.LoadX509KeyPair(opts.ClientCertFile, opts.ClientKeyFile)
+	if len(opts.Pins) > 0 {
+		pins, err := parsePins(opts.Pins)
 		if err != nil {
-			return nil, fmt.Errorf("transmit: loading the client certificate: %w", err)
+			return nil, err
+		}
+		// Pin-based verification replaces chain verification rather than
+		// adding to it - the flag exists for the site whose CA cannot be made
+		// valid on this host. InsecureSkipVerify here only disables the chain
+		// check; VerifyPeerCertificate still runs and still refuses.
+		tlsCfg.InsecureSkipVerify = true // #nosec G402 -- verification happens in pinVerifier
+		tlsCfg.VerifyPeerCertificate = pinVerifier(pins)
+	}
+
+	if opts.ClientCertFile != "" {
+		cert, err := loadClientCertificate(opts.ClientCertFile, opts.ClientKeyFile, opts.KeyPassphrase)
+		if err != nil {
+			return nil, err
 		}
 		tlsCfg.Certificates = []tls.Certificate{cert}
 	}

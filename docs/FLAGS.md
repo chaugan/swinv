@@ -599,6 +599,15 @@ report, `services[]` included.
 | `--transmit-batch-bytes SIZE` | `1MiB` | Maximum uncompressed bytes per request. |
 | `--transmit-attempts N` | `5` | Attempts per request including the first, with exponential backoff and jitter. |
 | `--transmit-timeout DURATION` | `60s` | Deadline for one request, not for the whole upload. |
+| `--transmit-key-passphrase-file PATH` | *(none)* | Passphrase for an encrypted `--transmit-key`. A systemd credential or `$SWINV_TRANSMIT_KEY_PASSPHRASE` also works; see below. |
+| `--transmit-pin SPKI` | *(none)* | Verify the server by its public key: base64 SHA-256 of the SubjectPublicKeyInfo. Repeatable. |
+| `--transmit-tls-min VERSION` | `1.2` | Minimum TLS version, `1.2` or `1.3`. There is no spelling that lowers the floor. |
+| `--transmit-check` | `false` | Validate endpoint, auth, TLS and clock, then exit. No scan, nothing sent. |
+| `--transmit-only` | `false` | Send the spooled backlog and exit. No scan. |
+| `--transmit-from PATH` | *(none)* | Send this NDJSON file and exit. Refused when its manifest disagrees with its contents. |
+| `--transmit-rate-limit SIZE/s` | *(unlimited)* | Cap upload throughput, e.g. `256KiB`, for metered links. |
+| `--transmit-compress MODE` | `auto` | `auto`, `always`, or `never`. |
+| `--transmit-require-complete` | `true` | Do not transmit a scan whose sources failed; `=false` sends anyway. |
 
 **There is no `--transmit-token` flag.** Every process on the machine can read
 `/proc/<pid>/cmdline`, so a token on the command line is a token handed to
@@ -633,6 +642,69 @@ which is the one 4xx that says "later" rather than "no". A permanent failure
 says so on stderr and leaves the spool in place.
 
 **Proxies.** `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` are honoured.
+
+**Encrypted client keys.** `--transmit-key` accepts a PKCS#8 encrypted key -
+the `BEGIN ENCRYPTED PRIVATE KEY` that `openssl pkcs8 -topk8 -v2 aes-256-cbc`
+writes - decrypted in-process with no dependency added. The legacy RFC 1423
+format (`Proc-Type: 4,ENCRYPTED` in the PEM) is refused by name with the
+command that re-wraps it: its MD5-based construction was deprecated out of
+Go's standard library and should not ride into a new deployment. The
+passphrase comes from, in order of preference, each logged when used:
+
+1. **A systemd credential named `swinv.key-passphrase`** - the packaged unit's
+   `LoadCredentialEncrypted=` seals it to the TPM on modern hosts. This is the
+   right arrangement for a collector that runs unattended from a timer.
+2. **`--transmit-key-passphrase-file`**, refused unless the file is mode
+   `0600`: an encrypted key whose passphrase sits world-readable next to it is
+   theatre.
+3. **`$SWINV_TRANSMIT_KEY_PASSPHRASE`**, the weakest option, documented as
+   such.
+
+There is no interactive prompt on purpose. This runs from a timer, and a flag
+that can block forever on a TTY that is not there is a hang, not a feature.
+
+**Pinning.** `--transmit-pin` verifies the server by public key instead of by
+chain, for the site that cannot get its CA into the trust store and should not
+be pushed to `--transmit-insecure`. Any certificate in the presented chain may
+match, so pinning an internal CA's key survives leaf rotation; giving the flag
+twice makes a key rotation two pins for a while rather than a flag day. The
+pin is the base64 SHA-256 of the SubjectPublicKeyInfo:
+
+```sh
+openssl x509 -in server.crt -pubkey -noout \
+  | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
+```
+
+A mismatch refuses the connection and prints the pins the server presented,
+so a first deployment is: run `--transmit-check` once, copy the pin from the
+output, run again. `--transmit-pin` and `--transmit-insecure` together are an
+error, not a precedence rule.
+
+**Preflight.** `--transmit-check` contacts the server, authenticates, and
+prints one greppable line per check - reachable, TLS version and cipher,
+certificate expiry and observed pin, credentials accepted or rejected, proxy
+in use, clock skew - without scanning or sending anything. Non-zero exit on
+any failure. This is the first step of the runbook and a natural `postinst`
+check; without it, diagnosing a bad token means running a full scan to find
+out.
+
+**Sending without scanning.** `--transmit-only` flushes the spooled backlog -
+the server was down for a day, the spool holds the scans, and no host should
+need a fresh 30-minute scan to deliver them. `--transmit-from FILE` sends one
+existing NDJSON file, for relay hosts (a segment with no route to the server
+writes files; a host that can reach it sends them) and for backfilling a new
+server. The file must carry a manifest whose counts agree with its contents;
+a file already known to be wrong is refused before a byte leaves the machine.
+
+**Do not let a degraded scan become the fleet's truth.**
+`--transmit-require-complete` (on by default) withholds the upload when an
+inventory source failed. A scan where the dpkg cataloger failed produces a
+valid file with a plausible component count, and once it is on the server it
+*is* the host's inventory: the matcher correctly reports few findings because
+few packages were assessed, and every layer succeeds while the host goes
+silently unassessed. The refusal happens at the host, where the exit code (5)
+is visible, instead of in a reconciliation report nobody reads. The files on
+disk are still written; `=false` restores "send what you have".
 
 **`--transmit` implies the manifest.** The server opens a scan with the
 heartbeat record and reconciles the close against its counts, so the record is

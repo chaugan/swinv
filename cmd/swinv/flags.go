@@ -134,11 +134,17 @@ func validateTransmit(cfg *config) (int, error) {
 		// took effect. An operator who set --transmit-batch-lines and forgot
 		// --transmit would otherwise see a clean run and no upload.
 		for name, set := range map[string]bool{
-			"--transmit-token-file": cfg.transmitTokenFile != "",
-			"--transmit-cert":       cfg.transmitCert != "",
-			"--transmit-key":        cfg.transmitKey != "",
-			"--transmit-ca":         cfg.transmitCA != "",
-			"--transmit-insecure":   cfg.transmitInsecure,
+			"--transmit-token-file":          cfg.transmitTokenFile != "",
+			"--transmit-cert":                cfg.transmitCert != "",
+			"--transmit-key":                 cfg.transmitKey != "",
+			"--transmit-key-passphrase-file": cfg.transmitKeyPassphraseFile != "",
+			"--transmit-ca":                  cfg.transmitCA != "",
+			"--transmit-pin":                 len(cfg.transmitPins) > 0,
+			"--transmit-insecure":            cfg.transmitInsecure,
+			"--transmit-check":               cfg.transmitCheck,
+			"--transmit-only":                cfg.transmitOnly,
+			"--transmit-from":                cfg.transmitFrom != "",
+			"--transmit-rate-limit":          cfg.transmitRateLimit != "",
 		} {
 			if set {
 				return exitUsage, fmt.Errorf("%s requires --transmit", name)
@@ -178,6 +184,38 @@ func validateTransmit(cfg *config) (int, error) {
 		return exitUsage, fmt.Errorf("--transmit-batch-bytes must be positive, got %s", cfg.transmitBatchBytes)
 	}
 	cfg.transmitBatchBytesN = n
+
+	if len(cfg.transmitPins) > 0 && cfg.transmitInsecure {
+		return exitUsage, fmt.Errorf("--transmit-pin and --transmit-insecure contradict each other: " +
+			"one verifies the server by its key, the other verifies nothing; remove one")
+	}
+	switch cfg.transmitTLSMin {
+	case "1.2", "1.3":
+	default:
+		return exitUsage, fmt.Errorf("--transmit-tls-min must be 1.2 or 1.3, got %q", cfg.transmitTLSMin)
+	}
+	switch cfg.transmitCompress {
+	case "auto", "always", "never":
+	default:
+		return exitUsage, fmt.Errorf("--transmit-compress must be auto, always or never, got %q", cfg.transmitCompress)
+	}
+	if cfg.transmitRateLimit != "" {
+		rate, err := parseSize(cfg.transmitRateLimit)
+		if err != nil {
+			return exitUsage, fmt.Errorf("--transmit-rate-limit: %w", err)
+		}
+		if rate < 0 {
+			return exitUsage, fmt.Errorf("--transmit-rate-limit must not be negative, got %s", cfg.transmitRateLimit)
+		}
+		cfg.transmitRateLimitN = rate
+	}
+	if cfg.transmitCheck && (cfg.transmitOnly || cfg.transmitFrom != "") {
+		return exitUsage, fmt.Errorf("--transmit-check validates without sending; it cannot be combined with --transmit-only or --transmit-from")
+	}
+	if cfg.transmitOnly && cfg.transmitFrom != "" {
+		return exitUsage, fmt.Errorf("--transmit-only sends the spool and --transmit-from sends one file; pick one " +
+			"(--transmit-from also sends any spooled backlog for the same server first)")
+	}
 
 	if cfg.transmitInsecure {
 		// Loud where it is used, not only where it is documented. A trial flag
@@ -293,4 +331,13 @@ func registerFlags(fs *flag.FlagSet, cfg *config) {
 	fs.StringVar(&cfg.transmitBatchBytes, "transmit-batch-bytes", "1MiB", "maximum uncompressed bytes per request; whichever of the two batch limits trips first ends the batch")
 	fs.IntVar(&cfg.transmitAttempts, "transmit-attempts", transmit.DefaultAttempts, "attempts per request, including the first, with exponential backoff and jitter between them")
 	fs.DurationVar(&cfg.transmitTimeout, "transmit-timeout", transmit.DefaultRequestTimeout, "deadline for one request, not for the whole upload")
+	fs.StringVar(&cfg.transmitKeyPassphraseFile, "transmit-key-passphrase-file", "", "passphrase for an encrypted --transmit-key; a systemd credential named "+transmitKeyCredential+" or $"+transmitKeyPassEnv+" also works. There is no flag for the passphrase itself, for the same reason there is none for the token")
+	fs.Var(&cfg.transmitPins, "transmit-pin", "pin the server's public key: base64 SHA-256 of the SubjectPublicKeyInfo; repeatable, so a key rotation is two pins for a while rather than a flag day")
+	fs.StringVar(&cfg.transmitTLSMin, "transmit-tls-min", "1.2", "minimum TLS version, 1.2 or 1.3; there is no spelling that lowers it")
+	fs.BoolVar(&cfg.transmitCheck, "transmit-check", false, "validate the endpoint, auth, TLS and clock, then exit without scanning or sending anything")
+	fs.BoolVar(&cfg.transmitOnly, "transmit-only", false, "send spooled scans and exit; do not scan. This is how a host that was offline flushes its backlog without a fresh scan")
+	fs.StringVar(&cfg.transmitFrom, "transmit-from", "", "send this NDJSON file and exit; refused when its manifest disagrees with its contents. For relay hosts and backfill")
+	fs.StringVar(&cfg.transmitRateLimit, "transmit-rate-limit", "", "cap upload throughput in bytes per second, e.g. 256KiB; empty or 0 is unlimited")
+	fs.StringVar(&cfg.transmitCompress, "transmit-compress", "auto", "gzip the request bodies: auto, always, or never; never exists to diagnose a proxy that mangles compressed bodies")
+	fs.BoolVar(&cfg.transmitRequireComplete, "transmit-require-complete", true, "=false: transmit even when an inventory source failed. On by default: a partial inventory on the server reads as a healthy small host")
 }

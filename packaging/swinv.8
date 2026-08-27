@@ -542,6 +542,55 @@ Maximum records and maximum uncompressed bytes per request; default 2000 and
 Attempts per request including the first (default 5, exponential backoff with
 jitter), and the deadline for one request rather than for the whole upload
 (default 60s). 5xx and network failures are retried; 4xx are not, except 429.
+.It Fl -transmit-key-passphrase-file Ar path
+Passphrase for an encrypted
+.Fl -transmit-key
+(PKCS#8 PBES2, the format
+.Ql openssl pkcs8 -topk8 -v2 aes-256-cbc
+writes). Preferred over this flag: a systemd credential named
+.Ql swinv.key-passphrase ,
+which
+.Ql LoadCredentialEncrypted=
+seals to the TPM. The environment variable
+.Ev SWINV_TRANSMIT_KEY_PASSPHRASE
+is the weakest option. The file is refused unless it is mode 0600. The legacy
+RFC 1423 encrypted PEM is refused with the command that re-wraps it. There is
+no interactive prompt: this runs from a timer.
+.It Fl -transmit-pin Ar spki
+Verify the server by public key: the base64 SHA-256 of its
+SubjectPublicKeyInfo. Repeatable, so a key rotation is two pins for a while
+rather than a flag day. Any certificate in the presented chain may match.
+Mutually exclusive with
+.Fl -transmit-insecure .
+.It Fl -transmit-tls-min Ar version
+Minimum TLS version, 1.2 (default) or 1.3. There is no spelling that lowers
+the floor.
+.It Fl -transmit-check
+Validate the endpoint, credentials, TLS and clock, print one line per check,
+and exit without scanning or sending anything. Non-zero exit on any failure.
+.It Fl -transmit-only
+Send the spooled backlog and exit without scanning. This is how a host that
+was offline flushes its queue without a fresh scan.
+.It Fl -transmit-from Ar path
+Send an existing NDJSON file and exit. The file must carry a manifest whose
+counts agree with its contents; a file already known to be wrong is refused
+before a byte leaves the machine. For relay hosts and backfill.
+.It Fl -transmit-rate-limit Ar size
+Cap upload throughput in bytes per second, e.g.
+.Ql 256KiB ,
+for metered links. Unlimited by default.
+.It Fl -transmit-compress Ar mode
+.Ql auto
+(default, gzip when it helps),
+.Ql always ,
+or
+.Ql never
+- which exists to diagnose a proxy that mangles compressed bodies.
+.It Fl -transmit-require-complete
+On by default: a scan whose inventory sources failed is not transmitted,
+because a partial inventory on the server reads as a healthy small host.
+.Ql =false
+sends anyway. The files on disk are written either way.
 .It Fl -version
 Print the
 .Nm

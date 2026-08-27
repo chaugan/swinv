@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +24,56 @@ import (
 // in the journal besides.
 // #nosec G101 -- this is the name of an environment variable, not a token
 const transmitTokenEnv = "SWINV_TRANSMIT_TOKEN"
+
+// transmitKeyPassEnv is the weakest of the three passphrase sources, and
+// documented as such: the environment of a process is visible to its own uid
+// and survives into core dumps.
+// #nosec G101 -- this is the name of an environment variable, not a secret
+const transmitKeyPassEnv = "SWINV_TRANSMIT_KEY_PASSPHRASE"
+
+// transmitKeyCredential is the systemd credential name the packaged unit
+// loads. LoadCredentialEncrypted= seals it to the TPM on modern hosts, which
+// is the correct place for a passphrase on a machine that scans unattended.
+const transmitKeyCredential = "swinv.key-passphrase"
+
+// transmitKeyPassphrase resolves the key passphrase, strongest source first,
+// and says which one was used - an encrypted key whose passphrase sits in a
+// world-readable file next to it is theatre, and the operator deserves to
+// know which of the three arrangements this run is actually relying on.
+func transmitKeyPassphrase(cfg *config, logf func(string, ...any)) ([]byte, error) {
+	if dir := os.Getenv("CREDENTIALS_DIRECTORY"); dir != "" {
+		path := filepath.Join(dir, transmitKeyCredential)
+		raw, err := os.ReadFile(path) // #nosec G304 -- the path systemd provides
+		if err == nil {
+			logf("transmit: key passphrase from the systemd credential %s", transmitKeyCredential)
+			return bytes.TrimSpace(raw), nil
+		}
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("reading the systemd credential %s: %w", transmitKeyCredential, err)
+		}
+	}
+	if cfg.transmitKeyPassphraseFile != "" {
+		if err := refuseOpenPassphraseFile(cfg.transmitKeyPassphraseFile); err != nil {
+			return nil, err
+		}
+		raw, err := os.ReadFile(cfg.transmitKeyPassphraseFile) // #nosec G304 -- operator-supplied path, by design
+		if err != nil {
+			return nil, fmt.Errorf("--transmit-key-passphrase-file: %w", err)
+		}
+		pass := bytes.TrimSpace(raw)
+		if len(pass) == 0 {
+			return nil, fmt.Errorf("--transmit-key-passphrase-file: %s is empty", cfg.transmitKeyPassphraseFile)
+		}
+		logf("transmit: key passphrase from %s", cfg.transmitKeyPassphraseFile)
+		return pass, nil
+	}
+	if v := os.Getenv(transmitKeyPassEnv); v != "" {
+		logf("transmit: key passphrase from $%s (the weakest of the three sources; "+
+			"prefer a systemd credential)", transmitKeyPassEnv)
+		return []byte(strings.TrimSpace(v)), nil
+	}
+	return nil, nil
+}
 
 // transmitToken resolves the bearer token from its file or the environment.
 func transmitToken(cfg *config) (string, error) {
@@ -45,19 +97,44 @@ func newTransmitClient(cfg *config, logf func(string, ...any)) (*transmit.Client
 	if err != nil {
 		return nil, err
 	}
+	passphrase, err := transmitKeyPassphrase(cfg, logf)
+	if err != nil {
+		return nil, err
+	}
+	tlsMin, err := transmitTLSMin(cfg.transmitTLSMin)
+	if err != nil {
+		return nil, err
+	}
 	return transmit.New(transmit.Options{
-		BaseURL:            cfg.transmit,
-		Token:              token,
-		ClientCertFile:     cfg.transmitCert,
-		ClientKeyFile:      cfg.transmitKey,
-		CAFile:             cfg.transmitCA,
-		InsecureSkipVerify: cfg.transmitInsecure,
-		BatchLines:         cfg.transmitBatchLines,
-		BatchBytes:         int(cfg.transmitBatchBytesN),
-		Attempts:           cfg.transmitAttempts,
-		RequestTimeout:     cfg.transmitTimeout,
-		Logf:               logf,
+		BaseURL:              cfg.transmit,
+		Token:                token,
+		ClientCertFile:       cfg.transmitCert,
+		ClientKeyFile:        cfg.transmitKey,
+		KeyPassphrase:        passphrase,
+		CAFile:               cfg.transmitCA,
+		Pins:                 cfg.transmitPins,
+		TLSMinVersion:        tlsMin,
+		InsecureSkipVerify:   cfg.transmitInsecure,
+		BatchLines:           cfg.transmitBatchLines,
+		BatchBytes:           int(cfg.transmitBatchBytesN),
+		Attempts:             cfg.transmitAttempts,
+		RequestTimeout:       cfg.transmitTimeout,
+		Compress:             cfg.transmitCompress,
+		RateLimitBytesPerSec: cfg.transmitRateLimitN,
+		Logf:                 logf,
 	})
+}
+
+// transmitTLSMin maps the validated flag to the tls constant.
+func transmitTLSMin(v string) (uint16, error) {
+	switch v {
+	case "", "1.2":
+		return tls.VersionTLS12, nil
+	case "1.3":
+		return tls.VersionTLS13, nil
+	default:
+		return 0, fmt.Errorf("--transmit-tls-min: %q is not 1.2 or 1.3", v)
+	}
 }
 
 // spoolDir is where scans wait to be uploaded.

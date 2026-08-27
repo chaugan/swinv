@@ -144,17 +144,27 @@ type config struct {
 	verbose          bool
 	showVersion      bool
 
-	transmit            string
-	transmitTokenFile   string
-	transmitCert        string
-	transmitKey         string
-	transmitCA          string
-	transmitInsecure    bool
-	transmitBatchLines  int
-	transmitBatchBytes  string
-	transmitBatchBytesN int64
-	transmitAttempts    int
-	transmitTimeout     time.Duration
+	transmit                  string
+	transmitTokenFile         string
+	transmitCert              string
+	transmitKey               string
+	transmitKeyPassphraseFile string
+	transmitCA                string
+	transmitPins              stringList
+	transmitTLSMin            string
+	transmitInsecure          bool
+	transmitBatchLines        int
+	transmitBatchBytes        string
+	transmitBatchBytesN       int64
+	transmitAttempts          int
+	transmitTimeout           time.Duration
+	transmitCheck             bool
+	transmitOnly              bool
+	transmitFrom              string
+	transmitRateLimit         string
+	transmitRateLimitN        int64
+	transmitCompress          string
+	transmitRequireComplete   bool
 
 	// transmitInsecureWarned makes the certificate-verification opt-out
 	// announce itself on every run rather than only in the help.
@@ -197,6 +207,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 		// machine to an unverified peer.
 		fmt.Fprintln(stderr, "swinv: WARNING: --transmit-insecure: the server's certificate is not "+
 			"being verified, so this upload can be intercepted and read")
+	}
+
+	// The run modes that talk to the server without scanning exit here,
+	// before any collection machinery spins up.
+	if cfg.transmitCheck {
+		return runTransmitCheck(cfg, logf, stdout, stderr)
+	}
+	if cfg.transmitOnly || cfg.transmitFrom != "" {
+		return runTransmitSend(cfg, logf, stderr)
 	}
 
 	if cfg.showVersion {
@@ -498,7 +517,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// can still act on when the server is unreachable, so it is written first
 	// and is never conditional on the upload.
 	transmitCode := exitOK
-	if cfg.transmit != "" {
+	switch {
+	case cfg.transmit == "":
+	case cfg.transmitRequireComplete && len(failedSources) > 0:
+		// A partial inventory on the server reads as a healthy small host:
+		// the matcher correctly reports few findings because few packages
+		// were assessed, and every layer succeeds while the host goes
+		// silently unassessed. Failing here, at the host, is where the
+		// operator can still see the exit code.
+		fmt.Fprintf(stderr, "swinv: not transmitting: %d inventory source(s) failed and the scan is "+
+			"incomplete; the files are on disk, and --transmit-require-complete=false sends anyway\n",
+			len(failedSources))
+	default:
 		sendCtx, cancelSend := context.WithTimeout(context.Background(), transmitDeadline(cfg))
 		transmitCode = transmitReport(sendCtx, cfg, report, logf, stderr)
 		cancelSend()
