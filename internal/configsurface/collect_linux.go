@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/chaugan/swinv/internal/model"
+	"github.com/chaugan/swinv/internal/pathnorm"
 )
 
 // suidDirs is the standard-scope SUID walk, the same population the ELF
@@ -41,7 +42,7 @@ func Collect(ctx context.Context, opts Options) []model.ConfigEntry {
 	var out []model.ConfigEntry
 	out = append(out, collectCron(root, opts.IncludeCommands)...)
 	out = append(out, collectSystemd(root, opts.IncludeCommands)...)
-	out = append(out, collectSUID(ctx, root, opts.Scope)...)
+	out = append(out, collectSUID(ctx, opts, root, opts.Scope)...)
 
 	for i := range out {
 		markWorldWritable(root, &out[i])
@@ -210,11 +211,12 @@ func defaultRoot(user string) string {
 	return user
 }
 
-func collectSUID(ctx context.Context, root, scope string) []model.ConfigEntry {
+func collectSUID(ctx context.Context, opts Options, root, scope string) []model.ConfigEntry {
 	dirs := suidDirs
 	if scope == ScopeAll {
 		dirs = []string{"/"}
 	}
+	excluded := pathnorm.SubtreeExcludes(opts.Excludes)
 
 	// Kernel-backed and ephemeral trees have no SUID binaries worth a walk,
 	// and /proc in particular is bottomless.
@@ -231,8 +233,17 @@ func collectSUID(ctx context.Context, root, scope string) []model.ConfigEntry {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			if de.IsDir() && scope == ScopeAll {
-				if rel, rerr := filepath.Rel(base, path); rerr == nil && skip[rel] {
+			rel := strings.TrimPrefix(path, strings.TrimSuffix(root, "/"))
+			if !strings.HasPrefix(rel, "/") {
+				rel = "/" + rel
+			}
+			if de.IsDir() {
+				if scope == ScopeAll {
+					if top, rerr := filepath.Rel(base, path); rerr == nil && skip[top] {
+						return fs.SkipDir
+					}
+				}
+				if excluded != nil && excluded(rel) {
 					return fs.SkipDir
 				}
 			}
@@ -250,10 +261,6 @@ func collectSUID(ctx context.Context, root, scope string) []model.ConfigEntry {
 			mode := info.Mode()
 			if mode&(os.ModeSetuid|os.ModeSetgid) == 0 {
 				return nil
-			}
-			rel := strings.TrimPrefix(path, strings.TrimSuffix(root, "/"))
-			if !strings.HasPrefix(rel, "/") {
-				rel = "/" + rel
 			}
 			out = append(out, model.ConfigEntry{
 				Kind:       model.ConfigKindSUID,

@@ -33,6 +33,14 @@ schema and cataloger coverage may still change between releases. See
   tables: the tests cross-compile a PE and read kernel32.dll's actual
   imports rather than a synthetic.
 
+### Fixed
+
+- **The SUID and ELF walks now honour `./`-anchored `--exclude` patterns**,
+  the same subset the symlink preflight honours. They previously ignored
+  excludes entirely, which stopped being theoretical when a CI runner's
+  `/opt` toolchain cache cost the SUID walk six minutes of lstat calls
+  while the command line said `--exclude './opt/**'` the whole time.
+
 ### Changed
 
 - The MFT walk's log line names what it keeps (exe, dll, sys, ocx, cpl,

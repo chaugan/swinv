@@ -455,11 +455,13 @@ to the scan root and must start with "./", "*/", or "**/" (for example
 them.
 
 One caveat: the symlink preflight (which stops a single unreadable symlink from
-aborting the entire scan) honours only `./`-anchored patterns. `*/` and `**/`
-patterns are ignored there, so those paths are still lstat-ed during the
-preflight walk. That is the safe direction to be wrong in - over-skipping would
-let through exactly the symlink the pass exists to catch, and extra lstat calls
-are cheap where a lost scan is not.
+aborting the entire scan), the SUID walk (`--config-scope`) and the ELF walk
+(`--elf-scope all`) honour only `./`-anchored patterns. `*/` and `**/` patterns
+are ignored by all three, so those paths are still visited. That is the safe
+direction to be wrong in - over-skipping would hide exactly the file the walk
+exists to find - but the `./` form is honoured everywhere, because a CI
+runner's `/opt` toolchain cache once cost the SUID walk six minutes while the
+command line said `--exclude './opt/**'` the whole time.
 
 ## `--config-scope`
 

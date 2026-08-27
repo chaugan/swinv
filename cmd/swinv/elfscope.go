@@ -78,7 +78,7 @@ func probeELF(ctx context.Context, cfg *config, listeners *service.Result, logf 
 	// front rather than discovered: 5,845 ELF objects took about a minute and
 	// a half on the development host, most of it walking /opt.
 	if cfg.elfScope == elfScopeAll {
-		paths, truncated := elflink.FindELF(ctx, cfg.root)
+		paths, truncated := elflink.FindELF(ctx, cfg.root, cfg.excludes)
 		out.truncated = truncated
 		logf("elf: probing %d binaries under %s", len(paths), cfg.root)
 		all, libs := elflink.ProbeAll(ctx, cfg.root, paths, cfg.elfSymbols)

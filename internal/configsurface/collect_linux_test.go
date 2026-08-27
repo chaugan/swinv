@@ -144,3 +144,35 @@ func TestExecutablePathsAndOwners(t *testing.T) {
 		t.Errorf("owners not attached: %+v", entries[:2])
 	}
 }
+
+// The SUID walk honours ./-anchored excludes: the operator who wrote
+// --exclude './opt/**' meant it, and a CI runner's /opt toolchain cache
+// proved the walk was six minutes of ignoring them.
+func TestCollectSUIDHonoursExcludes(t *testing.T) {
+	root := t.TempDir()
+	for _, rel := range []string{"opt/cache/tool", "usr/bin/kept"} {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(p, 0o755|os.ModeSetuid); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := Collect(context.Background(), Options{
+		Root: root, Scope: ScopeStandard, Excludes: []string{"./opt/**"},
+	})
+	var paths []string
+	for _, e := range got {
+		if e.Kind == model.ConfigKindSUID {
+			paths = append(paths, e.Path)
+		}
+	}
+	if len(paths) != 1 || paths[0] != "/usr/bin/kept" {
+		t.Fatalf("suid paths = %v, want only /usr/bin/kept", paths)
+	}
+}

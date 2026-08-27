@@ -44,6 +44,15 @@ type Options struct {
 	// an inventory file is usually copied somewhere else. Executable paths
 	// are kept either way - a path is joinable and carries no secrets.
 	IncludeCommands bool
+
+	// Excludes are the operator's --exclude patterns. The SUID walk honours
+	// the ./-anchored subtree form, the same rule the symlink preflight
+	// applies; the fixed-path readers (cron, systemd) are not walks and are
+	// unaffected. This stopped being optional when a CI runner's /opt held
+	// a toolchain cache that took the walk six minutes to lstat through -
+	// while the run's own command line said --exclude './opt/**' the whole
+	// time.
+	Excludes []string
 }
 
 // ValidateScope rejects a scope the collector does not have.

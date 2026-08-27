@@ -362,6 +362,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Root:            configRoot,
 		Scope:           cfg.configScope,
 		IncludeCommands: !cfg.noServiceCommand,
+		Excludes:        cfg.excludes,
 	})
 	if len(configEntries) > 0 {
 		logf("config surface: %d entr(ies) collected", len(configEntries))

@@ -1,8 +1,10 @@
 package elflink
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -170,5 +172,24 @@ func TestPaths(t *testing.T) {
 	})
 	if len(got) != 2 || got[0] != "/lib/d.so" || got[1] != "/usr/lib/a.so" {
 		t.Errorf("Paths = %v", got)
+	}
+}
+
+// The ELF walk honours ./-anchored excludes the same way the SUID walk does.
+func TestFindELFHonoursExcludes(t *testing.T) {
+	root := t.TempDir()
+	elf := []byte("\x7fELF" + strings.Repeat("x", 100))
+	for _, rel := range []string{"opt/cache/big", "usr/bin/kept"} {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, elf, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	paths, _ := FindELF(context.Background(), root, []string{"./opt/**"})
+	if len(paths) != 1 || paths[0] != "/usr/bin/kept" {
+		t.Fatalf("paths = %v, want only /usr/bin/kept", paths)
 	}
 }

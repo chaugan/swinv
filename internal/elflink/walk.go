@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
+
+	"github.com/chaugan/swinv/internal/pathnorm"
 )
 
 // binaryDirs are where executables and libraries live. /opt is included
@@ -31,9 +34,11 @@ const maxWalkFiles = 2_000_000
 // top-level dirs (the /usr merge, /bin -> /usr/bin) are followed once at the
 // root level and deduplicated by the resolved path, so nothing is probed
 // twice.
-func FindELF(ctx context.Context, root string) (paths []string, truncated bool) {
+func FindELF(ctx context.Context, root string, excludes []string) (paths []string, truncated bool) {
 	seen := map[string]bool{}
 	var files int
+	excluded := pathnorm.SubtreeExcludes(excludes)
+	relFrom := strings.TrimSuffix(root, "/")
 
 	for _, dir := range binaryDirs {
 		real := filepath.Join(root, filepath.FromSlash(dir))
@@ -58,6 +63,18 @@ func FindELF(ctx context.Context, root string) (paths []string, truncated bool) 
 			if files >= maxWalkFiles {
 				truncated = true
 				return filepath.SkipAll
+			}
+			if excluded != nil {
+				rel := strings.TrimPrefix(p, relFrom)
+				if !strings.HasPrefix(rel, "/") {
+					rel = "/" + rel
+				}
+				if excluded(rel) {
+					if info.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
 			}
 			if !info.Mode().IsRegular() || info.Size() < 64 {
 				return nil
