@@ -350,16 +350,8 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 		}
 	}
 
-	if opts.Polite {
-		// The pacing bounds the workers, but the garbage collector runs on
-		// every processor the runtime sees, and an --elf-symbols probe
-		// allocates enough to keep it busy machine-wide. Politeness includes
-		// the GC: clamp the runtime to the worker count for the probe's
-		// duration. Restored on return; the scan is already finished by the
-		// time this runs, so nothing else is contending for the limit.
-		prev := runtime.GOMAXPROCS(parallelism + 1)
-		defer runtime.GOMAXPROCS(prev)
-	}
+	// The garbage collector is bounded process-wide by sched.Apply in
+	// background mode; a local GOMAXPROCS clamp here would only fight it.
 
 	p := newProber()
 	p.ctx = ctx

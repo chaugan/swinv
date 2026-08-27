@@ -227,7 +227,7 @@ func ndjsonCounts(r *model.Report) map[string]int {
 		counts[model.RecordComponent] = 0
 	}
 	if includes(r, recordExposure) {
-		counts[model.RecordExposure] = len(exposureLines(r, ""))
+		counts[model.RecordExposure] = countExposureLines(r)
 	}
 	if includes(r, recordContainer) {
 		counts[model.RecordContainer] = len(r.Containers)
@@ -237,7 +237,7 @@ func ndjsonCounts(r *model.Report) map[string]int {
 	// manifest that declared them anyway would report its own suppression as
 	// data loss.
 	if includes(r, recordLink) && !r.Scan.InventoryUnchanged {
-		counts[model.RecordLink] = len(linkLines(r, ""))
+		counts[model.RecordLink] = countLinkLines(r)
 	}
 	if includes(r, recordConfig) {
 		counts[model.RecordConfig] = len(r.ConfigSurface)

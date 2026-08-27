@@ -422,3 +422,47 @@ func containerNames(containers []model.Container) map[string]string {
 	}
 	return out
 }
+
+// countLinkLines and countExposureLines predict the record counts without
+// materializing the records. The manifest needs the numbers before line 2,
+// the writer builds the real slices once when it writes them - and building
+// several hundred thousand link records twice per scan was measured as
+// synchronized all-core garbage-collector bursts on the machine being
+// inventoried. Each mirrors its lines function exactly; reconcileNDJSON
+// fails the write if they ever drift.
+
+func countLinkLines(r *model.Report) int {
+	n := 0
+	seen := map[string]bool{}
+	for _, s := range r.Services {
+		if len(s.Links) == 0 {
+			continue
+		}
+		n += len(s.Links)
+		seen[s.Executable] = true
+	}
+	for _, c := range r.Containers {
+		for _, s := range c.Services {
+			n += len(s.Links)
+		}
+	}
+	for _, b := range r.Links {
+		if seen[b.Executable] {
+			continue
+		}
+		n += len(b.Links)
+	}
+	return n
+}
+
+func countExposureLines(r *model.Report) int {
+	n := 0
+	for _, e := range r.Exposure {
+		if len(e.Components) == 0 {
+			n++
+			continue
+		}
+		n += len(e.Components)
+	}
+	return n
+}
