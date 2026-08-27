@@ -130,7 +130,10 @@ func collect(ctx context.Context, opts Options) (*Result, error) {
 			return nil, err
 		}
 
-		logf("%s: %d executables from %d MFT records in %s",
+		// "executable files", spelled out: an operator reading "executables"
+		// concluded the walk was skipping DLLs, when DLLs are most of what
+		// it finds.
+		logf("%s: %d executable files (exe, dll, sys, ocx, cpl, drv) from %d MFT records in %s",
 			volume, len(enumerated.Entries), enumerated.Records, time.Since(start).Round(time.Millisecond))
 		res.Stats.Enumerated += len(enumerated.Entries)
 
