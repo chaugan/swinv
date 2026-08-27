@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sort"
 
 	"github.com/chaugan/swinv/internal/elflink"
@@ -52,7 +53,11 @@ type linkProbe struct {
 // Linux only. An ELF probe of a Windows host would find nothing, and the PE
 // import table is a different feature.
 func probeELF(ctx context.Context, cfg *config, listeners *service.Result, logf func(string, ...any)) *linkProbe {
-	if cfg.elfScope == elfScopeOff || !service.Supported() || listeners == nil {
+	if cfg.elfScope == elfScopeOff || !service.Supported() || listeners == nil ||
+		runtime.GOOS == "windows" {
+		// On Windows the binaries are PE, and attachPELinks is this probe's
+		// sibling; running the ELF walk there produced a puzzled
+		// "probing 0 binaries under /" on a machine with no /usr/bin.
 		return &linkProbe{byExe: map[string][]elflink.Link{}}
 	}
 

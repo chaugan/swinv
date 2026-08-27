@@ -191,7 +191,12 @@ func (p *prober) probe(exe string, opts Options) ([]Link, error) {
 			Direct:   it.hop == 1,
 			NSymbols: len(it.mod.symbols),
 		}
-		if opts.Symbols {
+		// Direct links only, matching the ELF probe and the model's own
+		// documentation. A transitive symbol list describes what one system
+		// DLL asks of another - no consumer ranks on that, and keeping it
+		// for every KERNELBASE import on the machine is what turned the
+		// symbol option into a garbage-collector workout.
+		if opts.Symbols && l.Direct {
 			l.Symbols = it.mod.symbols
 			l.SymbolsTruncated = it.mod.truncated
 		}
@@ -330,6 +335,17 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 		if parallelism = runtime.NumCPU() / 4; parallelism < 1 {
 			parallelism = 1
 		}
+	}
+
+	if opts.Polite {
+		// The pacing bounds the workers, but the garbage collector runs on
+		// every processor the runtime sees, and an --elf-symbols probe
+		// allocates enough to keep it busy machine-wide. Politeness includes
+		// the GC: clamp the runtime to the worker count for the probe's
+		// duration. Restored on return; the scan is already finished by the
+		// time this runs, so nothing else is contending for the limit.
+		prev := runtime.GOMAXPROCS(parallelism + 1)
+		defer runtime.GOMAXPROCS(prev)
 	}
 
 	p := newProber()
