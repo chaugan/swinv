@@ -19,7 +19,7 @@ import (
 // document.
 // 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
 // describing manifest (see the NDJSON heartbeat record). Also additive.
-const SchemaVersion = "1.14"
+const SchemaVersion = "1.15"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -144,13 +144,30 @@ type Tool struct {
 // Host is the identity of the machine that was scanned. Every field is
 // optional: an unreadable source yields an empty value rather than an error.
 type Host struct {
-	Hostname       string   `json:"hostname"`
-	FQDN           string   `json:"fqdn,omitempty"`
-	MachineID      string   `json:"machine_id,omitempty"`
-	BootID         string   `json:"boot_id,omitempty"`
-	OSID           string   `json:"os_id,omitempty"`
-	OSVersionID    string   `json:"os_version_id,omitempty"`
-	OSPrettyName   string   `json:"os_pretty_name,omitempty"`
+	Hostname     string `json:"hostname"`
+	FQDN         string `json:"fqdn,omitempty"`
+	MachineID    string `json:"machine_id,omitempty"`
+	BootID       string `json:"boot_id,omitempty"`
+	OSID         string `json:"os_id,omitempty"`
+	OSVersionID  string `json:"os_version_id,omitempty"`
+	OSPrettyName string `json:"os_pretty_name,omitempty"`
+
+	// The four fields below exist because Microsoft's Security Update Guide
+	// keys on the OS build, and everything the stream carried before them
+	// was one inference short of that join. OSBuild is what the host itself
+	// reports ("10.0.26200.9168"); os_version_id "11" is a family, and the
+	// cumulative update's component version is a servicing detail that
+	// cannot tell 24H2 from 25H2 (an enablement package keeps the older
+	// servicing branch) - so OSDisplayVersion carries the release ("25H2",
+	// deciding end-of-service), and OSEdition with OSInstallationType
+	// separate client from server, whose update ranges on the same branch
+	// sit twenty-four thousand revisions apart. All Windows-only; a build
+	// number is the one Windows assessment that does not have to infer.
+	OSBuild            string `json:"os_build,omitempty"`
+	OSDisplayVersion   string `json:"os_display_version,omitempty"`
+	OSEdition          string `json:"os_edition,omitempty"`
+	OSInstallationType string `json:"os_installation_type,omitempty"`
+
 	KernelRelease  string   `json:"kernel_release,omitempty"`
 	Architecture   string   `json:"architecture,omitempty"`
 	Virtualization string   `json:"virtualization,omitempty"`

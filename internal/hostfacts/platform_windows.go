@@ -57,6 +57,19 @@ func platformFacts(h *model.Host, isSystemRoot bool) {
 			build,
 			regUint(cv, "UBR"),
 		)
+
+		// The patch-level join (issue #14): MSRC's CVRF keys remediations on
+		// the OS build, and these four values are the whole join key. The
+		// build string matches KernelRelease today; it gets its own field
+		// because it is a statement of host identity, not of the kernel.
+		h.OSBuild = h.KernelRelease
+		h.OSDisplayVersion = regString(cv, "DisplayVersion")
+		if h.OSDisplayVersion == "" {
+			// Windows 10 before 20H2 spelled it ReleaseId ("1909").
+			h.OSDisplayVersion = regString(cv, "ReleaseId")
+		}
+		h.OSEdition = regString(cv, "EditionID")
+		h.OSInstallationType = regString(cv, "InstallationType")
 	}
 
 	// MachineGuid is written once when Windows is installed and survives

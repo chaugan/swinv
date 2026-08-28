@@ -76,6 +76,16 @@ type heartbeatLine struct {
 	OSVersionID  string `json:"os_version_id,omitempty"`
 	Architecture string `json:"architecture,omitempty"`
 
+	// The Windows patch-level join key (issue #14): the build MSRC keys
+	// remediations on, the release that decides end-of-service, and the
+	// edition/installation type that separate client UBR ranges from server
+	// ones. On the heartbeat because they are host identity - the one line
+	// a consumer always gets, components suppressed or not. Empty on Linux.
+	OSBuild            string `json:"os_build,omitempty"`
+	OSDisplayVersion   string `json:"os_display_version,omitempty"`
+	OSEdition          string `json:"os_edition,omitempty"`
+	OSInstallationType string `json:"os_installation_type,omitempty"`
+
 	// --- manifest, schema_version 2 --------------------------------------
 	//
 	// Everything below turns the heartbeat from "this host is alive" into
@@ -262,6 +272,11 @@ func manifestRecord(r *model.Report, scannedAt string, counts map[string]int) he
 		OSID:         r.Host.OSID,
 		OSVersionID:  r.Host.OSVersionID,
 		Architecture: r.Host.Architecture,
+
+		OSBuild:            r.Host.OSBuild,
+		OSDisplayVersion:   r.Host.OSDisplayVersion,
+		OSEdition:          r.Host.OSEdition,
+		OSInstallationType: r.Host.OSInstallationType,
 
 		SchemaVersion:       manifestSchemaVersion,
 		ScanID:              r.Scan.ScanID,

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.14",
+  "schema_version": "1.15",
   "tool": {
     "name": "swinv",
     "version": "test",

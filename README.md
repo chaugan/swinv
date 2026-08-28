@@ -915,6 +915,17 @@ come from the registry, so a Windows report groups and joins alongside a Linux
 one. `machine_id` is derived from `MachineGuid` and normalised to the same
 32-hex-character shape as a Linux `machine-id`.
 
+A Windows report also carries the **patch-level join key** - `os_build`
+(`10.0.26200.9168`), `os_display_version` (`25H2`), `os_edition` and
+`os_installation_type` - on the host record and on the heartbeat line. That
+is what makes an offline patch-currency check arithmetic instead of a guess:
+Microsoft's Security Update Guide keys every remediation on the OS build, the
+host states which build it is on, and the comparison needs no inference from a
+display name. The release distinguishes 24H2 from 25H2 for end-of-service (an
+enablement package keeps the older servicing branch, so the cumulative
+update's version alone cannot), and the edition separates a client from a
+server that share a build branch but sit ~24,000 update revisions apart.
+
 Two Windows quirks are handled: the registry still reads `Windows 10 Pro` on
 Windows 11 hosts, and client and server share build numbers - Windows 11 24H2
 and Server 2025 are both `26100` - so a server reports its release year rather

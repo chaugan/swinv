@@ -7,6 +7,23 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Added
+
+- **The Windows patch-level join key**, schema `1.15` (#14): `os_build`
+  ("10.0.26200.9168" - what the host itself reports, the build MSRC keys
+  remediations on), `os_display_version` ("25H2", which decides
+  end-of-service; the cumulative update's component version cannot tell
+  24H2 from 25H2 because an enablement package keeps the older servicing
+  branch), `os_edition` and `os_installation_type` (client and server
+  share build branches whose update ranges sit ~24,000 revisions apart).
+  On `host` in the JSON and on the heartbeat line - the one line a
+  consumer always gets - read from
+  `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` without
+  elevation, `ReleaseId` fallback for pre-20H2 Windows 10. A build number
+  is the one Windows assessment that does not have to infer.
+
 ## [0.9.1] - 2026-08-28
 
 What v0.9.0 promised, delivered politely. Ten development builds were run and

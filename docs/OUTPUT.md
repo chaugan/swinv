@@ -11,11 +11,28 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.14`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.15`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.14"
+"schema_version": "1.15"
 ```
+
+**1.14 → 1.15** added the Windows patch-level join key (#14), on `host` in
+the JSON report and on the heartbeat line - the one line a consumer always
+gets, components suppressed or not:
+
+| Field | Example | Why |
+|---|---|---|
+| `os_build` | `10.0.26200.9168` | What the host itself reports; the build MSRC keys remediations on (`FixedBuild`). `os_version_id` is a family ("11"), and the cumulative update's component version is a servicing detail that cannot tell 24H2 from 25H2 - an enablement package keeps the older servicing branch. |
+| `os_display_version` | `25H2` | The release, which decides end-of-service. |
+| `os_edition` | `Professional` | `EditionID`; client and server share build branches whose update ranges sit ~24,000 revisions apart. |
+| `os_installation_type` | `Client` | `InstallationType`, the coarse client/server split even when the edition string is exotic. |
+
+All four come from `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion`,
+readable without elevation; on Windows 10 before 20H2 the release falls back
+to `ReleaseId` ("1909"). Empty on Linux and absent from the JSON. With these,
+"is this host at the current build" is arithmetic against Microsoft's own
+CVRF data rather than an inference from a display name.
 
 **1.13 → 1.14** brought the linkage to Windows, and one field with it:
 

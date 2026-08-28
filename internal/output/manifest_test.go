@@ -289,3 +289,41 @@ func TestManifestKnowsEveryRecordType(t *testing.T) {
 		}
 	}
 }
+
+// Issue #14: Microsoft's Security Update Guide keys on the OS build, and the
+// heartbeat is the one line a consumer always gets - so the build, the
+// release and the edition ride there. Empty on Linux, absent from the JSON.
+func TestManifestCarriesTheWindowsBuild(t *testing.T) {
+	r := manifestReport()
+	r.Host.OSBuild = "10.0.26200.9168"
+	r.Host.OSDisplayVersion = "25H2"
+	r.Host.OSEdition = "Professional"
+	r.Host.OSInstallationType = "Client"
+
+	var buf bytes.Buffer
+	if err := WriteNDJSON(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	manifest, _ := decodeStream(t, buf.Bytes())
+	for field, want := range map[string]string{
+		"os_build":             "10.0.26200.9168",
+		"os_display_version":   "25H2",
+		"os_edition":           "Professional",
+		"os_installation_type": "Client",
+	} {
+		if manifest[field] != want {
+			t.Errorf("%s = %v, want %q", field, manifest[field], want)
+		}
+	}
+}
+
+func TestManifestOmitsTheBuildWhereThereIsNone(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WriteNDJSON(&buf, manifestReport()); err != nil {
+		t.Fatal(err)
+	}
+	first := strings.SplitN(buf.String(), "\n", 2)[0]
+	if strings.Contains(first, "os_build") {
+		t.Errorf("a Linux heartbeat grew an empty os_build: %s", first)
+	}
+}
