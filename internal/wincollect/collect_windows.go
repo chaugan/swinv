@@ -320,21 +320,32 @@ func componentFromPE(path string, info peversion.Info) model.Component {
 
 	version := preferredVersion(info.FileVersion, info.FixedFileVersion)
 
+	attrs := map[string]string{
+		"file_version":       info.FileVersion,
+		"product_version":    info.ProductVersion,
+		"fixed_file_version": info.FixedFileVersion,
+		"file_description":   info.FileDescription,
+		"original_filename":  info.OriginalFilename,
+	}
+	// An installer carries the version of the installer, not of the software
+	// it would install, so a consumer must be able to tell the two apart. The
+	// row stays - the file is on disk - but it is marked, with the evidence
+	// that decided it, so matching can exclude or rank it rather than report
+	// "Firefox Setup 121.0.exe" as an installed Firefox.
+	if isInstaller, why := classifyInstaller(baseName(path), info.FileDescription, info.OriginalFilename, info.ProductName); isInstaller {
+		attrs["role"] = "installer"
+		attrs["role_evidence"] = why
+	}
+
 	return model.Component{
-		Name:      name,
-		Version:   version,
-		Type:      typeBinary,
-		Vendor:    info.CompanyName,
-		CPEs:      candidateCPEs(info.CompanyName, name, version),
-		Locations: []string{path},
-		FoundBy:   peCataloger,
-		Attributes: attributes(map[string]string{
-			"file_version":       info.FileVersion,
-			"product_version":    info.ProductVersion,
-			"fixed_file_version": info.FixedFileVersion,
-			"file_description":   info.FileDescription,
-			"original_filename":  info.OriginalFilename,
-		}),
+		Name:       name,
+		Version:    version,
+		Type:       typeBinary,
+		Vendor:     info.CompanyName,
+		CPEs:       candidateCPEs(info.CompanyName, name, version),
+		Locations:  []string{path},
+		FoundBy:    peCataloger,
+		Attributes: attributes(attrs),
 	}
 }
 

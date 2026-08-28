@@ -358,6 +358,21 @@ It is frequently empty - measured at 23% of components on a full Debian-family
 host, ranging from 66% for `deb` down to 0% for kernel modules, which have no
 such concept. Treat its absence as "not recorded", never as "no vendor".
 
+**Windows installers are flagged, not hidden.** A `--full-scan` finds
+installer executables sitting on disk - `Firefox Setup 121.0.exe` and the
+like - and their version resource carries the version of the *installer*, not
+of the software it would install: Mozilla's stub reads `ProductName: Firefox`,
+so without care it enters the inventory as an installed Firefox and a matcher
+reports Firefox CVEs against a machine that may not run Firefox at all. swinv
+keeps the row (the file is genuinely present) but sets
+`attributes.role = "installer"`, with `attributes.role_evidence` naming what
+decided it (an installer word in the file description or original filename, or
+an installer's file name). A consumer excludes or ranks-last anything with
+`role = installer` rather than matching its version. The signal is
+conservative by design: the application's own binary (`firefox.exe`,
+ProductName `Firefox`) is never flagged, because a false positive here hides a
+real installation.
+
 **1.0 → 1.1** added exactly two things:
 
 | Addition | Produced by | Appears in |

@@ -7,6 +7,21 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Fixed
+
+- **A Windows installer on disk no longer enters the inventory as the
+  software it installs.** `Firefox Setup 121.0.exe` carries
+  `ProductName: Firefox` in its version resource, so a `--full-scan`
+  reported it as an installed Firefox - with the installer's version, not
+  the application's - and a matcher would raise Firefox CVEs against a host
+  that may not run Firefox. The row is kept (the file is present) but marked
+  `attributes.role = "installer"` with `role_evidence` naming what decided
+  it, from the file description, original filename or file name that swinv
+  already reads. Conservative by design: the application's own binary is
+  never flagged, because a false positive would hide a real installation.
+
 ## [0.9.4] - 2026-08-28
 
 Tell a narrower scan apart from an uninstall.
