@@ -38,6 +38,17 @@ schema and cataloger coverage may still change between releases. See
   probe reports files probed, PE-parsed and linked, plus the first parse
   error verbatim, into the log and scan.warnings.
 
+### Changed
+
+- **The heartbeat digest includes `sha256` when `--hash` recorded one.** A
+  binary replaced in place under the same version string was invisible to
+  the identity-only digest, so the heartbeat suppressed the re-probed link
+  records as "unchanged" - for up to `--full-interval` (24h default). With
+  content in the digest, an in-place swap streams immediately. Toggling
+  `--hash` itself now costs one full resend, which a timer never does. The
+  digest was always documented as opaque and unstable across versions;
+  upgrading causes one full resend per host, as any digest change does.
+
 ## [0.9.0] - 2026-08-27
 
 The import table: what every Windows binary loads.

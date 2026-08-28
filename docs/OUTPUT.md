@@ -1323,12 +1323,18 @@ otherwise.
 
 #### What the digest is built from
 
-Identity alone: `type`, `name`, `version`, `root` and `purl` - the same tuple
-deduplication uses. Deliberately **not** `locations`, `found_by`, `sha256`,
-`licenses`, `cpes`, `vendor` or `change`: files get relinked, catalogers get
-renamed upstream, `sha256` appears and disappears with `--hash`, and none of
-that means a package was installed or removed. A digest that moved with them
-would report change constantly and be ignored within a week.
+Identity - `type`, `name`, `version`, `root` and `purl`, the same tuple
+deduplication uses - plus `sha256` when the scan recorded one (`--hash`).
+Content is in the digest for a reason identity cannot cover: a binary
+replaced in place under the same version string is a change worth streaming -
+the link probe re-reads the new file every run, and an identity-only digest
+would suppress the corrected records as "unchanged". The cost is one full
+resend when the `--hash` flag itself is toggled, which a timer never does.
+
+Deliberately still **not** in the digest: `locations`, `found_by`,
+`licenses`, `cpes`, `vendor`, `change`. Files get relinked and catalogers get
+renamed upstream, and none of that means the software changed. A digest that
+moved with them would report change constantly and be ignored within a week.
 
 #### When a full list is sent anyway
 

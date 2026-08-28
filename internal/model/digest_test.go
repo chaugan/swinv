@@ -89,3 +89,14 @@ func TestInventoryDigestOfNothing(t *testing.T) {
 		t.Error("nil and empty produced different digests")
 	}
 }
+
+// A binary replaced in place under the same version string must change the
+// digest when the scan hashes files - identity alone cannot see it, and an
+// unchanged digest would suppress the corrected link records.
+func TestInventoryDigestSeesContentChangesUnderHash(t *testing.T) {
+	before := []Component{{Name: "test", Version: "1.0", Type: "binary", SHA256: "aaaa"}}
+	after := []Component{{Name: "test", Version: "1.0", Type: "binary", SHA256: "bbbb"}}
+	if InventoryDigest(before) == InventoryDigest(after) {
+		t.Fatal("an in-place binary swap left the digest unchanged")
+	}
+}

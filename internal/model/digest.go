@@ -31,8 +31,15 @@ func InventoryDigest(components []Component) string {
 	for _, c := range components {
 		// Tab-separated because a tab cannot occur in any of these fields,
 		// while "|" and ":" occur in PURLs and Windows paths routinely.
+		// SHA256 is included when the scan recorded it (--hash). Identity
+		// alone cannot see a binary replaced in place under the same
+		// version string - the import probe re-reads the new file every
+		// run, but an identity-only digest would suppress the corrected
+		// records as "unchanged". The cost is one full resend when the
+		// --hash flag itself is toggled, which a timer does never and an
+		// operator does deliberately.
 		lines = append(lines, strings.Join([]string{
-			c.Type, c.Name, c.Version, c.Root, c.PURL,
+			c.Type, c.Name, c.Version, c.Root, c.PURL, c.SHA256,
 		}, "\t"))
 	}
 	// Sorted, so the digest does not depend on the order the catalogers
