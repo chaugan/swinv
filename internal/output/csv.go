@@ -56,7 +56,7 @@ var csvColumns = []string{
 	// counted under - "dpkg", not "dpkg-db-cataloger" - so a consumer joins
 	// a component to the source that produced it without reproducing the
 	// mapping (#15).
-	"source",
+	"source_key",
 }
 
 // CSVColumns returns a copy of the CSV header row, in order. It exists so
@@ -112,7 +112,7 @@ func WriteCSV(w io.Writer, r *model.Report) error {
 		record[17] = c.Vendor
 		record[18] = c.Root
 		record[19] = c.OwnedBy
-		record[20] = c.Source
+		record[20] = c.SourceKey
 		if err := cw.Write(record); err != nil {
 			return fmt.Errorf("output: writing csv row for %q: %w", c.Name, err)
 		}

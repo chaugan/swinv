@@ -33,7 +33,7 @@ type ndjsonLine struct {
 	Licenses  []string `json:"licenses,omitempty"`
 	Locations []string `json:"locations,omitempty"`
 	FoundBy   string   `json:"found_by,omitempty"`
-	Source    string   `json:"source,omitempty"`
+	SourceKey string   `json:"source_key,omitempty"`
 	SHA256    string   `json:"sha256,omitempty"`
 	Change    string   `json:"change,omitempty"`
 
@@ -206,7 +206,7 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 			Licenses:     c.Licenses,
 			Locations:    c.Locations,
 			FoundBy:      c.FoundBy,
-			Source:       c.Source,
+			SourceKey:    c.SourceKey,
 			SHA256:       c.SHA256,
 			Vendor:       c.Vendor,
 			Root:         c.Root,

@@ -51,7 +51,7 @@ func buildManifest(cfg *config, report *model.Report, services model.SourceStatu
 	// component carries and the key the manifest declares come from one
 	// function and cannot drift.
 	for i := range report.Components {
-		report.Components[i].Source = sourceKey(report.Components[i].FoundBy)
+		report.Components[i].SourceKey = sourceKey(report.Components[i].FoundBy)
 	}
 
 	counts := componentsBySource(report.Components)

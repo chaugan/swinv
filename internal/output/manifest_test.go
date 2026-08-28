@@ -352,10 +352,10 @@ func TestManifestCarriesTheScanProfile(t *testing.T) {
 
 // The component's source field is the manifest key it is counted under, so a
 // consumer joins component to source without reproducing sourceKey's table.
-func TestComponentCarriesItsSource(t *testing.T) {
+func TestComponentCarriesItsSourceKey(t *testing.T) {
 	r := manifestReport()
 	r.Components[0].FoundBy = "dpkg-db-cataloger"
-	r.Components[0].Source = "dpkg"
+	r.Components[0].SourceKey = "dpkg"
 
 	var buf bytes.Buffer
 	if err := WriteNDJSON(&buf, r); err != nil {
@@ -367,8 +367,8 @@ func TestComponentCarriesItsSource(t *testing.T) {
 			t.Fatal(err)
 		}
 		if m["found_by"] == "dpkg-db-cataloger" {
-			if m["source"] != "dpkg" {
-				t.Errorf("source = %v, want dpkg beside found_by dpkg-db-cataloger", m["source"])
+			if m["source_key"] != "dpkg" {
+				t.Errorf("source_key = %v, want dpkg beside found_by dpkg-db-cataloger", m["source_key"])
 			}
 			return
 		}

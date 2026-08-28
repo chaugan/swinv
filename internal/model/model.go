@@ -19,7 +19,7 @@ import (
 // document.
 // 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
 // describing manifest (see the NDJSON heartbeat record). Also additive.
-const SchemaVersion = "1.16"
+const SchemaVersion = "1.17"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -349,16 +349,22 @@ type Component struct {
 	Locations  []string          `json:"locations,omitempty"`
 	FoundBy    string            `json:"found_by,omitempty"`
 
-	// Source is the manifest sources key this component is counted under -
+	// SourceKey is the manifest sources key this component is counted under -
 	// the same string that keys scan.sources. found_by names the cataloger
-	// ("dpkg-db-cataloger"); Source names the source the manifest reconciles
-	// ("dpkg"), and the two vocabularies did not map by any rule a consumer
-	// could reproduce. A consumer asking "did the source that produced this
-	// component run this scan?" joins Source against sources without
-	// guessing - which is the difference between closing a finding because
-	// software was removed and closing it because a narrower scan did not
-	// look (#15).
-	Source string `json:"source,omitempty"`
+	// ("dpkg-db-cataloger"); SourceKey names the source the manifest
+	// reconciles ("dpkg"), and the two vocabularies did not map by any rule a
+	// consumer could reproduce. A consumer asking "did the source that
+	// produced this component run this scan?" joins SourceKey against sources
+	// without guessing - the difference between closing a finding because
+	// software was removed and closing it because a narrower scan did not look
+	// (#15).
+	//
+	// The JSON key is "source_key", not "source": Splunk reserves "source" as
+	// index-time metadata (the file path an event came from), and a component
+	// carrying its own "source" produced a silently multivalued field (#16).
+	// swinv already sidesteps Splunk's reserved "host" by using "hostname";
+	// this is the same avoidance.
+	SourceKey string `json:"source_key,omitempty"`
 
 	// SHA256 is the hex content digest of the component's primary on-disk
 	// location. Populated only when --hash is given, because hashing every

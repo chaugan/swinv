@@ -11,23 +11,32 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.16`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.17`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.16"
+"schema_version": "1.17"
 ```
+
+**1.16 → 1.17** renamed the component `source` field to `source_key` (#16).
+Splunk reserves `source` as index-time metadata (the file path an event came
+from), so a component that also carried `source` produced a silently
+multivalued field - the file path sitting among the real values, with correct
+totals and one wrong row. `source_key` is the same value under a name Splunk
+has not taken, the same avoidance that made this field `hostname` rather than
+Splunk's reserved `host`. The JSON/NDJSON key, CSV column 21 and the CycloneDX
+property are all `source_key`.
 
 **1.15 → 1.16** made a narrower scan distinguishable from software being
 uninstalled (#15):
 
-- **`source` on every component** (JSON, NDJSON, CSV column 21, CycloneDX
-  property) - the manifest `sources` key the component is counted under.
-  `found_by` names the cataloger (`dpkg-db-cataloger`); `source` names the
-  manifest key (`dpkg`), and the two did not map by any rule a consumer
-  could reproduce (`dpkg` vs `dpkg-db-cataloger`, `container-runtime-probe`
-  with no suffix at all). A consumer asking "did the source that produced
-  this component run this scan?" now joins `source` against `sources`
-  directly.
+- **`source_key` on every component** (JSON, NDJSON, CSV column 21, CycloneDX
+  property; named `source` in 1.16, renamed in 1.17) - the manifest `sources`
+  key the component is counted under. `found_by` names the cataloger
+  (`dpkg-db-cataloger`); `source_key` names the manifest key (`dpkg`), and the
+  two did not map by any rule a consumer could reproduce (`dpkg` vs
+  `dpkg-db-cataloger`, `container-runtime-probe` with no suffix at all). A
+  consumer asking "did the source that produced this component run this
+  scan?" now joins `source_key` against `sources` directly.
 - **`scan_profile` on the heartbeat** - what the scan was asked to collect:
   `full_scan`, `hash`, `elf_scope`, `config_scope`, `ndjson_include`,
   `containers`, `services`, `root`. `sources` says what ran; `scan_profile`
@@ -1286,6 +1295,14 @@ executable)` could not tell the difference.
 array field with a `{}` suffix, so a search asking for `endpoints` silently
 gets nothing - which once reported a whole fleet as publishing no ports. Every
 array field therefore also has `_text` (`;`-joined) and `n_` (count) forms.
+
+**No field is named after Splunk's reserved metadata.** Splunk sets `host`,
+`source`, `sourcetype`, `index`, `_time` and `_raw` itself at index time, and
+a payload field of the same name collides silently - the event carries both,
+multivalued, with correct totals and one value that is not what it claims.
+swinv uses `hostname` rather than `host`, and `source_key` (the manifest
+sources key a component is counted under) rather than `source`; the field was
+briefly `source` in schema 1.16 and renamed in 1.17 for exactly this reason.
 
 #### With `--heartbeat`
 

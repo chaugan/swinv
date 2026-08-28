@@ -9,6 +9,23 @@ schema and cataloger coverage may still change between releases. See
 
 ## [Unreleased]
 
+### Changed
+
+- **The component `source` field is renamed `source_key`** (#16), schema
+  `1.17`. Splunk reserves `source` as index-time metadata (the file path an
+  event came from), so a component carrying its own `source` produced a
+  silently multivalued field - correct totals with one value that is not a
+  source. `source_key` is the same value under a name Splunk has not taken,
+  the same reason this field is `hostname` and not Splunk's reserved `host`.
+  The field is two releases old (1.16) with one known consumer, so renaming
+  now costs least. JSON/NDJSON key, CSV column 21 and the CycloneDX property
+  all change to `source_key`.
+
+## [0.9.5] - 2026-08-28
+
+Harden the privileged collector against unprivileged local users, and stop an
+installer on disk being catalogued as the software it wraps.
+
 ### Fixed
 
 - **A Windows installer or launcher on disk no longer enters the inventory as
@@ -26,10 +43,6 @@ schema and cataloger coverage may still change between releases. See
   Conservative by design to protect the standalone case: a portable single
   exe with no installer keeps its own name in `original_filename` and is
   never flagged, because a false positive would hide a real installation.
-
-## [0.9.5] - 2026-08-28
-
-Harden the privileged collector against unprivileged local users.
 
 ### Security
 
