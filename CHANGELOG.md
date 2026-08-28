@@ -7,7 +7,11 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
-## [Unreleased]
+## [0.9.1] - 2026-08-28
+
+What v0.9.0 promised, delivered politely. Ten development builds were run and
+measured on a real laptop (i7-12700H, 20 logical processors, Defender on) by
+the operator who reported each defect; every fix below cites what was seen.
 
 ### Fixed
 
@@ -38,6 +42,32 @@ schema and cataloger coverage may still change between releases. See
   probe reports files probed, PE-parsed and linked, plus the first parse
   error verbatim, into the log and scan.warnings.
 
+- **"Almost killing the computer it is running on."** The probe and the
+  phases around it were rebuilt for politeness, verified fix-by-fix by an
+  independent audit with the race detector on:
+  - background mode now clamps the Go runtime - garbage collector included -
+    to a quarter of the machine for the entire run, on every platform;
+    `--fast` lifts it;
+  - each probe worker pauses as long as its last parse took, with no side
+    door: the pause lives next to the parse, so the sequential phase pays
+    it too;
+  - the owner-attribution ladder walked from O(links x locations) - billions
+    of iterations and tens of gigabytes of garbage per run, the measured
+    source of all-core GC bursts - to O(path depth) map lookups with
+    memoization;
+  - resolution stats, the OS-root string, and record counts are computed
+    once instead of per call, and the big record slice is sized exactly;
+  - a deadline hit now delivers everything parsed so far - a run that
+    probed 42,411 of 46,325 files used to report zero.
+  Measured across the builds: 89% CPU unpaced, 73% paced, **26% with the
+  full stack**, and the post-probe write phase went from minutes of
+  synchronized all-core bursts to seconds.
+- **A registry InstallLocation ending in a separator never matched** the
+  containing-directory rung, so products recorded as `C:\App\` silently
+  lost attribution. Trailing separators are trimmed at indexing.
+- The Linux ELF walk no longer runs on Windows, where "probing 0 binaries
+  under /" explained itself poorly.
+
 ### Changed
 
 - **All-scope Windows link records keep the signal and drop the OS graph.**
@@ -59,6 +89,16 @@ schema and cataloger coverage may still change between releases. See
   `--hash` itself now costs one full resend, which a timer never does. The
   digest was always documented as opaque and unstable across versions;
   upgrading causes one full resend per host, as any digest change does.
+
+The measured end state on the reporting laptop, full bells
+(`--full-scan --hash --config-scope all --elf-scope all --elf-symbols`,
+background mode): 46,331 files probed in ~21 minutes at ~26% CPU, 77,507
+link records in a 156MB NDJSON (down from 5,053,397 records and 1.8GB), and
+an unchanged-heartbeat rerun writing 116KB. Among the first findings: three
+generations of OpenSSL loaded side by side - 3.4.0, 3.0.16 and the
+end-of-life 1.1.1g - plus vendored copies inside an MQTT broker and two
+Siemens OT tools, and 9,986 links against a 2011-era Qt 4.8.0. No package
+manager on Windows can produce that table.
 
 ## [0.9.0] - 2026-08-27
 
@@ -1109,7 +1149,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/chaugan/swinv/releases/tag/v0.9.1
 [0.9.0]: https://github.com/chaugan/swinv/releases/tag/v0.9.0
 [0.8.0]: https://github.com/chaugan/swinv/releases/tag/v0.8.0
 [0.7.1]: https://github.com/chaugan/swinv/releases/tag/v0.7.1

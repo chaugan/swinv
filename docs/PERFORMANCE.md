@@ -550,3 +550,25 @@ To compare configurations honestly:
 - Use `--quiet` so stderr formatting is not in the measurement, and `--out` a
   scratch directory so you are not racing your real inventory.
 - Add `--verbose` on a separate run to see which stage moved.
+
+## What the PE link probe costs (Windows)
+
+Measured on an i7-12700H laptop (20 logical processors, 32GB, NVMe,
+real-time Defender), background mode, during the v0.9.1 development series:
+
+| Run | Wall clock | CPU while probing | Output |
+|---|---|---|---|
+| `--full-scan --hash` alone (v0.8.0 baseline) | 14.4 min | moderate | no link records |
+| + unpaced probe (v0.9.0, withdrawn) | +20 min, then lost to a shared deadline | 89% across all processors | `link: 0`, silently |
+| + paced probe, GC unclamped | ~ the same | 73% | correct but rude |
+| + the full politeness stack (v0.9.1) | scan 3.7 min + probe ~21 min | **~26%**, progress every 30s | 77,507 link records, 156MB |
+| unchanged-heartbeat rerun | ~24 min total | same profile | 116KB |
+
+The probe's cost is not its own CPU: every file open is scanned by the
+antivirus at its own priority, which is why the probe paces itself (each
+worker pauses as long as its last parse took) instead of opening files as
+fast as it can. 4,978,820 operating-system links are deliberately not
+recorded at all scope - they were 97% of the volume and all of them said
+"loads the operating system", which the inventory already represents by the
+installed updates.
+

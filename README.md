@@ -68,7 +68,7 @@ in-process with no subprocess overhead.
 
 **Platforms** &nbsp; [Windows](#windows) · [Platform testing status](#platform-testing-status)
 
-**Running it** &nbsp; [Security and privacy](#security-and-privacy) · [Performance](#performance) · [Known limitations](#known-limitations)
+**Running it** &nbsp; [How often to run](#how-often-to-run-and-what-it-costs) · [Security and privacy](#security-and-privacy) · [Performance](#performance) · [Known limitations](#known-limitations)
 
 **The project** &nbsp; [Why not just use…?](#why-not-just-use) · [Architecture](#architecture) · [Building](#building) · [Licensing](#licensing) · [Documentation](#documentation) · [Non-goals](#non-goals)
 
@@ -150,12 +150,12 @@ so in `scan.exposure_blind_spots`, because "looked and found nothing" and
 ## Quickstart
 
 ```sh
-sudo dpkg -i swinv_0.9.0-1_amd64.deb   # or: sudo rpm -i swinv-0.9.0-1.x86_64.rpm
+sudo dpkg -i swinv_0.9.1-1_amd64.deb   # or: sudo rpm -i swinv-0.9.1-1.x86_64.rpm
 swinv --out /tmp/inv                   # scan /, write JSON + CSV
 ```
 
 No package? The binary is static and has no dependencies, so
-`install -m0755 swinv-v0.9.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
+`install -m0755 swinv-v0.9.1-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
 That writes timestamped files plus `-latest` symlinks - and, run as root with
@@ -555,9 +555,26 @@ inventory identified. System DLLs carry `os_component` instead of an owner,
 so `KERNEL32.dll` does not masquerade as the interesting unowned case.
 `--elf-scope all` with `--full-scan` extends the probe from the listeners to
 **every executable file the MFT enumeration saw** - the enumeration is
-already the index of the machine's binaries, so no second walk is paid for.
-LoadLibrary and delay-loaded imports are the Windows `dlopen`: invisible, and
-the evidence says so.
+already the index of the machine's binaries, so no second walk is paid for -
+and at that scope OS links are not recorded at all: the OS is represented by
+its updates, and five million rows of "loads KERNEL32" answer no question a
+consumer asks. LoadLibrary and delay-loaded imports are the Windows
+`dlopen`: invisible, and the evidence says so.
+
+What the first real all-scope run of this found, on one ordinary laptop:
+**three generations of OpenSSL loaded side by side** - 3.4.0, 3.0.16 and the
+end-of-life 1.1.1g - plus private copies vendored inside an MQTT broker and
+two Siemens OT tools, and 9,986 links against a 2011-era Qt 4.8.0. The
+leaderboard falls out of one query:
+
+```sh
+jq -r 'select(.record_type == "link") | select(.purl != null) | .purl' scan.ndjson \
+  | sort | uniq -c | sort -rn | head
+```
+
+and "who loads the EOL OpenSSL" is the same query with
+`select(.purl | test("1.1.1"))` - each row carrying the executable that
+loads it.
 
 #### What the machine is configured to run
 
@@ -1095,6 +1112,37 @@ swinv --out /var/lib/swinv --output-mode timestamped \
 ```
 
 **[Output formats, schema and SQL loading →](docs/OUTPUT.md)**
+
+## How often to run, and what it costs
+
+The default scan is cheap enough to run often; the heavy flags are not, and
+the honest way to choose a cadence is by how much the machine changes:
+
+- **On systems that change often or without control** - developer machines,
+  terminal servers, anything users install onto - run often. `--heartbeat`
+  makes frequency nearly free on the wire: an unchanged scan writes one
+  digest line plus the exposure, container and config records (116KB
+  measured), and a change streams in full on the next tick.
+- **On stable systems** - servers, OT and appliance-like machines - run
+  seldom on a timer, and ad hoc after software updates. Nothing in swinv
+  needs to run continuously; the report is the state of the machine at scan
+  time, and a machine that does not change has the same report tomorrow.
+
+What the flags cost, measured on a 20-logical-processor laptop with
+real-time antivirus (background mode; `--fast` trades politeness for speed):
+
+| Configuration | Wall clock | The machine while it runs |
+|---|---|---|
+| default scan (registry + listeners, Linux: package DBs) | seconds to ~15 min | barely visible |
+| `--full-scan --hash` (Windows) | ~10-14 min | moderate, mostly antivirus |
+| + `--elf-scope all --elf-symbols` | + ~21 min for 46k binaries | **~26% CPU**, paced, progress every 30s |
+
+The probe pays for politeness with wall clock: every file open is scanned by
+the antivirus at its own priority, so the probe paces itself rather than
+turning the AV into a foreground workload. Give the heavy combination
+`--timeout 45m`; the probe gets its own equal budget on top, and if it ever
+runs out it delivers everything probed so far and says `PARTIAL` in
+`scan.warnings` rather than pretending.
 
 ## Security and privacy
 
