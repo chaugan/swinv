@@ -27,6 +27,27 @@ schema and cataloger coverage may still change between releases. See
   exe with no installer keeps its own name in `original_filename` and is
   never flagged, because a false positive would hide a real installation.
 
+## [Unreleased]
+
+### Security
+
+- **Hardened the privileged collector against unprivileged local users.** A
+  structured local-attacker review (nine root causes, adversarially verified,
+  documented in [SECURITY.md](SECURITY.md)) drove a set of fixes
+  that change how swinv reads and writes, not what it reports (verified by a
+  full before/after scan diff): configuration-surface reads go through a
+  regular-file + size-capped reader, with an ownership gate on
+  `authorized_keys` so a symlink to `/dev/zero`, a FIFO, or a root-only file
+  planted in an attacker-owned home is refused; `--no-service-command` now
+  actually covers sudo evidence, ssh-key comments and Windows IFEO lines; the
+  transmit spool is forced 0600/0700; the goroutine dump is written
+  `O_EXCL|O_NOFOLLOW`; credential files open `O_NOFOLLOW` and are
+  fstat-checked for owner and mode; the ELF probe cleans resolved paths and
+  rejects a slash-bearing `DT_NEEDED`; the SUID walk caps recorded entries and
+  skips attacker-creatable non-root setuid files under `--config-scope all`;
+  and on Windows the output directory is created with an admin-only DACL with
+  swinv refusing an `--out` a non-admin owns.
+
 ## [0.9.4] - 2026-08-28
 
 Tell a narrower scan apart from an uninstall.

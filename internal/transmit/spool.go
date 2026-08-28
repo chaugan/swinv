@@ -87,7 +87,7 @@ func (c *Client) NewSpool(dir, scanID, hostname string, declared int, _, _ os.Fi
 	// area, not a file anyone was meant to read, and it lives under a
 	// world-traversable --out on a machine with unprivileged local users.
 	// Owner-only regardless of the caller's --perm, so a widened report mode
-	// cannot widen the spool. See docs/SECURITY.md (R4). The two mode
+	// cannot widen the spool. See SECURITY.md (R4). The two mode
 	// parameters are ignored deliberately and kept for call-site
 	// compatibility.
 	const perm, dirPerm = os.FileMode(0o600), os.FileMode(0o700)

@@ -101,6 +101,149 @@ machine it runs on.
 - **The dependency licence gate is not a security control.** It prevents
   copyleft contamination, nothing more.
 
+## Hardening against a local attacker
+
+swinv runs as root or SYSTEM on hosts that also have unprivileged local
+users. A structured review asked what such a user could do *because* swinv is
+privileged, across six dimensions, and its findings consolidated to nine root
+causes - each adversarially verified against the code. All nine are addressed;
+the principle throughout was to change how swinv reads and writes, not what it
+reports, verified by diffing a full before/after scan of a reference host.
+
+A structured review across six dimensions (output/symlink/TOCTOU, information
+disclosure, attacker-controlled input parsing, secrets and privileged-daemon
+access, resource exhaustion, and Windows-specific) produced findings that
+consolidated to **nine root causes**, each adversarially verified against the
+code before being accepted. All nine are addressed.
+
+### R1 - Windows: SYSTEM writing into an attacker-controlled directory *(high)*
+
+`C:\` grants `BUILTIN\Users` "create folders", inherited into new
+subdirectories, so an unprivileged user could pre-create the `--out` path,
+become its owner, and then read everything SYSTEM wrote there and overwrite
+what it transmitted (including forging the spool and heartbeat state). POSIX
+`--perm` bits are inert on Windows.
+
+**Fix.** `secureOutputDir` (Windows) creates the output directory with an
+explicit, non-inherited DACL granting only SYSTEM and Administrators, and
+**refuses to run** when an existing `--out` is owned by any principal other
+than SYSTEM, Administrators, or the account running the scan. The transmit
+spool and heartbeat state live under that now-protected directory.
+
+### R2 - `authorized_keys` read from an attacker-owned home *(high)*
+
+Under the default config scope the root process read every account's
+`~/.ssh/authorized_keys`, including the attacker's own home, with an unguarded
+`os.ReadFile` that followed symlinks and had no size cap. A symlink to
+`/dev/zero` caused unbounded memory growth (OOM), to a FIFO blocked the read
+past any deadline (hang), and to `/root/.aws/credentials` had root read a
+root-only file whose contents then entered the report the attacker can read.
+
+**Fix.** All configuration-surface reads now go through a **regular-file gate +
+size cap** (`readCapped`); `authorized_keys` additionally goes through an
+**ownership gate** (`readOwnedByCapped`) that refuses a file whose resolved
+owner is neither the account nor root. A legitimate key file is owned by its
+own account and is read unchanged; a symlink to a differently-owned file is
+refused. *Output note:* a deployment that legitimately symlinks
+`authorized_keys` to a file owned by a different account would lose that row;
+verified absent on the reference host.
+
+### R3 - Root-only privilege data in a world-readable report *(high)*
+
+Sudo rules (with NOPASSWD/broad-grant evidence), cron and systemd command
+lines, ssh-key comments, and the Windows IFEO debugger line were collected and
+written to the default 0644 report. `--no-service-command` did not cover the
+sudo, ssh-key, or IFEO fields.
+
+**Fix.** `--no-service-command` now correctly redacts the sudo NOPASSWD/broad
+evidence, the ssh-key comment, and the IFEO debugger line, matching every other
+command line. The *default* still collects them (the tool's documented model is
+"collect, then the operator restricts the files"); operators who share the
+report should pass `--no-service-command` and/or tighten `--perm`. See R4.
+
+### R4 - Report and spool written world-readable *(medium)*
+
+The report defaults to 0644 and the transmit spool inherited `--perm`, so on a
+host where `proc hidepid` hides other users' command lines, the report handed
+them back anyway. 
+
+**Fix.** The **transmit spool is forced 0600/0700** regardless of `--perm` - it
+is swinv's private staging area and always holds the full scan. The report
+mode remains operator-controlled (`--perm`); the disclosure surface is
+documented here and in the report's own Security section so an operator sharing
+the file at 0644 does so knowingly. *No content change.*
+
+### R5 - Goroutine dump written to a predictable temp path *(medium)*
+
+`--debug-stacks-after` wrote `swinv-stacks-<timestamp>.txt` into shared
+`os.TempDir()` with `O_CREATE|O_TRUNC`, letting an unprivileged user pre-plant
+the path to capture the dump or symlink it onto a root file.
+
+**Fix.** The primary write uses `O_EXCL|O_NOFOLLOW`; the fallback uses
+`os.MkdirTemp`+`os.CreateTemp` for an unpredictable, exclusively-created file.
+
+### R6 - SUID walk memory inflation *(low)*
+
+Under `--config-scope all` the walk descended into world-writable directories,
+where an attacker could `chmod u+s` thousands of files they own (no privilege,
+but it trips the setuid check) to inflate the root process's memory.
+
+**Fix.** The number of *recorded* setuid entries is capped, and under
+`--config-scope all` a setuid file owned by a non-root user is skipped - it
+runs as that unprivileged user and is no escalation. The standard scope walks
+only system binary directories and is unchanged. *Output note:* on a normal
+host every real setuid binary is root-owned, so the recorded set is unchanged;
+verified on the reference host.
+
+### R7 - Uncapped reads across the configuration surface *(low, defense-in-depth)*
+
+Beyond `authorized_keys`, the other config reads (cron, units, sudoers, passwd,
+modules, preload) used unbounded `os.ReadFile`.
+
+**Fix.** All routed through `readCapped` (regular-file gate + 8 MiB cap). Real
+configuration files are far below the cap; a pathological file degrades one
+inventory row instead of the host.
+
+### R8 - Crafted `DT_NEEDED` naming an arbitrary host path *(low)*
+
+A listening binary with `DT_NEEDED="../../../etc/shadow"` had the root ELF probe
+stat and header-read the named file and record the un-normalised path (no
+contents leaked - non-ELF is discarded).
+
+**Fix.** The resolver returns `path.Clean`ed paths, and a slash-bearing soname
+(never legitimate - a `DT_NEEDED` is a bare name) is rejected before resolution.
+
+### R9 - Inconsistent credential-file checks *(low)*
+
+The passphrase file check followed symlinks, checked mode but not ownership,
+and raced the read; the token and client-key files had no check; the check was
+a no-op on Windows.
+
+**Fix.** Credential files open through `openCredential`: `O_NOFOLLOW`, then
+`fstat` on the descriptor verifying owner (root/self) and mode `0600`, closing
+the symlink-follow, ownership gap, and stat/read race together. Applied to the
+token and passphrase files; the Windows path relies on directory ACLs (R1).
+
+## Verified safe (no action)
+
+- **No DLL-hijack vector.** Every Windows system DLL is loaded via
+  `windows.NewLazySystemDLL` (System32-only) or the `x/sys/windows` version
+  APIs; there is no `NewLazyDLL`/`LoadLibrary` by bare name that an
+  unprivileged user could redirect via the current directory or PATH.
+- The container-root re-rooting jail and the ELF resolver's regular-file gate
+  were each checked and found to correctly bound the impact of R8.
+
+## Operator guidance
+
+- On a shared host, either run swinv with `--no-service-command` (redacts
+  command lines, sudo evidence, ssh-key comments, IFEO lines) or write the
+  report to an admin-only directory and/or `--perm 0600`.
+- On Windows, prefer an output directory under `%ProgramData%\swinv`; swinv
+  will refuse an `--out` a non-admin owns.
+- Keep credential files (`--transmit-token-file`, `--transmit-key`,
+  `--transmit-key-passphrase-file`) mode 0600 and root-owned; swinv refuses
+  them otherwise. Prefer a systemd credential for the passphrase.
+
 ## Supported versions
 
 Only the latest tagged release is supported. `swinv` has not reached `v1.0.0`;
