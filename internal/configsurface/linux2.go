@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/chaugan/swinv/internal/model"
@@ -19,8 +20,8 @@ import (
 
 func collectLinuxExtras(root string, includeCommands bool) []model.ConfigEntry {
 	var out []model.ConfigEntry
-	out = append(out, collectSudo(root)...)
-	out = append(out, collectSSHKeys(root)...)
+	out = append(out, collectSudo(root, includeCommands)...)
+	out = append(out, collectSSHKeys(root, includeCommands)...)
 	out = append(out, collectAccounts(root)...)
 	out = append(out, collectKernelModules(root)...)
 	out = append(out, collectPreload(root)...)
@@ -31,7 +32,7 @@ func collectLinuxExtras(root string, includeCommands bool) []model.ConfigEntry {
 // collectSudo reads sudoers and the drop-in directory. The interesting rows
 // are the ones a consumer ranks: NOPASSWD (a privilege grant with no
 // authentication) and ALL=(ALL) breadth. The rule text is the evidence.
-func collectSudo(root string) []model.ConfigEntry {
+func collectSudo(root string, includeCommands bool) []model.ConfigEntry {
 	files := []string{"/etc/sudoers"}
 	if names, err := os.ReadDir(under(root, "/etc/sudoers.d")); err == nil {
 		for _, de := range names {
@@ -42,8 +43,8 @@ func collectSudo(root string) []model.ConfigEntry {
 	}
 	var out []model.ConfigEntry
 	for _, f := range files {
-		raw, err := os.ReadFile(under(root, f)) // #nosec G304 -- fixed/enumerated under the scan root
-		if err != nil {
+		raw, ok := readCapped(under(root, f))
+		if !ok {
 			continue
 		}
 		for _, line := range strings.Split(string(raw), "\n") {
@@ -63,15 +64,17 @@ func collectSudo(root string) []model.ConfigEntry {
 				User:   strings.TrimSpace(who),
 				Attack: "T1548.003",
 			}
-			var ev []string
-			if strings.Contains(line, "NOPASSWD") {
-				ev = append(ev, "grants sudo with NOPASSWD (no authentication)")
+			if includeCommands {
+				var ev []string
+				if strings.Contains(line, "NOPASSWD") {
+					ev = append(ev, "grants sudo with NOPASSWD (no authentication)")
+				}
+				if strings.Contains(strings.ReplaceAll(line, " ", ""), "=(ALL") ||
+					strings.Contains(line, "ALL=(ALL") || strings.HasSuffix(line, "ALL") {
+					ev = append(ev, "broad grant (ALL)")
+				}
+				e.Evidence = ev
 			}
-			if strings.Contains(strings.ReplaceAll(line, " ", ""), "=(ALL") ||
-				strings.Contains(line, "ALL=(ALL") || strings.HasSuffix(line, "ALL") {
-				ev = append(ev, "broad grant (ALL)")
-			}
-			e.Evidence = ev
 			out = append(out, e)
 		}
 	}
@@ -81,14 +84,19 @@ func collectSudo(root string) []model.ConfigEntry {
 // collectSSHKeys reads each account's authorized_keys. An entry is one
 // standing credential; the interesting join is a key on an account with no
 // password and no login shell.
-func collectSSHKeys(root string) []model.ConfigEntry {
+func collectSSHKeys(root string, includeCommands bool) []model.ConfigEntry {
 	var out []model.ConfigEntry
-	homes := accountHomes(root)
-	for user, home := range homes {
+	for _, acct := range accountHomeList(root) {
 		for _, name := range []string{"authorized_keys", "authorized_keys2"} {
-			p := filepath.Join(home, ".ssh", name)
-			raw, err := os.ReadFile(under(root, p)) // #nosec G304 -- per-account key file under the scan root
-			if err != nil {
+			p := filepath.Join(acct.home, ".ssh", name)
+			// Ownership-gated: the file lives in a directory the account owns,
+			// and a symlink to a root-only file (/root/.aws/credentials) would
+			// otherwise be read by the root collector and its contents placed
+			// in a report the attacker can read back. A real key file is owned
+			// by its own account; the gate refuses anything that resolves to a
+			// differently-owned file.
+			raw, ok := readOwnedByCapped(under(root, p), acct.uid)
+			if !ok {
 				continue
 			}
 			for _, line := range strings.Split(string(raw), "\n") {
@@ -96,14 +104,20 @@ func collectSSHKeys(root string) []model.ConfigEntry {
 				if line == "" || strings.HasPrefix(line, "#") {
 					continue
 				}
-				out = append(out, model.ConfigEntry{
+				e := model.ConfigEntry{
 					Kind:     model.ConfigKindSSHKey,
-					Name:     sshKeyComment(line),
 					Path:     p,
-					User:     user,
+					User:     acct.user,
 					Attack:   "T1098.004",
 					Evidence: []string{sshKeyType(line)},
-				})
+				}
+				// The trailing "user@host" comment is free text an operator
+				// may have put anything in; it rides the same redaction switch
+				// as command lines, which can carry secrets.
+				if includeCommands {
+					e.Name = sshKeyComment(line)
+				}
+				out = append(out, e)
 			}
 		}
 	}
@@ -113,8 +127,8 @@ func collectSSHKeys(root string) []model.ConfigEntry {
 // collectAccounts reads /etc/passwd. The rows worth a record are the ones a
 // consumer ranks: uid 0 (root-equivalent), and login-capable accounts.
 func collectAccounts(root string) []model.ConfigEntry {
-	raw, err := os.ReadFile(under(root, "/etc/passwd")) // #nosec G304 -- fixed path under the scan root
-	if err != nil {
+	raw, ok := readCapped(under(root, "/etc/passwd"))
+	if !ok {
 		return nil
 	}
 	var out []model.ConfigEntry
@@ -160,7 +174,7 @@ func pickAttack(uid0 bool) string {
 // A module loaded from outside the module tree is the joinable weakness.
 func collectKernelModules(root string) []model.ConfigEntry {
 	var out []model.ConfigEntry
-	if raw, err := os.ReadFile(under(root, "/proc/modules")); err == nil {
+	if raw, ok := readCapped(under(root, "/proc/modules")); ok {
 		for _, line := range strings.Split(string(raw), "\n") {
 			f := strings.Fields(line)
 			if len(f) == 0 {
@@ -181,8 +195,8 @@ func collectKernelModules(root string) []model.ConfigEntry {
 				continue
 			}
 			p := "/etc/modules-load.d/" + de.Name()
-			raw, err := os.ReadFile(under(root, p)) // #nosec G304 -- enumerated under the scan root
-			if err != nil {
+			raw, ok := readCapped(under(root, p))
+			if !ok {
 				continue
 			}
 			for _, line := range strings.Split(string(raw), "\n") {
@@ -207,8 +221,8 @@ func collectKernelModules(root string) []model.ConfigEntry {
 // loads whatever it names, before its own libraries. A near-universal
 // interposition point, and empty on a healthy host.
 func collectPreload(root string) []model.ConfigEntry {
-	raw, err := os.ReadFile(under(root, "/etc/ld.so.preload")) // #nosec G304 -- fixed path under the scan root
-	if err != nil {
+	raw, ok := readCapped(under(root, "/etc/ld.so.preload"))
+	if !ok {
 		return nil
 	}
 	var out []model.ConfigEntry
@@ -253,19 +267,31 @@ func collectShellInit(root string, includeCommands bool) []model.ConfigEntry {
 
 // --- small helpers ---------------------------------------------------------
 
-// accountHomes maps each account to its home directory, from /etc/passwd.
-func accountHomes(root string) map[string]string {
-	out := map[string]string{}
-	raw, err := os.ReadFile(under(root, "/etc/passwd")) // #nosec G304 -- fixed path under the scan root
-	if err != nil {
-		return out
+// acctHome is one account's user name, uid and home directory from /etc/passwd.
+type acctHome struct {
+	user string
+	uid  uint32
+	home string
+}
+
+// accountHomeList reads /etc/passwd for the home directories and uids the
+// ssh-key collector needs. The uid is the ownership the key file must match.
+func accountHomeList(root string) []acctHome {
+	raw, ok := readCapped(under(root, "/etc/passwd"))
+	if !ok {
+		return nil
 	}
+	var out []acctHome
 	for _, line := range strings.Split(string(raw), "\n") {
 		f := strings.Split(line, ":")
 		if len(f) < 6 || f[5] == "" {
 			continue
 		}
-		out[f[0]] = f[5]
+		uid, err := strconv.ParseUint(f[2], 10, 32)
+		if err != nil {
+			continue
+		}
+		out = append(out, acctHome{user: f[0], uid: uint32(uid), home: f[5]})
 	}
 	return out
 }

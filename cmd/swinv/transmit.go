@@ -54,10 +54,12 @@ func transmitKeyPassphrase(cfg *config, logf func(string, ...any)) ([]byte, erro
 		}
 	}
 	if cfg.transmitKeyPassphraseFile != "" {
-		if err := refuseOpenPassphraseFile(cfg.transmitKeyPassphraseFile); err != nil {
+		f, err := openCredential(cfg.transmitKeyPassphraseFile, "--transmit-key-passphrase-file")
+		if err != nil {
 			return nil, err
 		}
-		raw, err := os.ReadFile(cfg.transmitKeyPassphraseFile) // #nosec G304 -- operator-supplied path, by design
+		raw, err := io.ReadAll(io.LimitReader(f, 1<<20))
+		_ = f.Close()
 		if err != nil {
 			return nil, fmt.Errorf("--transmit-key-passphrase-file: %w", err)
 		}
@@ -79,7 +81,12 @@ func transmitKeyPassphrase(cfg *config, logf func(string, ...any)) ([]byte, erro
 // transmitToken resolves the bearer token from its file or the environment.
 func transmitToken(cfg *config) (string, error) {
 	if cfg.transmitTokenFile != "" {
-		raw, err := os.ReadFile(cfg.transmitTokenFile) // #nosec G304 -- operator-supplied path, by design
+		f, err := openCredential(cfg.transmitTokenFile, "--transmit-token-file")
+		if err != nil {
+			return "", err
+		}
+		raw, err := io.ReadAll(io.LimitReader(f, 1<<20))
+		_ = f.Close()
 		if err != nil {
 			return "", fmt.Errorf("--transmit-token-file: %w", err)
 		}

@@ -29,6 +29,13 @@ var suidDirs = []string{
 // runaway filesystem must degrade the answer, not the machine.
 const maxSUIDWalk = 2_000_000
 
+// maxSUIDEntries caps the number of setuid/setgid entries RECORDED, not just
+// dirents visited. Under --config-scope all the walk descends into sticky
+// world-writable dirs, and an unprivileged user can chmod u+s on thousands of
+// files they own (it grants no privilege but trips the setuid check) to
+// inflate the root process's live memory. A real host has dozens.
+const maxSUIDEntries = 4096
+
 // Collect reads the configuration surface of the tree at opts.Root.
 func Collect(ctx context.Context, opts Options) []model.ConfigEntry {
 	if opts.Scope == ScopeOff {
@@ -68,7 +75,7 @@ func under(root, p string) string {
 func collectCron(root string, includeCommands bool) []model.ConfigEntry {
 	var out []model.ConfigEntry
 
-	if raw, err := os.ReadFile(under(root, "/etc/crontab")); err == nil { // #nosec G304 -- fixed path under the scan root
+	if raw, ok := readCapped(under(root, "/etc/crontab")); ok {
 		out = append(out, parseCrontab(string(raw), "/etc/crontab", "root", true, includeCommands)...)
 	}
 	if names, err := os.ReadDir(under(root, "/etc/cron.d")); err == nil {
@@ -77,7 +84,7 @@ func collectCron(root string, includeCommands bool) []model.ConfigEntry {
 				continue
 			}
 			p := "/etc/cron.d/" + de.Name()
-			if raw, err := os.ReadFile(under(root, p)); err == nil { // #nosec G304 -- enumerated under the scan root
+			if raw, ok := readCapped(under(root, p)); ok {
 				out = append(out, parseCrontab(string(raw), p, "root", true, includeCommands)...)
 			}
 		}
@@ -89,7 +96,7 @@ func collectCron(root string, includeCommands bool) []model.ConfigEntry {
 				continue
 			}
 			p := "/var/spool/cron/crontabs/" + de.Name()
-			if raw, err := os.ReadFile(under(root, p)); err == nil { // #nosec G304 -- enumerated under the scan root
+			if raw, ok := readCapped(under(root, p)); ok {
 				out = append(out, parseCrontab(string(raw), p, de.Name(), false, includeCommands)...)
 			}
 		}
@@ -153,8 +160,8 @@ func collectSystemd(root string, includeCommands bool) []model.ConfigEntry {
 
 	parsed := map[string]unitFile{}
 	for name, p := range units {
-		raw, err := os.ReadFile(under(root, p)) // #nosec G304 -- enumerated under the scan root
-		if err != nil {
+		raw, ok := readCapped(under(root, p))
+		if !ok {
 			continue
 		}
 		parsed[name] = parseUnit(string(raw))
@@ -262,6 +269,21 @@ func collectSUID(ctx context.Context, opts Options, root, scope string) []model.
 			mode := info.Mode()
 			if mode&(os.ModeSetuid|os.ModeSetgid) == 0 {
 				return nil
+			}
+			if len(out) >= maxSUIDEntries {
+				return fs.SkipAll
+			}
+			// Under the whole-filesystem walk (--config-scope all) the walk
+			// reaches user-writable dirs, where an unprivileged attacker can
+			// chmod u+s files they own to inflate this list. A setuid bit on
+			// a non-root-owned file runs as that unprivileged user and is no
+			// escalation, so it is dropped there. The standard scope only
+			// walks system binary directories the attacker cannot write, so
+			// it keeps every entry and stays byte-for-byte as before.
+			if scope == ScopeAll {
+				if uid, ok := suidOwner(info); ok && uid != 0 {
+					return nil
+				}
 			}
 			out = append(out, model.ConfigEntry{
 				Kind:       model.ConfigKindSUID,

@@ -153,6 +153,17 @@ func Probe(exe string, opts Options) ([]Link, error) {
 		}
 		seen[it.soname] = true
 
+		// A DT_NEEDED entry is a bare soname ("libcrypto.so.3"). A crafted
+		// binary can put a path there ("../../../etc/shadow"); ld.so treats a
+		// slash-bearing name as a path, and honouring that from an
+		// attacker-controlled binary would have the root probe re-root and
+		// stat arbitrary host files. A real soname never contains a slash, so
+		// reject the ones that do rather than resolve them.
+		if strings.ContainsRune(it.soname, '/') {
+			out = append(out, Link{Soname: it.soname, Direct: it.depth == 1})
+			continue
+		}
+
 		path := resolver.resolve(it.soname, it.dirs)
 		link := Link{Soname: it.soname, Path: path, Direct: it.depth == 1}
 
@@ -286,7 +297,12 @@ func (r *resolver) realpath(p string) string {
 		}
 		if fi.Mode()&os.ModeSymlink == 0 {
 			if fi.Mode().IsRegular() {
-				return p
+				// Cleaned, so a crafted DT_NEEDED like "../../../etc/shadow"
+				// cannot make the caller record or re-open an un-normalised
+				// path that names a file outside the intended library search.
+				// filepath.Join above already jails the read under r.root;
+				// this makes the returned string honest too.
+				return path.Clean(p)
 			}
 			return ""
 		}

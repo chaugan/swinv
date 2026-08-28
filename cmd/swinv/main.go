@@ -609,6 +609,12 @@ func writeFiles(cfg *config, report *model.Report, logf func(string, ...any), st
 	// Derived from --perm. The default (0755) keeps a collector running as
 	// another user able to read the reports, which is the documented
 	// deployment model; --perm 0600 tightens it to owner-only.
+	// On Windows, refuse or lock down an output directory an unprivileged user
+	// could have pre-seeded; a no-op on unix, where the mode below governs.
+	if err := secureOutputDir(cfg.out); err != nil {
+		fmt.Fprintf(stderr, "swinv: %v\n", err)
+		return exitFatal
+	}
 	// #nosec G301 -- the mode is operator-chosen and validated, see parsePerm
 	if err := os.MkdirAll(cfg.out, cfg.dirPerm); err != nil {
 		fmt.Fprintf(stderr, "swinv: creating %s: %v\n", cfg.out, err)

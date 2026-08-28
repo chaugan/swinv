@@ -21,7 +21,7 @@ func collectWindowsExtras(includeCommands bool) []model.ConfigEntry {
 	var out []model.ConfigEntry
 	out = append(out, collectDefenderExclusions()...)
 	out = append(out, collectServices(includeCommands)...)
-	out = append(out, collectIFEO()...)
+	out = append(out, collectIFEO(includeCommands)...)
 	out = append(out, collectAppInit()...)
 	return out
 }
@@ -107,7 +107,7 @@ func expandImagePath(image string) string {
 
 // collectIFEO reads Image File Execution Options: a Debugger value hijacks
 // the named program's launch, and a GlobalFlag can silently attach one.
-func collectIFEO() []model.ConfigEntry {
+func collectIFEO(includeCommands bool) []model.ConfigEntry {
 	base := `SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options`
 	root, err := registry.OpenKey(registry.LOCAL_MACHINE, base, registry.ENUMERATE_SUB_KEYS)
 	if err != nil {
@@ -129,15 +129,21 @@ func collectIFEO() []model.ConfigEntry {
 		if strings.TrimSpace(debugger) == "" {
 			continue // only the hijacked entries are worth a record
 		}
-		out = append(out, model.ConfigEntry{
+		e := model.ConfigEntry{
 			Kind:       model.ConfigKindIFEO,
 			Name:       name,
 			Path:       `HKLM\` + base + `\` + name,
 			Executable: windowsExecutable(debugger),
-			Command:    debugger,
 			Attack:     "T1546.012",
 			Evidence:   []string{"launching " + name + " runs this debugger instead"},
-		})
+		}
+		// The debugger command line rides the same redaction switch as every
+		// other command line; it was set unconditionally, silently defeating
+		// --no-service-command on this one field.
+		if includeCommands {
+			e.Command = debugger
+		}
+		out = append(out, e)
 	}
 	return out
 }

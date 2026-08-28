@@ -81,8 +81,17 @@ func (s *Spool) statePath() string { return filepath.Join(s.dir, s.name+spoolSta
 // ignores -- one wasted scan. The other order would leave a state file
 // pointing at a payload that does not exist, and a resume would report a
 // missing file for a scan that was never written.
-func (c *Client) NewSpool(dir, scanID, hostname string, declared int, perm, dirPerm os.FileMode, write func(io.Writer) error) (*Spool, error) {
-	// #nosec G301 -- the mode is derived from the operator's --perm
+func (c *Client) NewSpool(dir, scanID, hostname string, declared int, _, _ os.FileMode, write func(io.Writer) error) (*Spool, error) {
+	// The spool always holds the complete scan, including whatever the report
+	// permission chose to share; but the spool is swinv's private staging
+	// area, not a file anyone was meant to read, and it lives under a
+	// world-traversable --out on a machine with unprivileged local users.
+	// Owner-only regardless of the caller's --perm, so a widened report mode
+	// cannot widen the spool. See docs/SECURITY.md (R4). The two mode
+	// parameters are ignored deliberately and kept for call-site
+	// compatibility.
+	const perm, dirPerm = os.FileMode(0o600), os.FileMode(0o700)
+	// #nosec G301 -- forced to 0700 here
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return nil, fmt.Errorf("transmit: creating the spool directory %s: %w", dir, err)
 	}

@@ -31,14 +31,31 @@ func dumpStacks(dir string) (string, error) {
 	}
 
 	name := fmt.Sprintf("swinv-stacks-%s.txt", time.Now().UTC().Format("20060102T150405Z"))
+	// O_EXCL|O_NOFOLLOW: the goroutine dump names scanned paths and internal
+	// addresses, and swinv runs as root. A predictable name written with
+	// O_CREATE|O_TRUNC into a shared directory lets an unprivileged user
+	// pre-plant a file to capture the dump, or a symlink to redirect the
+	// write onto a root-owned file. Refusing an existing path and never
+	// following a symlink closes both.
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, buf, 0o600); err != nil {
-		// Fall back to the temp directory: the output directory may be
-		// read-only, or may be the very thing that is misbehaving.
-		path = filepath.Join(os.TempDir(), name)
-		if err2 := os.WriteFile(path, buf, 0o600); err2 != nil {
+	if err := writeExclusive(path, buf); err != nil {
+		// Fall back to a private, unpredictable temp file: the output
+		// directory may be read-only, or may be the very thing misbehaving.
+		// os.CreateTemp creates with O_EXCL and a random suffix in a dir only
+		// this process should be writing dumps into.
+		tmpDir, mkErr := os.MkdirTemp("", "swinv-stacks-")
+		if mkErr != nil {
 			return "", fmt.Errorf("writing goroutine dump: %w", err)
 		}
+		f, cErr := os.CreateTemp(tmpDir, "stacks-*.txt")
+		if cErr != nil {
+			return "", fmt.Errorf("writing goroutine dump: %w", err)
+		}
+		defer func() { _ = f.Close() }()
+		if _, wErr := f.Write(buf); wErr != nil {
+			return "", fmt.Errorf("writing goroutine dump: %w", wErr)
+		}
+		return f.Name(), nil
 	}
 	return path, nil
 }
