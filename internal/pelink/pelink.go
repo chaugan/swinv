@@ -114,6 +114,15 @@ type prober struct {
 	// loop obeyed the same expired context as the work it was assembling.
 	ctx context.Context
 
+	// statCache remembers whether a resolution candidate exists, keyed by
+	// lowered path. Every binary's BFS re-resolves the same system DLLs -
+	// ntdll, KERNELBASE, msvcrt - and 46,000 binaries times up to three
+	// stats per import was millions of serial syscalls through the
+	// filesystem filter drivers, in a loop whose comment claimed it was
+	// pure map lookups. Negative answers are cached too; they repeat just
+	// as often.
+	statCache map[string]bool
+
 	// firstErr keeps the first parse failure verbatim. When a whole machine
 	// produces zero links, the difference between "every open failed with
 	// ERROR_ACCESS_DENIED" and "these are not PE files" is the entire
@@ -128,7 +137,7 @@ type parsed struct {
 }
 
 func newProber() *prober {
-	return &prober{cache: map[string]parsed{}}
+	return &prober{cache: map[string]parsed{}, statCache: map[string]bool{}}
 }
 
 // imports parses one file through the cache. Keyed case-insensitively,
@@ -214,7 +223,7 @@ func (p *prober) probe(exe string, opts Options) ([]Link, error) {
 		}
 
 		if !isAPISet(it.mod.name) {
-			l.Path = resolve(it.mod.name, it.from, appDir, sysDir)
+			l.Path = p.resolve(it.mod.name, it.from, appDir, sysDir)
 		}
 		out = append(out, l)
 
@@ -285,17 +294,33 @@ func isAPISet(name string) bool {
 // directory, then the system directory. PATH and SxS redirection are
 // deliberately out of scope - both depend on an environment this probe does
 // not have - and a miss is recorded as a nameless path rather than guessed.
-func resolve(name, objDir, appDir, sysDir string) string {
+func (p *prober) resolve(name, objDir, appDir, sysDir string) string {
 	for _, dir := range []string{objDir, appDir, sysDir} {
 		if dir == "" {
 			continue
 		}
-		p := filepath.Join(dir, name)
-		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
-			return p
+		candidate := filepath.Join(dir, name)
+		if p.isFile(candidate) {
+			return candidate
 		}
 	}
 	return ""
+}
+
+func (p *prober) isFile(path string) bool {
+	key := strings.ToLower(path)
+	p.mu.Lock()
+	hit, ok := p.statCache[key]
+	p.mu.Unlock()
+	if ok {
+		return hit
+	}
+	fi, err := os.Stat(path)
+	hit = err == nil && fi.Mode().IsRegular()
+	p.mu.Lock()
+	p.statCache[key] = hit
+	p.mu.Unlock()
+	return hit
 }
 
 // systemDir picks System32 or SysWOW64 by the binary's machine type: a
@@ -404,8 +429,8 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 	wg.Wait()
 	close(progressDone)
 
-	// Assembly runs to completion REGARDLESS of the deadline: everything
-	// expensive already happened, this is cache lookups, and the deadline
+	// Assembly runs to completion REGARDLESS of the deadline: the parses
+	// already happened, resolution stats are cached, and the deadline
 	// only stops the prober from starting new parses for transitive
 	// resolution. The links from every file parsed in time are delivered.
 	stats := Stats{Files: len(paths), Probed: int(atomic.LoadInt64(&done))}

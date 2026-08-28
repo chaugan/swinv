@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/chaugan/swinv/internal/model"
 )
@@ -189,30 +190,35 @@ func containingProduct(exe string, owners map[string][]model.Component) ([]strin
 	if exe == "" {
 		return nil, ""
 	}
-	sep := "/"
-	if strings.Contains(exe, "\\") {
-		sep = "\\"
+	sep := byte('/')
+	if strings.ContainsRune(exe, '\\') {
+		sep = '\\'
 	}
+	// Ancestor walking, not a scan: strip one path component at a time and
+	// look each prefix up directly. Longest match first by construction,
+	// O(path depth) map lookups per call. The previous shape iterated every
+	// key in the owners map per call, with a string concatenation per key -
+	// which, called once per link on a 46,000-binary probe against ~17,000
+	// recorded locations, was billions of iterations and tens of gigabytes
+	// of garbage. The all-core GC bursts an operator reported as "HAMMERING
+	// the system" were this loop's exhaust.
 	key := lookupKey(exe)
-
-	var best string
-	for dir := range owners {
-		if len(dir) >= len(key) || !strings.HasPrefix(key, dir+sep) {
+	for {
+		i := strings.LastIndexByte(key, sep)
+		if i <= 0 {
+			return nil, ""
+		}
+		key = key[:i]
+		matches, ok := owners[key]
+		if !ok {
 			continue
 		}
-		if len(dir) > len(best) {
-			best = dir
+		var ids []string
+		for _, c := range matches {
+			ids = append(ids, model.Identify(c))
 		}
+		return model.SortedSet(ids), key
 	}
-	if best == "" {
-		return nil, ""
-	}
-
-	var ids []string
-	for _, c := range owners[best] {
-		ids = append(ids, model.Identify(c))
-	}
-	return model.SortedSet(ids), best
 }
 
 // lookupKey normalises a path for comparison against recorded locations.
@@ -243,11 +249,25 @@ func indexByLocation(components []model.Component) map[string][]model.Component 
 // per report so probing tens of thousands of DLL paths stays cheap.
 type OwnerIndex struct {
 	owners map[string][]model.Component
+
+	// memo caches answers by lookup key. The probe asks about the same
+	// paths tens of thousands of times - every binary on the machine links
+	// the same system DLLs - and the ladder below allocates on every climb.
+	memo map[string]ownerAnswer
+	mu   sync.Mutex
+}
+
+type ownerAnswer struct {
+	ids         []string
+	osComponent bool
 }
 
 // NewOwnerIndex indexes the inventory's recorded locations.
 func NewOwnerIndex(components []model.Component) *OwnerIndex {
-	return &OwnerIndex{owners: indexByLocation(components)}
+	return &OwnerIndex{
+		owners: indexByLocation(components),
+		memo:   map[string]ownerAnswer{},
+	}
 }
 
 // Owners resolves one path. ids follow the services convention: a PURL when
@@ -258,7 +278,22 @@ func (ix *OwnerIndex) Owners(path string) (ids []string, osComponent bool) {
 	if path == "" {
 		return nil, false
 	}
-	if matches := ix.owners[lookupKey(path)]; len(matches) > 0 {
+	key := lookupKey(path)
+	ix.mu.Lock()
+	if a, ok := ix.memo[key]; ok {
+		ix.mu.Unlock()
+		return a.ids, a.osComponent
+	}
+	ix.mu.Unlock()
+	ids, osComponent = ix.resolve(path, key)
+	ix.mu.Lock()
+	ix.memo[key] = ownerAnswer{ids: ids, osComponent: osComponent}
+	ix.mu.Unlock()
+	return ids, osComponent
+}
+
+func (ix *OwnerIndex) resolve(path, key string) (ids []string, osComponent bool) {
+	if matches := ix.owners[key]; len(matches) > 0 {
 		for _, c := range matches {
 			ids = append(ids, model.Identify(c))
 		}

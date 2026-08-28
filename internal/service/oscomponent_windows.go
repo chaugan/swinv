@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // IsOSComponent reports whether an executable belongs to the operating system.
@@ -25,14 +26,26 @@ func IsOSComponent(exe string) bool {
 	if exe == systemProcessName {
 		return true
 	}
-	root := os.Getenv("SystemRoot")
-	if root == "" {
-		root = `C:\Windows`
-	}
-	root = strings.ToLower(filepath.Clean(root))
+	// %SystemRoot% is a constant; recomputing and re-lowering it per call
+	// allocated four strings for every one of the hundreds of thousands of
+	// DLL paths the link probe asks about.
+	osRootOnce.Do(func() {
+		root := os.Getenv("SystemRoot")
+		if root == "" {
+			root = `C:\Windows`
+		}
+		osRootLower = strings.ToLower(filepath.Clean(root))
+	})
 	candidate := strings.ToLower(filepath.Clean(exe))
-	return candidate == root || strings.HasPrefix(candidate, root+string(filepath.Separator))
+	return candidate == osRootLower ||
+		strings.HasPrefix(candidate, osRootLower) &&
+			len(candidate) > len(osRootLower) && candidate[len(osRootLower)] == filepath.Separator
 }
+
+var (
+	osRootOnce  sync.Once
+	osRootLower string
+)
 
 // pathsAreCaseInsensitive reports whether two recorded paths that differ only
 // in case name the same file. They do on Windows, and the registry and the

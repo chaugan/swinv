@@ -256,7 +256,9 @@ func containerRoot(id string) string {
 // linkLines flattens every link in the report.
 func linkLines(r *model.Report, scannedAt string) []linkLine {
 	roots := recordRoots(r)
-	var out []linkLine
+	// Sized exactly: half a million records built through append's doubling
+	// left ~100MB of dead half-capacity slices behind for the collector.
+	out := make([]linkLine, 0, countLinkLines(r))
 	add := func(exe, exePURL, containerID string, listening bool, links []model.Link) {
 		for _, l := range links {
 			root := ""
