@@ -146,6 +146,7 @@ func cdxComponent(c model.Component, refs map[string]int) cyclonedx.Component {
 	props = appendProp(props, propComponentPrefix+"change", c.Change)
 	props = appendProp(props, propComponentPrefix+"language", c.Language)
 	props = appendProp(props, propComponentPrefix+"found_by", c.FoundBy)
+	props = appendProp(props, propComponentPrefix+"source", c.Source)
 
 	// Ecosystem-specific identity has no home in the CycloneDX component
 	// schema, so it goes to properties under the same prefix as everything

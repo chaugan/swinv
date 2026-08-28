@@ -33,6 +33,7 @@ type ndjsonLine struct {
 	Licenses  []string `json:"licenses,omitempty"`
 	Locations []string `json:"locations,omitempty"`
 	FoundBy   string   `json:"found_by,omitempty"`
+	Source    string   `json:"source,omitempty"`
 	SHA256    string   `json:"sha256,omitempty"`
 	Change    string   `json:"change,omitempty"`
 
@@ -99,7 +100,11 @@ type heartbeatLine struct {
 	SwinvVersion  string                        `json:"swinv_version,omitempty"`
 	Counts        map[string]int                `json:"counts,omitempty"`
 	Sources       map[string]model.SourceStatus `json:"sources,omitempty"`
-	DurationMS    int64                         `json:"duration_ms,omitempty"`
+
+	// ScanProfile is what the scan was asked to collect, so a consumer
+	// compares two scans of a host only when they are comparable (#15).
+	ScanProfile *model.ScanProfile `json:"scan_profile,omitempty"`
+	DurationMS  int64              `json:"duration_ms,omitempty"`
 
 	// InventoryUnchanged explains the one case where Counts["component"] and
 	// NComponents legitimately disagree: --heartbeat suppressed the component
@@ -201,6 +206,7 @@ func WriteNDJSON(w io.Writer, r *model.Report) error {
 			Licenses:     c.Licenses,
 			Locations:    c.Locations,
 			FoundBy:      c.FoundBy,
+			Source:       c.Source,
 			SHA256:       c.SHA256,
 			Vendor:       c.Vendor,
 			Root:         c.Root,
@@ -283,6 +289,7 @@ func manifestRecord(r *model.Report, scannedAt string, counts map[string]int) he
 		SwinvVersion:        r.Tool.Version,
 		Counts:              counts,
 		Sources:             r.Scan.Sources,
+		ScanProfile:         r.Scan.Profile,
 		DurationMS:          r.Scan.DurationMS,
 		InventoryUnchanged:  r.Scan.InventoryUnchanged,
 		InventoryComponents: len(r.Components),

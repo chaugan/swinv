@@ -11,11 +11,30 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.15`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.16`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.15"
+"schema_version": "1.16"
 ```
+
+**1.15 → 1.16** made a narrower scan distinguishable from software being
+uninstalled (#15):
+
+- **`source` on every component** (JSON, NDJSON, CSV column 21, CycloneDX
+  property) - the manifest `sources` key the component is counted under.
+  `found_by` names the cataloger (`dpkg-db-cataloger`); `source` names the
+  manifest key (`dpkg`), and the two did not map by any rule a consumer
+  could reproduce (`dpkg` vs `dpkg-db-cataloger`, `container-runtime-probe`
+  with no suffix at all). A consumer asking "did the source that produced
+  this component run this scan?" now joins `source` against `sources`
+  directly.
+- **`scan_profile` on the heartbeat** - what the scan was asked to collect:
+  `full_scan`, `hash`, `elf_scope`, `config_scope`, `ndjson_include`,
+  `containers`, `services`, `root`. `sources` says what ran; `scan_profile`
+  says what was requested, so a consumer compares two scans only when they
+  are comparable. A scan without `--full-scan` produces fewer components on
+  purpose, and treating that as remediation - closing findings for files
+  still on disk - is the specific wrong answer this closes.
 
 **1.14 → 1.15** added the Windows patch-level join key (#14), on `host` in
 the JSON report and on the heartbeat line - the one line a consumer always

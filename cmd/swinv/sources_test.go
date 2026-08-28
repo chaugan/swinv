@@ -195,3 +195,20 @@ func TestComponentCountsAddUpToTheInventory(t *testing.T) {
 		t.Errorf("a component with no found_by was not counted anywhere: %v", counts)
 	}
 }
+
+// Issue #15: the source field on a component must be the exact manifest key,
+// including the cases where found_by does not map by stripping "-cataloger".
+func TestSourceKeyMatchesManifestVocabulary(t *testing.T) {
+	cases := map[string]string{
+		"dpkg-db-cataloger":           "dpkg",
+		"windows-pe-cataloger":        "windows-pe",
+		"language-manifest-cataloger": "language-manifest",
+		"container-runtime-probe":     "container-runtime-probe",
+		"":                            "unattributed",
+	}
+	for foundBy, want := range cases {
+		if got := sourceKey(foundBy); got != want {
+			t.Errorf("sourceKey(%q) = %q, want %q", foundBy, got, want)
+		}
+	}
+}

@@ -7,6 +7,26 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Added
+
+- **A narrower scan is no longer indistinguishable from software being
+  uninstalled** (#15), schema `1.16`:
+  - Every component carries `source`, the manifest `sources` key it is
+    counted under (`dpkg`, not `dpkg-db-cataloger`). `found_by` and the
+    sources vocabulary did not map by any rule a consumer could reproduce;
+    now a component joins to the source that produced it directly, in JSON,
+    NDJSON, the CSV (column 21) and CycloneDX.
+  - The heartbeat carries `scan_profile` - `full_scan`, `hash`, `elf_scope`,
+    `config_scope`, `ndjson_include`, `containers`, `services`, `root` -
+    so a consumer compares two scans of a host only when they are
+    comparable. A scan without `--full-scan` finds fewer components on
+    purpose; treating that as remediation closed 5,331 findings downstream
+    for files still on disk. With these two fields a finding can be closed
+    when the source that produced its component ran and held when it did
+    not - per finding, not a blanket per-host freeze.
+
 ## [0.9.3] - 2026-08-28
 
 More of the persistence and privilege surface, collected.

@@ -43,6 +43,16 @@ func newScanID() string {
 // reintroduced the whole problem.
 func buildManifest(cfg *config, report *model.Report, services model.SourceStatus) []string {
 	report.Scan.ScanID = newScanID()
+	report.Scan.Profile = scanProfile(cfg)
+
+	// Stamp each component with the manifest sources key it is counted
+	// under, so a consumer joins component to source directly. The mapping
+	// lives in sourceKey and nowhere else, which is the point: the key a
+	// component carries and the key the manifest declares come from one
+	// function and cannot drift.
+	for i := range report.Components {
+		report.Components[i].Source = sourceKey(report.Components[i].FoundBy)
+	}
 
 	counts := componentsBySource(report.Components)
 	results := probeSources(cfg.root, knownSourceProbes())
@@ -128,4 +138,24 @@ func serviceSourceStatus(cfg *config, snapshot *service.Result, err error) model
 			Reason: "the listening-socket snapshot returned nothing and gave no reason"}
 	}
 	return model.SourceStatus{Status: model.SourceOK}
+}
+
+// scanProfile records what this run was asked to collect, from the flags. A
+// consumer reads it to compare only like scans with like: the fields that
+// change how much is found are exactly the ones here.
+func scanProfile(cfg *config) *model.ScanProfile {
+	root := cfg.root
+	if root == "" {
+		root = "/"
+	}
+	return &model.ScanProfile{
+		FullScan:      cfg.fullScan,
+		Hash:          cfg.hash,
+		ELFScope:      cfg.elfScope,
+		ConfigScope:   cfg.configScope,
+		NDJSONInclude: parseNDJSONInclude(cfg.ndjsonInclude),
+		Containers:    !cfg.noContainers,
+		Services:      !cfg.noServices,
+		Root:          root,
+	}
 }

@@ -327,3 +327,51 @@ func TestManifestOmitsTheBuildWhereThereIsNone(t *testing.T) {
 		t.Errorf("a Linux heartbeat grew an empty os_build: %s", first)
 	}
 }
+
+// Issue #15: the manifest declares what the scan was asked to collect, so a
+// consumer refuses to read a narrower scan as software being uninstalled.
+func TestManifestCarriesTheScanProfile(t *testing.T) {
+	r := manifestReport()
+	r.Scan.Profile = &model.ScanProfile{
+		FullScan: true, Hash: true, ELFScope: "all", ConfigScope: "all",
+		NDJSONInclude: []string{"config", "link"}, Containers: true, Services: true, Root: "/",
+	}
+	var buf bytes.Buffer
+	if err := WriteNDJSON(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	manifest, _ := decodeStream(t, buf.Bytes())
+	prof, ok := manifest["scan_profile"].(map[string]any)
+	if !ok {
+		t.Fatal("the heartbeat carries no scan_profile")
+	}
+	if prof["full_scan"] != true || prof["elf_scope"] != "all" || prof["config_scope"] != "all" {
+		t.Errorf("scan_profile = %v", prof)
+	}
+}
+
+// The component's source field is the manifest key it is counted under, so a
+// consumer joins component to source without reproducing sourceKey's table.
+func TestComponentCarriesItsSource(t *testing.T) {
+	r := manifestReport()
+	r.Components[0].FoundBy = "dpkg-db-cataloger"
+	r.Components[0].Source = "dpkg"
+
+	var buf bytes.Buffer
+	if err := WriteNDJSON(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n")) {
+		var m map[string]any
+		if err := json.Unmarshal(line, &m); err != nil {
+			t.Fatal(err)
+		}
+		if m["found_by"] == "dpkg-db-cataloger" {
+			if m["source"] != "dpkg" {
+				t.Errorf("source = %v, want dpkg beside found_by dpkg-db-cataloger", m["source"])
+			}
+			return
+		}
+	}
+	t.Fatal("the dpkg component was not emitted")
+}

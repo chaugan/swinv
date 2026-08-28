@@ -19,7 +19,7 @@ import (
 // document.
 // 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
 // describing manifest (see the NDJSON heartbeat record). Also additive.
-const SchemaVersion = "1.15"
+const SchemaVersion = "1.16"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -141,6 +141,22 @@ type Tool struct {
 	SyftVersion string `json:"syft_version"`
 }
 
+// ScanProfile is what the scan was asked to collect. A consumer comparing two
+// scans of a host uses it to refuse a comparison across different scopes: a
+// scan without full_scan produced fewer components on purpose, and treating
+// that as software being uninstalled is the specific wrong answer #15 exists
+// to prevent.
+type ScanProfile struct {
+	FullScan      bool     `json:"full_scan"`
+	Hash          bool     `json:"hash"`
+	ELFScope      string   `json:"elf_scope,omitempty"`
+	ConfigScope   string   `json:"config_scope,omitempty"`
+	NDJSONInclude []string `json:"ndjson_include,omitempty"`
+	Containers    bool     `json:"containers"`
+	Services      bool     `json:"services"`
+	Root          string   `json:"root,omitempty"`
+}
+
 // Host is the identity of the machine that was scanned. Every field is
 // optional: an unreadable source yields an empty value rather than an error.
 type Host struct {
@@ -185,12 +201,18 @@ type ScanMeta struct {
 	StartedAt  time.Time `json:"started_at"`
 	FinishedAt time.Time `json:"finished_at"`
 	DurationMS int64     `json:"duration_ms"`
-	Root       string    `json:"root"`
-	Excluded   []string  `json:"excluded,omitempty"`
-	Catalogers []string  `json:"catalogers,omitempty"`
-	RanAsRoot  bool      `json:"ran_as_root"`
-	Incomplete bool      `json:"incomplete"`
-	Warnings   []string  `json:"warnings,omitempty"`
+
+	// Profile declares what this scan was asked to collect, so two scans are
+	// comparable only when they are comparable. sources says what ran;
+	// Profile says what was requested - the difference between "this source
+	// found nothing" and "this source was not asked to look" (#15).
+	Profile    *ScanProfile `json:"profile,omitempty"`
+	Root       string       `json:"root"`
+	Excluded   []string     `json:"excluded,omitempty"`
+	Catalogers []string     `json:"catalogers,omitempty"`
+	RanAsRoot  bool         `json:"ran_as_root"`
+	Incomplete bool         `json:"incomplete"`
+	Warnings   []string     `json:"warnings,omitempty"`
 
 	// InventoryDigest fingerprints the component list, for a consumer deciding
 	// whether this host changed without reading every component of it.
@@ -326,6 +348,17 @@ type Component struct {
 	Licenses   []string          `json:"licenses,omitempty"`
 	Locations  []string          `json:"locations,omitempty"`
 	FoundBy    string            `json:"found_by,omitempty"`
+
+	// Source is the manifest sources key this component is counted under -
+	// the same string that keys scan.sources. found_by names the cataloger
+	// ("dpkg-db-cataloger"); Source names the source the manifest reconciles
+	// ("dpkg"), and the two vocabularies did not map by any rule a consumer
+	// could reproduce. A consumer asking "did the source that produced this
+	// component run this scan?" joins Source against sources without
+	// guessing - which is the difference between closing a finding because
+	// software was removed and closing it because a narrower scan did not
+	// look (#15).
+	Source string `json:"source,omitempty"`
 
 	// SHA256 is the hex content digest of the component's primary on-disk
 	// location. Populated only when --hash is given, because hashing every
