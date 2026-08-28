@@ -17,6 +17,10 @@ func TestClassifyInstaller(t *testing.T) {
 		{"underscore installer", "node-v20_installer.exe", "", "", "", true},
 		{"vc redist", "vc_redist.x64.exe", "", "", "Microsoft Visual C++", true},
 		{"inno description", "app.exe", "Setup", "", "My App", true},
+		// The reported case exactly: renamed on disk, but the 7-Zip SFX
+		// original_filename and version 18.05 give it away.
+		{"7zip sfx stub", "Firefox Installer.exe", "Firefox", "7zS.sfx.exe", "Firefox", true},
+		{"7zip sfx renamed", "totally-legit.exe", "Firefox", "7zSD.sfx.exe", "Firefox", true},
 
 		// The real application must NOT trip: firefox.exe is Firefox.
 		{"real firefox", "firefox.exe", "Firefox", "firefox.exe", "Firefox", false},

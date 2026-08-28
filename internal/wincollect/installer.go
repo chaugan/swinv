@@ -31,6 +31,15 @@ var installerDescription = regexp.MustCompile(`(?i)\b(installer|setup|install wi
 // "vcredist"/"vc_redist" and the *_setup/*-setup forms cover the rest.
 var installerFilename = regexp.MustCompile(`(?i)((^|[ _\-])(setup|install|installer|uninstall|vc_redist|vcredist)([ _\-.]|$)|(setup|install|installer|uninstall)(\.[a-z0-9]+)?$)`)
 
+// installerStubOriginalFilename matches the original_filename an installer
+// stub carries even when the file on disk has been renamed. A 7-Zip
+// self-extracting archive ("7zS.sfx.exe", "7zSD.sfx.exe") is what Mozilla and
+// many others wrap an installer in; wextract is IExpress; nsis is the NSIS
+// stub. This is the field that caught the reported case: "Firefox Installer.exe"
+// carried original_filename "7zS.sfx.exe" and version 18.05 - the 7-Zip SFX's
+// version, not Firefox's.
+var installerStubOriginalFilename = regexp.MustCompile(`(?i)(7z[a-z]{0,3}\.sfx|wextract|nsis[0-9a-z]*\.exe|_?setup\.exe$|installer\.exe$)`)
+
 // classifyInstaller reports whether the PE at basename with these version
 // strings is an installer, and the single piece of evidence that decided it.
 //
@@ -43,6 +52,12 @@ func classifyInstaller(basename, fileDescription, originalFilename, productName 
 	}
 	if m := installerDescription.FindString(originalFilename); m != "" {
 		return true, "original filename names it a " + strings.ToLower(m)
+	}
+	// The stub the installer was built with, betrayed by original_filename
+	// even when the file was renamed. This is the strongest single tell that
+	// the version belongs to the wrapper, not the application.
+	if installerStubOriginalFilename.MatchString(originalFilename) {
+		return true, "built as a self-extracting installer stub (" + originalFilename + ")"
 	}
 	if installerFilename.MatchString(basename) {
 		return true, "the file name is an installer's (" + basename + ")"
