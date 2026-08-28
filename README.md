@@ -582,10 +582,12 @@ Installed software and listening sockets still miss a third class of fact:
 the persistence and privilege mechanisms MITRE ATT&CK is largely made of.
 Those are configurations, not software defects - no CVE feed will ever list
 them - so `swinv` collects them the same way it collects everything else,
-as local reads. Cron jobs, systemd timers and services, SUID/SGID binaries
-on Linux; Scheduled Tasks and Run-key autoruns on Windows. Each entry names
-the executable it runs, joined to the package that installed it, and the
-ATT&CK technique the mechanism is the surface for:
+as local reads. On Linux: cron jobs, systemd timers and services, SUID/SGID
+binaries, sudo rules, SSH authorized keys, accounts, kernel modules,
+`ld.so.preload` and shell init. On Windows: Scheduled Tasks, Run-key autoruns, the services
+registry, Defender exclusions, Image File Execution Options and AppInit_DLLs.
+Each entry names the executable it runs, joined to the package that installed
+it, and the ATT&CK technique the mechanism is the surface for:
 
 ```jsonc
 { "record_type": "config", "kind": "cron",

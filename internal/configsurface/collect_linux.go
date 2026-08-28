@@ -43,6 +43,7 @@ func Collect(ctx context.Context, opts Options) []model.ConfigEntry {
 	out = append(out, collectCron(root, opts.IncludeCommands)...)
 	out = append(out, collectSystemd(root, opts.IncludeCommands)...)
 	out = append(out, collectSUID(ctx, opts, root, opts.Scope)...)
+	out = append(out, collectLinuxExtras(root, opts.IncludeCommands)...)
 
 	for i := range out {
 		markWorldWritable(root, &out[i])

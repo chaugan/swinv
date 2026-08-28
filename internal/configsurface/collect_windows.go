@@ -27,6 +27,7 @@ func Collect(ctx context.Context, opts Options) []model.ConfigEntry {
 	var out []model.ConfigEntry
 	out = append(out, collectScheduledTasks(ctx, opts.IncludeCommands)...)
 	out = append(out, collectAutoruns(opts.IncludeCommands)...)
+	out = append(out, collectWindowsExtras(opts.IncludeCommands)...)
 
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Kind != out[j].Kind {

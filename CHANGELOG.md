@@ -7,6 +7,30 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Added
+
+- **The configuration surface's second slice** (#13): more of the persistence
+  and privilege mechanisms, all local reads, each row carrying its ATT&CK
+  technique and the owning package of the executable it names.
+  - Linux: sudo rules (`T1548.003`, with NOPASSWD and broad-grant flagged),
+    SSH `authorized_keys` per account (`T1098.004`), accounts from
+    `/etc/passwd` - uid 0 and login-capable only (`T1078`/`T1136`), loaded
+    and configured kernel modules (`T1547.006`), `/etc/ld.so.preload`
+    (`T1574.006`), and system shell init under `/etc/profile.d`
+    (`T1546.004`).
+  - Windows: **Defender exclusions** (`T1562.001` - paths, extensions and
+    processes; an exclusion over a writable directory is invisible to every
+    version scanner), the services registry (`T1543.003`, ImagePath joined
+    to its product), Image File Execution Options debuggers (`T1546.012`,
+    only the hijacked entries), and AppInit_DLLs (`T1546.010`).
+  New `config` record kinds: `sudo-rule`, `ssh-authorized-key`, `account`,
+  `kernel-module`, `preload`, `shell-init`, `service`, `ifeo`, `appinit`,
+  `av-exclusion`. All under the existing `--config-scope` and
+  `--ndjson-include config`; `--no-service-command` redacts the command
+  lines here too.
+
 ## [0.9.2] - 2026-08-28
 
 Match a Windows host to Microsoft's own patch data.

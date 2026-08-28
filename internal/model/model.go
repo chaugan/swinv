@@ -856,6 +856,19 @@ const (
 	ConfigKindSUID           = "suid"            // T1548.001
 	ConfigKindScheduledTask  = "scheduled-task"  // T1053.005
 	ConfigKindAutorun        = "autorun"         // T1547.001
+
+	// Second slice (#13): more of the persistence and privilege surface,
+	// all local reads.
+	ConfigKindSudoRule     = "sudo-rule"          // T1548.003
+	ConfigKindSSHKey       = "ssh-authorized-key" // T1098.004
+	ConfigKindAccount      = "account"            // T1136 / T1078
+	ConfigKindKernelModule = "kernel-module"      // T1547.006
+	ConfigKindPreload      = "preload"            // T1574.006
+	ConfigKindShellInit    = "shell-init"         // T1546.004
+	ConfigKindService      = "service"            // T1543.003 (Windows)
+	ConfigKindIFEO         = "ifeo"               // T1546.012 (Windows)
+	ConfigKindAppInit      = "appinit"            // T1546.010 (Windows)
+	ConfigKindAVException  = "av-exclusion"       // T1562.001 (Windows Defender)
 )
 
 // BindScope describes how widely a socket is bound. It is a fact about the
