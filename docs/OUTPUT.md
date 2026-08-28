@@ -36,10 +36,18 @@ Every JSON document carries a `schema_version` at the top. The current value is
   table and said so in the evidence. PATH and SxS resolution are not
   attempted - a miss is an empty `path`, never a guess.
 - `os_component` on link records marks a library the operating system ships
-  (a System32 DLL), which the inventory represents by the installed updates
-  rather than file by file. Without it every `KERNEL32.dll` would read as
-  "nothing installed owns it" - the interesting-case signal pointed at the
-  least interesting files.
+  (a System32 DLL, or a virtual `api-ms-*` API set), which the inventory
+  represents by the installed updates rather than file by file. Without it
+  every `KERNEL32.dll` would read as "nothing installed owns it" - the
+  interesting-case signal pointed at the least interesting files.
+- At `--elf-scope all` on Windows, **OS links are not recorded at all**, by
+  the same rule: the transitive walk otherwise pulls the entire OS DLL graph
+  into every binary's record set - measured at five million rows and 1.8GB
+  of NDJSON on one laptop, all of it saying "loads the operating system".
+  All-scope keeps the joinable signal: product, vendored and unowned
+  libraries. The *listening* services keep their complete link sets, OS
+  links included - a few dozen binaries ranked first deserve full fidelity,
+  and there the volume is trivial.
 
 **1.12 → 1.13** added the configuration surface: `config_surface[]` in the
 JSON report, and a `record_type: "config"` NDJSON record with

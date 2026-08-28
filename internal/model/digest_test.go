@@ -63,7 +63,6 @@ func TestInventoryDigestIgnoresVolatileFields(t *testing.T) {
 	for name, mutate := range map[string]func(*Component){
 		"locations": func(c *Component) { c.Locations = []string{"/usr/bin/x", "/usr/bin/y"} },
 		"found_by":  func(c *Component) { c.FoundBy = "some-renamed-cataloger" },
-		"sha256":    func(c *Component) { c.SHA256 = "deadbeef" },
 		"change":    func(c *Component) { c.Change = "added" },
 		"licenses":  func(c *Component) { c.Licenses = []string{"MIT"} },
 		"cpes":      func(c *Component) { c.CPEs = []string{"cpe:2.3:a:x:y:1:*:*:*:*:*:*:*"} },

@@ -40,6 +40,10 @@ type Link struct {
 	// Direct marks a first-hop import; the rest arrived transitively.
 	Direct bool
 
+	// APISet marks a virtual api-ms-*/ext-ms-* name: the operating
+	// system's contract surface, satisfied by apisetschema, never a file.
+	APISet bool
+
 	NSymbols int
 	Symbols  []string
 	// SymbolsTruncated notes that the list was cut at maxSymbols.
@@ -236,7 +240,9 @@ func (p *prober) probe(exe string, opts Options) ([]Link, error) {
 			l.SymbolsTruncated = it.mod.truncated
 		}
 
-		if !isAPISet(it.mod.name) {
+		if isAPISet(it.mod.name) {
+			l.APISet = true
+		} else {
 			l.Path = p.resolve(it.mod.name, it.from, appDir, sysDir)
 		}
 		out = append(out, l)

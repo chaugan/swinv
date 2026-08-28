@@ -40,6 +40,17 @@ schema and cataloger coverage may still change between releases. See
 
 ### Changed
 
+- **All-scope Windows link records keep the signal and drop the OS graph.**
+  The transitive walk pulled the whole operating-system DLL graph plus the
+  virtual `api-ms-*` API sets into every binary's record set: 5,053,397
+  link records and 1.8GB of NDJSON on the machine that measured it, nearly
+  all of it saying "loads the operating system" - which the inventory
+  already represents by the installed updates. At `--elf-scope all`,
+  OS-component links (API sets included, now marked as such) are not
+  recorded; product, vendored and unowned libraries are. Listening
+  services keep their complete link sets, OS and all - a few dozen
+  binaries ranked first deserve full fidelity.
+
 - **The heartbeat digest includes `sha256` when `--hash` recorded one.** A
   binary replaced in place under the same version string was invisible to
   the identity-only digest, so the heartbeat suppressed the re-probed link

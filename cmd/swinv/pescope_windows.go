@@ -124,22 +124,48 @@ func attachPELinks(cfg *config, report *model.Report, result *scan.Result, logf 
 		// Every probed binary, sorted so two runs of an unchanged machine
 		// produce identical output. linkLines dedups the listeners out of
 		// this list when it streams.
+		//
+		// OS links are dropped at this scope, by the inventory's own rule:
+		// the operating system is represented by its updates, and five
+		// million rows of "loads KERNEL32 which loads ntdll" - 1.8GB of
+		// NDJSON on the machine that measured it - answer no question a
+		// consumer asks. The listening services above keep their complete
+		// link sets, OS and all: a few dozen binaries ranked first deserve
+		// full fidelity. What all-scope keeps is the joinable signal:
+		// product, vendored and unowned libraries.
 		probed := make([]string, 0, len(byExe))
 		for exe := range byExe {
 			probed = append(probed, exe)
 		}
 		sort.Strings(probed)
 		report.Links = make([]model.BinaryLinks, 0, len(probed))
+		dropped := 0
 		for _, exe := range probed {
+			all := peModelLinks(byExe[exe], ix)
+			kept := make([]model.Link, 0, len(all))
+			for _, l := range all {
+				if l.OSComponent {
+					dropped++
+					continue
+				}
+				kept = append(kept, l)
+			}
+			if len(kept) == 0 {
+				continue
+			}
 			entry := model.BinaryLinks{
 				Executable: exe,
-				Links:      peModelLinks(byExe[exe], ix),
+				Links:      kept,
 			}
 			if ids, _ := ix.Owners(exe); len(ids) > 0 {
 				entry.PURL = ids[0]
 			}
 			report.Links = append(report.Links, entry)
 			nlinks += len(entry.Links)
+		}
+		if dropped > 0 {
+			logf("pe: %d operating-system link(s) not recorded at all scope; "+
+				"the OS is represented by its updates", dropped)
 		}
 	} else {
 		for _, links := range byExe {
@@ -161,7 +187,11 @@ func peModelLinks(links []pelink.Link, ix *service.OwnerIndex) []model.Link {
 			Symbols:          l.Symbols,
 			SymbolsTruncated: l.SymbolsTruncated,
 		}
-		if l.Path != "" {
+		switch {
+		case l.APISet:
+			// The OS's contract surface, by definition.
+			ml.OSComponent = true
+		case l.Path != "":
 			ids, osComponent := ix.Owners(l.Path)
 			if len(ids) > 0 {
 				ml.PURL = ids[0]
