@@ -224,6 +224,18 @@ a no-op on Windows.
 the symlink-follow, ownership gap, and stat/read race together. Applied to the
 token and passphrase files; the Windows path relies on directory ACLs (R1).
 
+## Verified: no functionality lost
+
+The fixes were vetted by scanning a reference host with the pre-change and
+post-change binaries under identical flags and diffing the records. The
+configuration-surface records (all nine kinds, every field) came out
+**byte-identical**: the ownership gate, the capped readers, the redaction
+plumbing and the setuid handling changed how the files are read, not which
+entries or fields result. The only intentional output change was R8: one link
+path canonicalized from `/usr/local/bin/../lib/libpython3.12.so.1.0` to
+`/usr/local/lib/libpython3.12.so.1.0` - the same file, cleaned - which is the
+traversal-hardening working as designed.
+
 ## Verified safe (no action)
 
 - **No DLL-hijack vector.** Every Windows system DLL is loaded via

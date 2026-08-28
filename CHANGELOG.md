@@ -27,7 +27,9 @@ schema and cataloger coverage may still change between releases. See
   exe with no installer keeps its own name in `original_filename` and is
   never flagged, because a false positive would hide a real installation.
 
-## [Unreleased]
+## [0.9.5] - 2026-08-28
+
+Harden the privileged collector against unprivileged local users.
 
 ### Security
 
@@ -1257,7 +1259,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/chaugan/swinv/releases/tag/v0.9.5
 [0.9.4]: https://github.com/chaugan/swinv/releases/tag/v0.9.4
 [0.9.3]: https://github.com/chaugan/swinv/releases/tag/v0.9.3
 [0.9.2]: https://github.com/chaugan/swinv/releases/tag/v0.9.2
