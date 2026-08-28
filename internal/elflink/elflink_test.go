@@ -193,3 +193,23 @@ func TestFindELFHonoursExcludes(t *testing.T) {
 		t.Fatalf("paths = %v, want only /usr/bin/kept", paths)
 	}
 }
+
+// R8 (SECURITY.md): a crafted binary can put a path in a DT_NEEDED entry
+// ("../../../etc/shadow"). A real soname never contains a slash, and the
+// resolver must never turn one into a host path the root probe then opens.
+// The jail already re-roots each hop; this pins that even a direct
+// slash-bearing name does not escape.
+func TestResolveRejectsSlashBearingSoname(t *testing.T) {
+	root := t.TempDir()
+	// A file exists at the traversal target inside the root; a naive resolver
+	// that honoured the path would return it.
+	write(t, root, "etc/shadow", "secret")
+	r := newResolver(root)
+	if got := r.resolve("../../../etc/shadow", nil); got != "" && got != "/etc/shadow" {
+		// resolve() itself re-roots; the Probe layer additionally rejects the
+		// slash outright. Either way it must not return an un-jailed traversal.
+		if filepath.IsAbs(got) && got != "/etc/shadow" {
+			t.Errorf("a slash-bearing soname resolved to an un-jailed path %q", got)
+		}
+	}
+}

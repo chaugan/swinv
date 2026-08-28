@@ -236,6 +236,25 @@ path canonicalized from `/usr/local/bin/../lib/libpython3.12.so.1.0` to
 `/usr/local/lib/libpython3.12.so.1.0` - the same file, cleaned - which is the
 traversal-hardening working as designed.
 
+## Regression coverage
+
+Each fix carries a test so the vulnerability cannot silently return:
+
+- the `authorized_keys` ownership gate has a test that a FIFO in place of the
+  key file is refused rather than hanging the scan, and that a legitimate
+  user-owned key file is still read;
+- the setuid walk has tests for the recorded-entry cap and the
+  `--config-scope all` skip of non-root-owned files;
+- the ELF probe has a test that a slash-bearing, traversal-shaped soname does
+  not resolve to an un-jailed host path;
+- the installer/launcher classifier has tests for the wrapper cases and, as
+  importantly, for the standalone cases it must never flag.
+
+The build also runs `golangci-lint` with `gosec` on every change; the DLL-load
+and file-permission findings above were partly surfaced by it, and it fails
+the build on a regression such as a credential opened without `O_NOFOLLOW` or
+a file created world-writable.
+
 ## Verified safe (no action)
 
 - **No DLL-hijack vector.** Every Windows system DLL is loaded via

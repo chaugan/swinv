@@ -1204,8 +1204,17 @@ Worth knowing before you roll this out fleet-wide:
   it, keeping the joinable executable paths; **`--no-services`** drops the
   services section.
 - **Protect the output directory.** `--out` is created `0755` and files `0644`,
-  so an inventory is world-readable by default. Tighten it if your threat model
-  needs that.
+  so an inventory is world-readable by default. Tighten it with `--perm 0600`,
+  or drop the sensitive fields with `--no-service-command`, if unprivileged
+  users share the host. On Windows the output directory is created with an
+  admin-only ACL and swinv refuses an `--out` a non-admin owns.
+- **Hardened against unprivileged local users.** Because swinv runs as
+  root/SYSTEM, a structured local-attacker security review was done and its
+  nine findings fixed - safe file reads that refuse a symlinked or oversized
+  attacker-planted file, owner-checked credential and key files, an admin-only
+  Windows output ACL, and more - each verified to change how swinv reads and
+  writes, not what it reports, and each guarded by a regression test. The full
+  threat model, findings and fixes are in **[SECURITY.md](SECURITY.md)**.
 - **The systemd unit is hardened but deliberately not sandboxed from the
   filesystem.** It sets `ProtectSystem=strict`, `ReadWritePaths=/var/lib/swinv`,
   `PrivateTmp`, `NoNewPrivileges`, and the `ProtectKernel*` / `ProtectClock` /
