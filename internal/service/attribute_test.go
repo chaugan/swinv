@@ -237,3 +237,17 @@ func TestOwnerIndex(t *testing.T) {
 	}
 	_ = osc // IsOSComponent is false on non-Windows by construction
 }
+
+// A registry InstallLocation that ends in a separator must still own the
+// files under it: "C:\App\" and "C:\App" are the same directory, and the
+// ancestor walk only generates candidates without the trailing separator.
+func TestOwnerIndexMatchesTrailingSeparatorLocations(t *testing.T) {
+	ix := NewOwnerIndex([]model.Component{
+		{Name: "App", Version: "1.0", Type: "windows",
+			Locations: []string{`C:\Program Files\App\`}},
+	})
+	ids, _ := ix.Owners(`C:\Program Files\App\bin\thing.dll`)
+	if len(ids) != 1 || ids[0] != "App@1.0" {
+		t.Fatalf("ids = %v, want the trailing-separator location to own its files", ids)
+	}
+}

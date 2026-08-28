@@ -237,6 +237,15 @@ func indexByLocation(components []model.Component) map[string][]model.Component 
 	out := make(map[string][]model.Component)
 	for _, c := range components {
 		for _, loc := range c.Locations {
+			// A registry InstallLocation frequently ends in a separator, and
+			// a trailing separator can never match: the ancestor walk (and
+			// the prefix scan before it) only ever generates candidates
+			// without one. Products recorded as "C:\App\" silently lost
+			// their containing-directory attribution.
+			loc = strings.TrimRight(loc, `\/`)
+			if loc == "" {
+				continue
+			}
 			out[lookupKey(loc)] = append(out[lookupKey(loc)], c)
 		}
 	}

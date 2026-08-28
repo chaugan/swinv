@@ -107,6 +107,12 @@ type prober struct {
 	mu    sync.Mutex
 	cache map[string]parsed
 
+	// polite paces every actual parse: the pacing lives here rather than
+	// in the phase-A worker loop, because transitive system DLLs are
+	// first-parsed by the sequential assembly phase - and a politeness
+	// contract with a side door is not a contract.
+	polite bool
+
 	// ctx, when set, stops NEW parses after the deadline without stopping
 	// cache reads: thirty minutes of completed parsing must not be thrown
 	// away because the thirty-first would be too many. A real run probed
@@ -153,7 +159,15 @@ func (p *prober) imports(path string) ([]module, uint16, bool) {
 			// not-PE, because that would be recording a fact nobody checked.
 			return nil, 0, false
 		}
+		start := time.Now()
 		mods, machine, err := parseImports(path)
+		if p.polite {
+			ctx := p.ctx
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			pause(ctx, politePause(time.Since(start)))
+		}
 		entry = parsed{mods: mods, machine: machine, notPE: err != nil}
 		p.mu.Lock()
 		if err != nil && p.firstErr == nil {
@@ -380,6 +394,7 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 
 	p := newProber()
 	p.ctx = ctx
+	p.polite = opts.Polite
 
 	var done int64
 	queue := make(chan string)
@@ -389,12 +404,10 @@ func ProbeAll(ctx context.Context, paths []string, opts Options, parallelism int
 		go func() {
 			defer wg.Done()
 			for path := range queue {
-				start := time.Now()
+				// The pacing lives inside imports, next to the parse it
+				// matches, so the sequential phase pays it too.
 				p.imports(path)
 				atomic.AddInt64(&done, 1)
-				if opts.Polite {
-					pause(ctx, politePause(time.Since(start)))
-				}
 			}
 		}()
 	}
