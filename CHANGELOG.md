@@ -33,22 +33,41 @@ Harden the privileged collector against unprivileged local users.
 
 ### Security
 
-- **Hardened the privileged collector against unprivileged local users.** A
-  structured local-attacker review (nine root causes, adversarially verified,
-  documented in [SECURITY.md](SECURITY.md)) drove a set of fixes
-  that change how swinv reads and writes, not what it reports (verified by a
-  full before/after scan diff): configuration-surface reads go through a
-  regular-file + size-capped reader, with an ownership gate on
-  `authorized_keys` so a symlink to `/dev/zero`, a FIFO, or a root-only file
-  planted in an attacker-owned home is refused; `--no-service-command` now
-  actually covers sudo evidence, ssh-key comments and Windows IFEO lines; the
-  transmit spool is forced 0600/0700; the goroutine dump is written
-  `O_EXCL|O_NOFOLLOW`; credential files open `O_NOFOLLOW` and are
-  fstat-checked for owner and mode; the ELF probe cleans resolved paths and
-  rejects a slash-bearing `DT_NEEDED`; the SUID walk caps recorded entries and
-  skips attacker-creatable non-root setuid files under `--config-scope all`;
-  and on Windows the output directory is created with an admin-only DACL with
-  swinv refusing an `--out` a non-admin owns.
+swinv runs as root or SYSTEM. A structured local-attacker review (nine root
+causes, each adversarially verified, documented in [SECURITY.md](SECURITY.md))
+drove the fixes below. Every one changes how swinv reads and writes, not what
+it reports: a before/after scan of a reference host produced byte-identical
+configuration records, the only intended output change being a single
+canonicalized ELF link path.
+
+- **`authorized_keys` and every config file are read safely.** A regular-file
+  gate plus size cap, and an ownership gate on `authorized_keys`, so a symlink
+  to `/dev/zero` (root OOM), a FIFO (hang), or `/root/.aws/credentials`
+  (disclosure) planted in an attacker-owned home is refused rather than read
+  by the root process.
+- **`--no-service-command` now covers what it should.** Sudo NOPASSWD/broad
+  evidence, ssh-key comments, and the Windows IFEO debugger line ride the same
+  redaction switch as every other command line; they were not gated before.
+- **Windows: the output directory is admin-only.** It is created with a DACL
+  granting only SYSTEM and Administrators, and swinv refuses an existing
+  `--out` owned by a non-admin - closing SYSTEM writing root inventory into a
+  directory an unprivileged user pre-seeded, and the spool/heartbeat forgery
+  that followed.
+- **Secrets and the spool are owner-only.** The transmit spool is forced
+  0600/0700 regardless of `--perm`; credential files (token, passphrase) open
+  `O_NOFOLLOW` and are fstat-checked for owner and mode on the descriptor,
+  closing the symlink-follow, ownership gap and stat/read race together.
+- **The goroutine dump cannot be hijacked.** Written `O_EXCL|O_NOFOLLOW`, with
+  an unpredictable `CreateTemp` fallback, instead of a predictable name in the
+  shared temp directory.
+- **The ELF probe cannot be pointed at arbitrary host files.** Resolved paths
+  are cleaned, and a slash-bearing `DT_NEEDED` (never a real soname) is
+  rejected, so a crafted listening binary cannot make the root probe stat or
+  read files outside the library search.
+- **The SUID walk cannot be inflated.** The number of recorded setuid entries
+  is capped, and under `--config-scope all` a setuid file owned by a non-root
+  user - which an attacker can mass-create and which grants no privilege - is
+  skipped.
 
 ## [0.9.4] - 2026-08-28
 
