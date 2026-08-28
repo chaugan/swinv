@@ -358,20 +358,35 @@ It is frequently empty - measured at 23% of components on a full Debian-family
 host, ranging from 66% for `deb` down to 0% for kernel modules, which have no
 such concept. Treat its absence as "not recorded", never as "no vendor".
 
-**Windows installers are flagged, not hidden.** A `--full-scan` finds
-installer executables sitting on disk - `Firefox Setup 121.0.exe` and the
-like - and their version resource carries the version of the *installer*, not
-of the software it would install: Mozilla's stub reads `ProductName: Firefox`,
-so without care it enters the inventory as an installed Firefox and a matcher
-reports Firefox CVEs against a machine that may not run Firefox at all. swinv
-keeps the row (the file is genuinely present) but sets
-`attributes.role = "installer"`, with `attributes.role_evidence` naming what
-decided it (an installer word in the file description or original filename, or
-an installer's file name). A consumer excludes or ranks-last anything with
-`role = installer` rather than matching its version. The signal is
-conservative by design: the application's own binary (`firefox.exe`,
-ProductName `Firefox`) is never flagged, because a false positive here hides a
-real installation.
+**Windows installers and launchers are flagged, not hidden.** A `--full-scan`
+finds executables on disk whose version resource carries the ProductName of an
+application but the version of something else. Two kinds:
+
+- **installers** - `Firefox Installer.exe` in Downloads reads
+  `ProductName: Firefox` and version `18.05`, which is the 7-Zip
+  self-extractor Mozilla wraps its installer in, not any Firefox. Without
+  care it enters the inventory as an installed Firefox 18.
+- **launchers** - `Firefox.exe` on a Desktop with `original_filename:
+  desktop-launcher.exe` and version `149.0.2` is a shim that starts Firefox,
+  not Firefox itself.
+
+Either way a version-based matcher would raise findings for software that may
+not be installed at that version at all. swinv keeps the row (the file is
+present) and sets `attributes.role` to `installer` or `launcher`, with
+`attributes.role_evidence` naming what decided it - an installer word in the
+file description or original filename, a self-extractor stub
+(`7zS.sfx.exe`), an installer file name, or a known generic launcher stub
+name. A consumer excludes or ranks-last anything carrying a `role` rather than
+matching its version.
+
+**The signal is conservative on purpose, to protect the standalone case.** An
+application that ships as a single exe with no installer is a genuine
+installation, and its `original_filename` is its own product's name. Every
+rule keys on a positive marker - an installer word, a self-extractor stub, a
+curated launcher name - and never on a file simply having been renamed, so a
+portable tool is never flagged and `firefox.exe` itself never is either. A
+false positive here would hide a real installation, which is worse than the
+false positive it prevents.
 
 **1.0 → 1.1** added exactly two things:
 

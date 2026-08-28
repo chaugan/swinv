@@ -332,8 +332,8 @@ func componentFromPE(path string, info peversion.Info) model.Component {
 	// row stays - the file is on disk - but it is marked, with the evidence
 	// that decided it, so matching can exclude or rank it rather than report
 	// "Firefox Setup 121.0.exe" as an installed Firefox.
-	if isInstaller, why := classifyInstaller(baseName(path), info.FileDescription, info.OriginalFilename, info.ProductName); isInstaller {
-		attrs["role"] = "installer"
+	if role, why := classifyRole(baseName(path), info.FileDescription, info.OriginalFilename, info.ProductName); role != "" {
+		attrs["role"] = role
 		attrs["role_evidence"] = why
 	}
 

@@ -11,15 +11,20 @@ schema and cataloger coverage may still change between releases. See
 
 ### Fixed
 
-- **A Windows installer on disk no longer enters the inventory as the
-  software it installs.** `Firefox Setup 121.0.exe` carries
-  `ProductName: Firefox` in its version resource, so a `--full-scan`
-  reported it as an installed Firefox - with the installer's version, not
-  the application's - and a matcher would raise Firefox CVEs against a host
-  that may not run Firefox. The row is kept (the file is present) but marked
-  `attributes.role = "installer"` with `role_evidence` naming what decided
-  it, from the file description, original filename or file name that swinv
-  already reads. Conservative by design: the application's own binary is
+- **A Windows installer or launcher on disk no longer enters the inventory as
+  the software it wraps.** An executable's version resource can carry an
+  application's ProductName but a different thing's version: `Firefox
+  Installer.exe` read as `Firefox 18.05` (the 7-Zip self-extractor Mozilla
+  wraps its installer in), and `Firefox.exe` on a Desktop with
+  `original_filename: desktop-launcher.exe` read as Firefox 149 (a launcher
+  shim). Either would raise findings for software not installed at that
+  version. The row is kept (the file is present) and marked
+  `attributes.role = "installer"` or `"launcher"` with `role_evidence`
+  naming what decided it - an installer word in the description or original
+  filename, a self-extractor stub (`7zS.sfx.exe`), an installer file name,
+  or a curated launcher stub name - all from fields swinv already reads.
+  Conservative by design to protect the standalone case: a portable single
+  exe with no installer keeps its own name in `original_filename` and is
   never flagged, because a false positive would hide a real installation.
 
 ## [0.9.4] - 2026-08-28

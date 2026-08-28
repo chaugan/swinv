@@ -40,32 +40,58 @@ var installerFilename = regexp.MustCompile(`(?i)((^|[ _\-])(setup|install|instal
 // version, not Firefox's.
 var installerStubOriginalFilename = regexp.MustCompile(`(?i)(7z[a-z]{0,3}\.sfx|wextract|nsis[0-9a-z]*\.exe|_?setup\.exe$|installer\.exe$)`)
 
-// classifyInstaller reports whether the PE at basename with these version
-// strings is an installer, and the single piece of evidence that decided it.
+// launcherStubOriginalFilename is a curated set of generic launcher and
+// wrapper stub names. A launcher carries the ProductName of the application it
+// starts but is not that application: "Firefox.exe" on a Desktop with
+// original_filename "desktop-launcher.exe" and version 149.0.2 is a shim, not
+// Firefox 149, and matching its version raises findings for software that may
+// not be installed at that version at all.
 //
-// productName is checked last and most narrowly: a product legitimately named
-// with "Setup" in it is rare, but "Installer" in a FileDescription is close to
-// definitive, so the description and original-filename fields lead.
-func classifyInstaller(basename, fileDescription, originalFilename, productName string) (bool, string) {
+// This is a NAME allowlist on purpose, and a short one. A standalone or
+// portable application that ships as a single exe with no installer is a real
+// installation, and its original_filename is its own product's name, not one
+// of these - so it is never flagged. The rule fires only on names that are
+// generic wrappers by convention and nothing an application would call itself.
+var launcherStubOriginalFilename = map[string]bool{
+	"desktop-launcher.exe": true,
+	"launcher.exe":         true,
+	"stub.exe":             true,
+	"wrapper.exe":          true,
+	"applauncher.exe":      true,
+}
+
+// classifyRole reports what a PE is if it is not the application it claims to
+// be: an "installer", a "launcher", or "" for the ordinary case. The evidence
+// names the field that decided it.
+//
+// The whole point is to protect the standalone case. A portable tool with no
+// installer is a genuine installation and must return "" - so every rule here
+// keys on a positive marker of installer-ness or a known wrapper name, never
+// on the absence of one, and never on the file simply having been renamed.
+func classifyRole(basename, fileDescription, originalFilename, productName string) (role, evidence string) {
 	if m := installerDescription.FindString(fileDescription); m != "" {
-		return true, "file description names it a " + strings.ToLower(m)
+		return "installer", "file description names it a " + strings.ToLower(m)
 	}
 	if m := installerDescription.FindString(originalFilename); m != "" {
-		return true, "original filename names it a " + strings.ToLower(m)
+		return "installer", "original filename names it a " + strings.ToLower(m)
 	}
 	// The stub the installer was built with, betrayed by original_filename
-	// even when the file was renamed. This is the strongest single tell that
-	// the version belongs to the wrapper, not the application.
+	// even when the file was renamed. The strongest single tell that the
+	// version belongs to the wrapper, not the application.
 	if installerStubOriginalFilename.MatchString(originalFilename) {
-		return true, "built as a self-extracting installer stub (" + originalFilename + ")"
+		return "installer", "built as a self-extracting installer stub (" + originalFilename + ")"
 	}
 	if installerFilename.MatchString(basename) {
-		return true, "the file name is an installer's (" + basename + ")"
+		return "installer", "the file name is an installer's (" + basename + ")"
 	}
 	// ProductName only when it says "installer" outright - "Firefox Installer"
 	// is one; "Firefox" is not, and must not be, or every application trips.
 	if strings.Contains(strings.ToLower(productName), "installer") {
-		return true, "product name is an installer's (" + productName + ")"
+		return "installer", "product name is an installer's (" + productName + ")"
 	}
-	return false, ""
+	// A generic launcher/wrapper stub carrying an application's ProductName.
+	if launcherStubOriginalFilename[strings.ToLower(strings.TrimSpace(originalFilename))] {
+		return "launcher", "a launcher stub (" + originalFilename + "), not the application itself"
+	}
+	return "", ""
 }
