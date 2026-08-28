@@ -7,7 +7,9 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
-## [Unreleased]
+## [0.9.3] - 2026-08-28
+
+More of the persistence and privilege surface, collected.
 
 ### Added
 
@@ -1192,7 +1194,8 @@ independent of the tool version. After `v1.0.0` the schema follows semver in
 its own right: a minor bump is additive and safe for existing consumers, a
 major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/chaugan/swinv/releases/tag/v0.9.3
 [0.9.2]: https://github.com/chaugan/swinv/releases/tag/v0.9.2
 [0.9.1]: https://github.com/chaugan/swinv/releases/tag/v0.9.1
 [0.9.0]: https://github.com/chaugan/swinv/releases/tag/v0.9.0
