@@ -150,12 +150,12 @@ so in `scan.exposure_blind_spots`, because "looked and found nothing" and
 ## Quickstart
 
 ```sh
-sudo dpkg -i swinv_0.9.6-1_amd64.deb   # or: sudo rpm -i swinv-0.9.6-1.x86_64.rpm
+sudo dpkg -i swinv_0.9.7-1_amd64.deb   # or: sudo rpm -i swinv-0.9.7-1.x86_64.rpm
 swinv --out /tmp/inv                   # scan /, write JSON + CSV
 ```
 
 No package? The binary is static and has no dependencies, so
-`install -m0755 swinv-v0.9.6-linux-amd64 /usr/bin/swinv` is equally fine, as is
+`install -m0755 swinv-v0.9.7-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
 That writes timestamped files plus `-latest` symlinks - and, run as root with
