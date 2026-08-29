@@ -7,6 +7,21 @@ All notable changes to `swinv` are recorded here. The format follows
 schema and cataloger coverage may still change between releases. See
 [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Security
+
+- **Closed two gaps in the v0.9.5 local-attacker hardening**, found by an
+  independent GLM review of the fix itself. The `authorized_keys` reader
+  refused a bare FIFO but a *symlink to* a FIFO slipped past the Lstat gate
+  and blocked the root process inside `open(2)` - the reads now open
+  `O_NONBLOCK` and fstat the descriptor, so no symlinked FIFO or device can
+  hang the scan. And the ownership gate exempted root-owned files, which let
+  a symlink at `~/.ssh/authorized_keys` pointing to `/root/.aws/credentials`
+  through - a file reached via symlink must now be owned by the account
+  itself, while a genuine root-owned key file (StrictModes) is still read.
+  Both cases are now regression-tested.
+
 ## [0.9.6] - 2026-08-28
 
 Rename the component `source` field so it stops colliding with Splunk.

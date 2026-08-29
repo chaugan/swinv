@@ -139,10 +139,15 @@ Under the default config scope the root process read every account's
 past any deadline (hang), and to `/root/.aws/credentials` had root read a
 root-only file whose contents then entered the report the attacker can read.
 
-**Fix.** All configuration-surface reads now go through a **regular-file gate +
-size cap** (`readCapped`); `authorized_keys` additionally goes through an
-**ownership gate** (`readOwnedByCapped`) that refuses a file whose resolved
-owner is neither the account nor root. A legitimate key file is owned by its
+**Fix.** All configuration-surface reads open the file `O_NONBLOCK` and then
+**fstat the opened descriptor**, refusing anything that is not a regular file -
+so a symlink to `/dev/zero`, a device, or a **FIFO** (which would otherwise
+block the root process inside `open(2)` waiting for a writer) is rejected
+without hanging. `authorized_keys` additionally goes through an **ownership
+gate** (`readOwnedByCapped`): a file reached through a symlink must be owned by
+the account itself, so a symlink pointing at a root-owned file such as
+`/root/.aws/credentials` is refused; a genuine (non-symlinked) root-owned key
+file, which a hardened `sshd`'s StrictModes permits, is still read. A legitimate key file is owned by its
 own account and is read unchanged; a symlink to a differently-owned file is
 refused. *Output note:* a deployment that legitimately symlinks
 `authorized_keys` to a file owned by a different account would lose that row;
@@ -240,9 +245,10 @@ traversal-hardening working as designed.
 
 Each fix carries a test so the vulnerability cannot silently return:
 
-- the `authorized_keys` ownership gate has a test that a FIFO in place of the
-  key file is refused rather than hanging the scan, and that a legitimate
-  user-owned key file is still read;
+- the `authorized_keys` ownership gate has tests that a FIFO, a *symlink to* a
+  FIFO, and a symlink to a file the account does not own are all refused
+  rather than hanging the scan or leaking the target's contents, and that a
+  legitimate user-owned key file is still read;
 - the setuid walk has tests for the recorded-entry cap and the
   `--config-scope all` skip of non-root-owned files;
 - the ELF probe has a test that a slash-bearing, traversal-shaped soname does

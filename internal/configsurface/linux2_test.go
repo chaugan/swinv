@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -149,4 +150,80 @@ func TestSSHKeysRejectSymlinkToOtherOwner(t *testing.T) {
 
 func syscallMkfifo(path string) error {
 	return mkfifo(path)
+}
+
+// GLM review (2026-08-29): the earlier FIFO test used a bare FIFO, caught at
+// Lstat. A SYMLINK to a FIFO slips past Lstat and, without O_NONBLOCK, blocks
+// the root process inside open(2). And a symlink to a root-owned file passed
+// the ownership gate's uid==0 exemption. Both are covered here.
+func TestSSHKeysRejectSymlinkToFifoAndRootFile(t *testing.T) {
+	uid := os.Getuid()
+	newRoot := func(t *testing.T) string {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "home/alice/.ssh"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(root, "etc"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "etc/passwd"),
+			[]byte(fmt.Sprintf("alice:x:%d:%d::/home/alice:/bin/bash\n", uid, uid)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+
+	// 1. Symlink -> FIFO must not hang and must produce no entry.
+	root := newRoot(t)
+	fifo := filepath.Join(root, "tmpfifo")
+	if err := syscallMkfifo(fifo); err != nil {
+		t.Skipf("cannot create fifo: %v", err)
+	}
+	if err := os.Symlink(fifo, filepath.Join(root, "home/alice/.ssh/authorized_keys")); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan int, 1)
+	go func() {
+		got := Collect(context.Background(), Options{Root: root, Scope: ScopeStandard, IncludeCommands: true})
+		done <- len(entriesByKind(got)[model.ConfigKindSSHKey])
+	}()
+	select {
+	case n := <-done:
+		if n != 0 {
+			t.Errorf("a symlink->FIFO authorized_keys produced %d entries", n)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Collect hung on a symlink->FIFO authorized_keys - O_NONBLOCK did not hold")
+	}
+
+	// 2. Symlink -> a file the account does NOT own must be refused. A non-root
+	// runner cannot chown a file to root, so instead make the account's uid in
+	// passwd differ from the file's real owner (the runner): the symlink target
+	// is then "owned by someone else" from the gate's point of view, exactly
+	// the /root/.aws/credentials shape, without needing privilege to set up.
+	root2 := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root2, "home/bob/.ssh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root2, "etc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakeUID := uid + 4242 // bob claims an id the runner does not have
+	if err := os.WriteFile(filepath.Join(root2, "etc/passwd"),
+		[]byte(fmt.Sprintf("bob:x:%d:%d::/home/bob:/bin/bash\n", fakeUID, fakeUID)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(root2, "etc/secret") // owned by the runner, != bob's fakeUID
+	if err := os.WriteFile(secret, []byte("aws_secret_access_key = AKIAEXFILTRATED\n"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(root2, "home/bob/.ssh/authorized_keys")); err != nil {
+		t.Fatal(err)
+	}
+	got := Collect(context.Background(), Options{Root: root2, Scope: ScopeStandard, IncludeCommands: true})
+	for _, e := range entriesByKind(got)[model.ConfigKindSSHKey] {
+		if strings.Contains(e.Name, "AKIA") {
+			t.Errorf("a symlink to a file the account does not own leaked its content: %q", e.Name)
+		}
+	}
 }
