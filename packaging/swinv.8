@@ -1,6 +1,6 @@
 .\" Manual page for swinv(8) - local software inventory collector.
 .\" Rendered with: man ./packaging/swinv.8
-.Dd August 19, 2026
+.Dd August 30, 2026
 .Dt SWINV 8
 .Os
 .Sh NAME
@@ -15,6 +15,8 @@
 .Op Fl -format Ar list
 .Op Fl -stdout
 .Op Fl -latest-symlink Ns = Ns Ar bool
+.Op Fl -html-report Ar path
+.Op Fl -report-from Ar path
 .Op Fl -exclude Ar glob
 .Op Fl -no-auto-exclude-mounts
 .Op Fl -no-snap
@@ -163,6 +165,23 @@ Default: enabled; disable with
 .Fl -latest-symlink Ns = Ns Cm false .
 Most useful together with
 .Fl -output-mode Cm timestamped .
+.It Fl -html-report Ar path
+Also write a single self-contained HTML report to
+.Ar path :
+distribution charts, drill-down tables, collapsible sections, and, on every
+data segment, the flag that produced it. The page is offline by construction
+\(em the CSS and JavaScript are embedded, the charts are inline SVG, and no
+external resource is fetched. It opens with the invocation that produced the
+data, reconstructed from the scan profile the report recorded. The report rides
+alongside the machine-readable formats and is never the only output.
+.It Fl -report-from Ar path
+Render the HTML report from an existing swinv
+.Cm json
+or
+.Cm ndjson
+file instead of scanning, and exit. The format is detected automatically.
+Requires
+.Fl -html-report .
 .It Fl -exclude Ar glob
 Exclude a path from the scan. Repeatable, and appended to the built-in
 defaults. Patterns must begin with

@@ -64,7 +64,7 @@ in-process with no subprocess overhead.
 
 **Start here** &nbsp; [What it reads](#what-it-reads) · [Quickstart](#quickstart) · [Install](#install)
 
-**Using it** &nbsp; [Everyday flags](#everyday-flags) · [Output file naming](#output-file-naming) · [What is skipped by default](#what-is-skipped-by-default) · [Change detection](#change-detection) · [Vulnerability scanning](#vulnerability-scanning)
+**Using it** &nbsp; [Everyday flags](#everyday-flags) · [HTML report](#html-report) · [Output file naming](#output-file-naming) · [What is skipped by default](#what-is-skipped-by-default) · [Change detection](#change-detection) · [Vulnerability scanning](#vulnerability-scanning)
 
 **Platforms** &nbsp; [Windows](#windows) · [Platform testing status](#platform-testing-status)
 
@@ -150,12 +150,12 @@ so in `scan.exposure_blind_spots`, because "looked and found nothing" and
 ## Quickstart
 
 ```sh
-sudo dpkg -i swinv_0.9.7-1_amd64.deb   # or: sudo rpm -i swinv-0.9.7-1.x86_64.rpm
+sudo dpkg -i swinv_1.0.0-1_amd64.deb   # or: sudo rpm -i swinv-1.0.0-1.x86_64.rpm
 swinv --out /tmp/inv                   # scan /, write JSON + CSV
 ```
 
 No package? The binary is static and has no dependencies, so
-`install -m0755 swinv-v0.9.7-linux-amd64 /usr/bin/swinv` is equally fine, as is
+`install -m0755 swinv-v1.0.0-linux-amd64 /usr/bin/swinv` is equally fine, as is
 `make build` from a clone.
 
 That writes timestamped files plus `-latest` symlinks - and, run as root with
@@ -617,6 +617,54 @@ paths.
 Two runs on an unchanged machine produce **byte-identical output** apart from the
 timestamps in `scan` - which is what makes these files worth diffing.
 
+## HTML report
+
+The machine-readable formats are for pipelines; the HTML report is for a person
+looking at one host. `--html-report PATH` writes a **single, self-contained
+page** - distribution charts, drill-down tables, collapsible sections, and, on
+every segment, the flag that produced it. It is offline by construction: the
+CSS and JavaScript are embedded, the charts are inline SVG, the data rides in
+one JSON blob, and nothing is fetched. The same air-gap promise as the rest of
+the tool.
+
+```sh
+swinv --elf-scope all --config-scope all --ndjson-include all \
+      --html-report /tmp/inventory.html
+```
+
+![The HTML report header: a reconstructed command line, a figure strip that
+names the flag behind each number, and a coverage note](docs/assets/html-report-hero.png)
+
+It opens with the **command that produced the data** - `swinv --hash
+--elf-scope all ...`, reconstructed from the scan profile the report recorded -
+so a reader can see at a glance which flags this page's numbers came from.
+Every figure and section carries the same provenance: the config surface is
+tagged `--config-scope`, the library links `--elf-scope`, the ports
+`--services`. A source that was skipped or out of scope reads **—**, never zero.
+
+![Distribution charts for installed software, each tagged with the cataloger or
+flag that produced it](docs/assets/html-report-charts.png)
+
+You do not have to scan to get one. `--report-from PATH` renders the page from
+an **existing** `json` or `ndjson` file, without touching the host again:
+
+```sh
+swinv --report-from /var/lib/swinv/web-01-latest.ndjson \
+      --html-report /tmp/inventory.html
+```
+
+The format is detected automatically. NDJSON is a denormalised projection, so
+the page reflects what the stream carried - the richest report comes from an
+NDJSON file written with `--heartbeat` (for the scan profile and per-source
+health) and `--ndjson-include all` (for exposure, containers and links).
+
+> **A note for contributors.** The HTML report is a first-class consumer of the
+> output. Any change to what the `json`/`ndjson` files carry - a **new, renamed
+> or removed flag, record type or field** - must update the report generator
+> (`internal/htmlreport` and the NDJSON reconstruction in
+> `cmd/swinv/reportfrom.go`) in the **same change**, or the page will silently
+> misreport the machine. See [docs/FLAGS.md](docs/FLAGS.md#--html-report-and---report-from).
+
 ## Install
 
 Every tagged release publishes static binaries and `.deb`/`.rpm` packages for
@@ -757,7 +805,7 @@ inventories in `/var/lib/swinv`** rather than deleting a fleet's history.
 
 ## Platform testing status
 
-`swinv` is `v0.x`, but the OS package catalogers are no longer taken on trust.
+`swinv` is `v1.0`, and the OS package catalogers are not taken on trust.
 Each was run against a real package database and its count compared with that
 distribution's own package manager:
 
@@ -1050,6 +1098,8 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--elf-symbols` | false | Record imported symbol lists, not only counts |
 | `--ndjson-include LIST` | - | NDJSON also carries `exposure`, `containers`, `links`, `config`, or `all` |
 | `--transmit URL` | - | Also POST the scan to a Riskability server; the files are still written |
+| `--html-report PATH` | - | Also write a self-contained HTML report (charts, drill-downs, flag provenance) |
+| `--report-from PATH` | - | Render the HTML report from an existing `json`/`ndjson` file; no scan. Needs `--html-report` |
 | `--hash` | false | Record a SHA-256 per component |
 | `--fast` | false | Scan at normal priority and full parallelism (see below) |
 | `--max-memory SIZE` | - | Soft memory limit, e.g. `1536MiB` |

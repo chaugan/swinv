@@ -157,5 +157,6 @@ func scanProfile(cfg *config) *model.ScanProfile {
 		Containers:    !cfg.noContainers,
 		Services:      !cfg.noServices,
 		Root:          root,
+		Args:          cfg.rawArgs,
 	}
 }

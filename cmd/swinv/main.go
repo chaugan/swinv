@@ -146,6 +146,14 @@ type config struct {
 	verbose          bool
 	showVersion      bool
 
+	htmlReport string
+	reportFrom string
+
+	// rawArgs is the argument list this run was invoked with (os.Args[1:]),
+	// recorded verbatim into the scan profile so a report can show the exact
+	// command that produced it.
+	rawArgs []string
+
 	transmit                  string
 	transmitTokenFile         string
 	transmitCert              string
@@ -209,6 +217,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 		// machine to an unverified peer.
 		fmt.Fprintln(stderr, "swinv: WARNING: --transmit-insecure: the server's certificate is not "+
 			"being verified, so this upload can be intercepted and read")
+	}
+
+	// Rendering an existing report to HTML reads a file and writes a file; it
+	// runs no scan, so it short-circuits here before any collection machinery.
+	if cfg.reportFrom != "" {
+		report, err := loadReportForHTML(cfg.reportFrom)
+		if err != nil {
+			fmt.Fprintf(stderr, "swinv: --report-from: %v\n", err)
+			return exitUsage
+		}
+		logf("loaded %d components from %s", len(report.Components), cfg.reportFrom)
+		return writeHTMLReport(cfg.htmlReport, cfg.filePerm, report, logf, stderr)
 	}
 
 	// The run modes that talk to the server without scanning exit here,
@@ -529,6 +549,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	} else if code := writeFiles(cfg, report, logf, stderr); code != exitOK {
 		return code
+	}
+
+	// The HTML report rides alongside the machine-readable formats: same run,
+	// same report, an operator-chosen path. It is never the only output, so a
+	// failure to write it does not discard the inventory already on disk.
+	if cfg.htmlReport != "" {
+		if code := writeHTMLReport(cfg.htmlReport, cfg.filePerm, report, logf, stderr); code != exitOK {
+			return code
+		}
 	}
 
 	// --- transmit ---------------------------------------------------------

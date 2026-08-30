@@ -11,11 +11,20 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.17`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.18`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.17"
+"schema_version": "1.18"
 ```
+
+**1.17 → 1.18** added `scan.profile.args`: the invocation the scan was run with,
+the arguments after the program name, verbatim. It lets a consumer - and the
+HTML report - show the exact command that produced a report rather than
+inferring it from the scope fields, which cannot recover flags that leave no
+scope trace (`--offline`, `--heartbeat`) or the output plumbing (`--out`,
+`--format`). Additive and omitted when absent; swinv has no flag that carries a
+secret on the command line, so it exposes nothing a report does not already
+carry.
 
 **1.16 → 1.17** renamed the component `source` field to `source_key` (#16).
 Splunk reserves `source` as index-time metadata (the file path an event came
@@ -449,6 +458,18 @@ swinv --format json --stdout | jq '.components | length'
 
 Every file write is atomic (staged next to the target, `fsync`, `rename`), so a
 collector can never pick up a half-written inventory.
+
+### A fifth output, for people rather than pipelines
+
+`--html-report PATH` writes a single self-contained HTML page next to the four
+machine-readable formats: distribution charts, drill-down tables, and, on every
+segment, the flag that produced it. It reconstructs and shows the invocation
+that produced the data, so a reader knows the scope of what they are looking at.
+`--report-from PATH` renders that page from an existing `json` or `ndjson` file
+without scanning. It is described in
+[docs/FLAGS.md](FLAGS.md#--html-report-and---report-from); the note there also
+records the maintenance rule that any change to these output formats must update
+the HTML generator in the same change.
 
 ---
 

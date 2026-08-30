@@ -103,7 +103,12 @@ func TestHelpFitsATerminal(t *testing.T) {
 	// nine flags compressed into six rows) and the configuration surface
 	// arrived (issue #13, one row). Anything that pushes past this should be
 	// a `man 8 swinv` entry instead.
-	if len(lines) > 110 {
+	//
+	// Raised to 113 when the HTML report arrived: two flags (--html-report,
+	// --report-from) in one row whose combined names outrun the description
+	// column, so the entry spans a name line and a wrapped description - a
+	// genuinely new output surface, not description creep.
+	if len(lines) > 113 {
 		t.Errorf("help is %d lines; it is meant to be scannable, not a manual", len(lines))
 	}
 }

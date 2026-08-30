@@ -63,6 +63,8 @@ usage problem.
 | `--format LIST` | `json,csv` | Comma-separated: `json`, `csv`, `ndjson`, `cyclonedx-json` |
 | `--stdout` | `false` | Write to stdout instead of files; requires exactly one `--format` |
 | `--latest-symlink` | `true` | Maintain `{hostname}-latest.{ext}` symlinks in `--out` |
+| `--html-report PATH` | *(off)* | Also write a self-contained HTML report to `PATH` - see below |
+| `--report-from PATH` | *(off)* | Render the HTML report from an existing `json`/`ndjson` file instead of scanning; requires `--html-report` |
 
 Format names map to file extensions as follows:
 
@@ -609,6 +611,63 @@ under `--stdout`; `--name` is rejected outright.
 `--stdout` writes one stream, so it has no services sidecar: `--stdout --format
 csv` gives the components alone. `--stdout --format json` carries the whole
 report, `services[]` included.
+
+## `--html-report` and `--report-from`
+
+`--html-report PATH` writes a **single self-contained HTML page** alongside the
+machine-readable formats: distribution charts, drill-down tables, collapsible
+sections, and - on every data segment - the flag that produced it. It is
+offline by construction: the CSS and JavaScript are embedded, the charts are
+inline SVG drawn in the browser, and the data rides in one
+`<script type="application/json">` blob. Nothing is fetched, no CDN is touched;
+the same air-gap promise as the rest of swinv.
+
+`PATH` is a **file**, e.g. `C:\ProgramData\swinv\report.html` - not a directory.
+It is written atomically and **replaces** any existing file at that path on
+every run, so pointing successive scans at one fixed path keeps a single
+up-to-date report. A missing parent directory is created; a directory at `PATH`
+is refused with a message naming the mistake, rather than failing silently.
+
+```console
+$ swinv --elf-scope all --config-scope all --ndjson-include all --html-report /tmp/inventory.html
+swinv: wrote /var/lib/swinv/devserver-20260830T120000Z.json
+swinv: wrote /tmp/inventory.html
+```
+
+The page opens with **the command that produced the data** - `swinv --out ...
+--config-scope all --hash --offline` - so a reader sees exactly which flags the
+page's numbers came from. A scan records its own invocation (`scan.profile.args`,
+schema 1.18), and the page shows it verbatim, program name normalised to
+`swinv`. A report written before schema 1.18, or one rebuilt with `--report-from`
+from such a file, carries no recorded invocation; there the page falls back to a
+**reconstruction** from the scan profile's scope fields, which shows only the
+non-default scope flags (`--hash`, `--elf-scope`, `--config-scope`,
+`--ndjson-include`, …) and cannot recover `--offline`, `--heartbeat` or the
+output paths.
+
+`--report-from PATH` renders the report from an **existing** `json` or `ndjson`
+file instead of scanning - useful for turning a collected inventory into a page
+without touching the host again. It requires `--html-report`:
+
+```console
+$ swinv --report-from /var/lib/swinv/devserver-latest.ndjson --html-report /tmp/inventory.html
+swinv: loaded 15300 components from /var/lib/swinv/devserver-latest.ndjson
+swinv: wrote /tmp/inventory.html
+```
+
+The format is sniffed automatically. NDJSON is a denormalised projection of the
+report, so the page reflects **what the stream carried**, not what a fresh scan
+would find: a heartbeat stream that suppressed its component records yields a
+page with none, and the richest page comes from an NDJSON file written with
+`--heartbeat` (for the scan profile and per-source health) and `--ndjson-include
+all` (for exposure, containers, and links).
+
+> **Maintainer note.** The HTML report is a first-class consumer of the output.
+> Any change to what the `json`/`ndjson` files carry - a new, renamed, or
+> removed flag, record type, or field - must update the report generator
+> (`internal/htmlreport` and the NDJSON reconstruction in
+> `cmd/swinv/reportfrom.go`) in the same change, or the page will silently
+> misreport the machine.
 
 ### Transmitting to a server
 

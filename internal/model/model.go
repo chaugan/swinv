@@ -19,7 +19,7 @@ import (
 // document.
 // 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
 // describing manifest (see the NDJSON heartbeat record). Also additive.
-const SchemaVersion = "1.17"
+const SchemaVersion = "1.18"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -155,6 +155,18 @@ type ScanProfile struct {
 	Containers    bool     `json:"containers"`
 	Services      bool     `json:"services"`
 	Root          string   `json:"root,omitempty"`
+
+	// Args is the invocation this scan was run with -- the arguments after the
+	// program name, verbatim. It is what lets a report show the exact command
+	// that produced it rather than a reconstruction from the scope fields
+	// above, which cannot recover flags that leave no scope trace (--offline,
+	// --heartbeat) or the output plumbing (--out, --format). Absent on a report
+	// written before this field existed, and on one rebuilt with --report-from
+	// from such a file, where the command line falls back to the reconstruction.
+	// swinv has no flag that carries a secret on the command line -- tokens and
+	// passphrases are read from files -- so recording the arguments leaks
+	// nothing a report does not already carry.
+	Args []string `json:"args,omitempty"`
 }
 
 // Host is the identity of the machine that was scanned. Every field is

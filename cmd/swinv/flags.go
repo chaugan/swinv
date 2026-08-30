@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +21,10 @@ import (
 // scanning - that is, for -h. A non-nil error means a usage problem.
 func parseFlags(args []string, stdout, stderr io.Writer) (*config, int, error) {
 	cfg := &config{}
+	// The invocation, recorded verbatim so a report can show the exact command
+	// that produced it rather than a reconstruction. Captured before parsing so
+	// it reflects what was typed, whatever the parse does with it.
+	cfg.rawArgs = append([]string(nil), args...)
 	fs := flag.NewFlagSet("swinv", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -115,6 +120,19 @@ func parseFlags(args []string, stdout, stderr io.Writer) (*config, int, error) {
 	}
 	if cfg.deltaOnly && cfg.since == "" {
 		return nil, exitUsage, fmt.Errorf("--delta-only requires --since")
+	}
+	if cfg.reportFrom != "" && cfg.htmlReport == "" {
+		return nil, exitUsage, fmt.Errorf("--report-from needs --html-report PATH: it renders an existing report to HTML, it writes nothing else")
+	}
+	if cfg.htmlReport != "" {
+		// Catch a directory target before a multi-minute scan rather than at
+		// write time. --html-report is a file path; a directory cannot be
+		// replaced by a file, and on Windows that failure reads as a silent
+		// no-op that leaves the operator believing a report was written.
+		if fi, err := os.Stat(cfg.htmlReport); err == nil && fi.IsDir() {
+			return nil, exitUsage, fmt.Errorf("--html-report %s is a directory; it needs a file path, e.g. %s",
+				cfg.htmlReport, filepath.Join(cfg.htmlReport, "report.html"))
+		}
 	}
 	if cfg.toStdout && cfg.nameSet {
 		return nil, exitUsage, fmt.Errorf("--name has no meaning with --stdout")
@@ -322,6 +340,8 @@ func registerFlags(fs *flag.FlagSet, cfg *config) {
 	fs.BoolVar(&cfg.quiet, "quiet", false, "suppress stderr status output")
 	fs.BoolVar(&cfg.verbose, "verbose", false, "per-stage timing to stderr")
 	fs.BoolVar(&cfg.showVersion, "version", false, "print version, commit, and Syft version, then exit")
+	fs.StringVar(&cfg.htmlReport, "html-report", "", "also write a self-contained HTML report (distribution charts, drill-downs, per-segment flag provenance) to this path; offline, no external requests")
+	fs.StringVar(&cfg.reportFrom, "report-from", "", "render the HTML report from an existing swinv json or ndjson file instead of scanning; requires --html-report")
 
 	// Transmission. File output is unaffected by every one of these: --transmit
 	// adds a destination, it does not replace one. An air-gapped site and a

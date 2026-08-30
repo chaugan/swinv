@@ -3,9 +3,46 @@
 All notable changes to `swinv` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-`swinv` is `v0.x`: while the tool is tested and in use, the CLI, the output
-schema and cataloger coverage may still change between releases. See
-[Versioning](#versioning) below.
+As of `v1.0.0`, `swinv` is stable: the CLI surface and the output schema follow
+[semantic versioning](#versioning), and a breaking change waits for a new major
+version. See [Versioning](#versioning) below.
+
+## [1.0.0] - 2026-08-30
+
+First stable release. The CLI and the output schema are now under semver, and
+this release adds an HTML report for reading a single host's inventory by eye.
+
+### Added
+
+- **`--html-report PATH` writes a single self-contained HTML report**:
+  distribution charts, drill-down tables, collapsible sections, and - on every
+  data segment - the flag that produced it. It is offline by construction: the
+  CSS and JavaScript are embedded, the charts are inline SVG, the data rides in
+  one `<script type="application/json">` blob, and nothing is fetched. It rides
+  alongside the machine-readable formats and is never the only output, so a
+  failure to write it cannot discard the inventory already on disk.
+- The report opens with **the command that produced the data** - the exact
+  invocation the scan was run with, shown verbatim with the program name
+  normalised to `swinv`. This is recorded in the report as `scan.profile.args`
+  (schema `1.18`). A report written before that field existed, or one rebuilt
+  with `--report-from` from such a file, falls back to a reconstruction from the
+  scan profile's scope fields - which shows the non-default scope flags but
+  cannot recover `--offline`, `--heartbeat` or the output paths.
+- **`--report-from PATH` renders the report from an existing `json` or `ndjson`
+  file** instead of scanning, so a collected inventory becomes a page without
+  touching the host again. The format is detected automatically; NDJSON is
+  reconstructed record by record and reflects what the stream carried. Requires
+  `--html-report`.
+
+### Changed
+
+- **Declared stability.** The versioning language is now a commitment rather
+  than a caveat: after `v1.0.0` the CLI and the output schema follow semver,
+  and breaking changes are reserved for a major bump.
+- **Schema `1.18`** adds `scan.profile.args`, the invocation the scan was run
+  with. Additive and omitted when absent; swinv has no flag that carries a
+  secret on the command line, so it exposes nothing a report does not already
+  carry.
 
 ## [0.9.7] - 2026-08-29
 
@@ -1303,15 +1340,17 @@ First public release.
 
 ## Versioning
 
-While `swinv` is `v0.x`, the CLI surface, the output schema and cataloger
-coverage may change in any release; breaking changes are called out here.
+As of `v1.0.0`, `swinv` follows semantic versioning: the CLI surface and the
+output schema are stable, a minor bump is additive and safe for existing
+consumers, and a breaking change is reserved for a new major version and called
+out here.
 
-The output document carries its own `schema_version`, currently `1.9`,
-independent of the tool version. After `v1.0.0` the schema follows semver in
-its own right: a minor bump is additive and safe for existing consumers, a
-major bump is breaking.
+The output document carries its own `schema_version`, currently `1.18`,
+independent of the tool version. It follows semver in its own right: a minor
+bump is additive and safe for existing consumers, a major bump is breaking.
 
-[Unreleased]: https://github.com/chaugan/swinv/compare/v0.9.7...HEAD
+[Unreleased]: https://github.com/chaugan/swinv/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/chaugan/swinv/releases/tag/v1.0.0
 [0.9.7]: https://github.com/chaugan/swinv/releases/tag/v0.9.7
 [0.9.6]: https://github.com/chaugan/swinv/releases/tag/v0.9.6
 [0.9.5]: https://github.com/chaugan/swinv/releases/tag/v0.9.5

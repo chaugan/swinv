@@ -1,0 +1,124 @@
+:root{
+  --paper:#f4f2ec; --panel:#faf9f5; --ink:#171a1e; --ink2:#3c4148; --muted:#71767e;
+  --rule:#ddd8cc; --rule2:#c9c3b4; --hair:#e7e3d8;
+  --red:#9c2b25; --redbg:#f6ece9; --link:#2c4a78; --link2:#20365a;
+  --amber:#8a5a12; --green:#2c6a45; --sel:#e5ddc6;
+  --b1:#26425f; --b2:#3f6a8f; --b3:#6f9ab8; --b4:#a7c3d6; --b5:#cfa15a; --b6:#7a8168;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:14px/1.55 "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  font-variant-numeric:tabular-nums lining-nums;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:var(--sel)}
+.mono,code,td .mono{font-family:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.ui{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+:focus-visible{outline:2px solid var(--link);outline-offset:2px;border-radius:1px}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:#c8c2b3;border:3px solid var(--paper);border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:#b0a994}
+.wrap{max-width:1140px;margin:0 auto;padding:38px 30px 90px}
+
+/* masthead */
+.mast{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
+  border-bottom:2px solid var(--ink);padding-bottom:16px}
+.mast h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-weight:600;color:var(--ink2)}
+.mast .host{font-size:30px;line-height:1.05;margin:0;letter-spacing:-.01em;font-weight:600}
+.mast .meta{font-size:12px;color:var(--muted);margin-top:6px}
+.mast .right{font-size:11.5px;color:var(--muted);text-align:right;line-height:1.7;font-family:-apple-system,sans-serif}
+.mast .right b{color:var(--ink2);font-weight:600}
+
+/* figure strip - not cards */
+.figs{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--rule);margin-bottom:4px}
+.fig{padding:16px 20px 15px;border-right:1px solid var(--hair)}
+.fig:last-child{border-right:0}
+.fig .n{font-size:27px;font-weight:600;letter-spacing:-.02em;line-height:1}
+.fig .n.off{color:var(--muted);font-weight:500}
+.fig .l{font-size:12px;color:var(--ink2);margin-top:5px;font-family:-apple-system,sans-serif}
+.fig .src{font-size:10.5px;color:var(--link2);margin-top:8px;font-family:"SFMono-Regular",ui-monospace,monospace;font-weight:600}
+.fig.off .src{color:var(--red)}
+.fig .src::before{content:"from ";color:var(--muted);font-family:-apple-system,sans-serif;font-weight:400}
+.fig.off{background:repeating-linear-gradient(135deg,transparent,transparent 7px,#efece3 7px,#efece3 8px)}
+
+.note{display:flex;gap:11px;align-items:flex-start;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+  padding:13px 2px;margin:18px 0 30px;font-size:13px;color:var(--ink2);font-family:-apple-system,sans-serif}
+.note svg{flex:none;margin-top:1px}
+.note b{color:var(--ink);font-weight:600}
+
+/* sections as ruled bands, no cards, no numbers */
+section{border-top:2px solid var(--ink);margin-top:34px}
+.shead{display:flex;align-items:baseline;gap:14px;padding:13px 0 4px;cursor:pointer;user-select:none}
+.shead h2{font-size:19px;margin:0;letter-spacing:-.01em;font-weight:600}
+.shead .d{color:var(--muted);font-size:12.5px;flex:1;font-family:-apple-system,sans-serif}
+.shead .car{color:var(--rule2);font-family:-apple-system,sans-serif;font-size:12px}
+.sbody{padding:14px 0 26px}
+.collapsed .sbody{display:none}.collapsed .car{transform:rotate(-90deg);display:inline-block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:34px}
+@media(max-width:820px){.grid2,.figs{grid-template-columns:1fr}.fig{border-right:0;border-bottom:1px solid var(--hair)}}
+
+.block{}
+.block h3{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin:0 0 12px;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.11em;text-transform:uppercase;font-family:-apple-system,sans-serif;padding-bottom:7px;border-bottom:1px solid var(--hair)}
+.prov{font-family:"SFMono-Regular",ui-monospace,monospace;font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--link2);font-weight:600;white-space:nowrap;padding-left:11px;border-left:2px solid var(--link)}
+.prov.gen{color:var(--muted);font-weight:600;border-left-color:var(--rule2)}
+.prov.off{color:var(--red);border-left-color:var(--red)}
+.shead .prov{margin-left:auto;font-size:11.5px;align-self:center}
+
+.chips{display:flex;flex-wrap:wrap;gap:0;font-family:-apple-system,sans-serif;font-size:12px}
+.chips .c{padding:3px 12px 3px 0;margin-right:12px;color:var(--ink2);border-right:1px solid var(--hair)}
+.chips .c:last-child{border-right:0}
+.chips .c b{font-weight:600}
+.chips .c.off b{color:var(--muted)}
+.chips .c .on{color:var(--link2);font-weight:600}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{text-align:left;padding:6px 10px 8px;color:var(--muted);font-weight:600;font-family:-apple-system,sans-serif;
+  font-size:11px;letter-spacing:.04em;text-transform:uppercase;border-bottom:1.5px solid var(--rule2);cursor:pointer;white-space:nowrap;position:sticky;top:0;background:var(--paper)}
+tbody td{padding:6px 10px;border-bottom:1px solid var(--hair);vertical-align:top;max-width:46ch}
+tbody tr:hover{background:#efece3}
+.st{font-family:-apple-system,sans-serif;font-size:11px;font-weight:600}
+.st.ok{color:var(--green)} .st.skip{color:var(--muted)} .st.bad{color:var(--red)}
+.dash{color:var(--rule2)}
+.att{font-family:"SFMono-Regular",ui-monospace,monospace;font-size:11.5px;color:var(--ink2);white-space:nowrap}
+.kind{font-family:-apple-system,sans-serif;font-size:11px;color:var(--ink2);font-weight:600;white-space:nowrap}
+.unowned{color:var(--red);font-family:-apple-system,sans-serif;font-size:11px;font-weight:600;white-space:nowrap}
+.ww{color:var(--red);font-family:-apple-system,sans-serif;font-size:11px;font-weight:600;white-space:nowrap}
+.bind{font-family:-apple-system,sans-serif;font-size:11px}
+.bind.ext{color:var(--amber);font-weight:600}
+
+.tools{display:flex;gap:12px;align-items:center;margin:0 0 10px}
+.tools input{flex:1;min-width:200px;padding:7px 0;border:0;border-bottom:1.5px solid var(--rule2);background:transparent;font:13px/1 -apple-system,sans-serif;color:var(--ink)}
+.tools input::placeholder{color:var(--muted)}
+.tools input:focus{outline:none;border-bottom-color:var(--link)}
+.pill{padding:2px 10px 2px 11px;border:1px solid var(--link);border-radius:2px;background:#eef2f8;color:var(--link2);cursor:pointer;font:11px/1.4 -apple-system,sans-serif;font-weight:600}
+.pg{display:flex;gap:12px;align-items:center;justify-content:flex-end;margin-top:10px;color:var(--muted);font-size:12px;font-family:-apple-system,sans-serif}
+.pg button{border:1px solid var(--rule2);background:var(--panel);border-radius:2px;padding:2px 11px;cursor:pointer;font:13px/1 -apple-system,sans-serif;color:var(--ink2)}
+.pg button:disabled{opacity:.4;cursor:default}
+
+.risk{border-left:2px solid var(--red);padding:2px 0 2px 16px}
+.risk .rn{display:flex;gap:26px;margin-top:12px;flex-wrap:wrap}
+.risk .rn .v{font-size:25px;font-weight:600;letter-spacing:-.02em;line-height:1}
+.risk .rn .k{font-size:11.5px;color:var(--ink2);margin-top:4px;font-family:-apple-system,sans-serif;max-width:130px}
+.lead{font-size:13px;color:var(--ink2);font-family:-apple-system,sans-serif;line-height:1.5}
+.bar{cursor:pointer}.bar:hover rect.b,.bar:hover path{opacity:.8}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:12px;color:var(--ink2);font-family:-apple-system,sans-serif}
+.legend i{width:9px;height:9px;display:inline-block;margin-right:6px;vertical-align:0}
+.foot{color:var(--muted);font-size:11.5px;margin-top:44px;padding-top:14px;border-top:1px solid var(--rule);font-family:-apple-system,sans-serif;letter-spacing:.02em}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+
+/* The command that produced the data. */
+.cmd .dollar{color:#9aa6b2;font-family:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;font-weight:700;user-select:none;flex:none}
+.cmd{display:flex;align-items:baseline;gap:9px;margin:2px 0 0;
+  padding:12px 15px;background:#1c2024;border:1px solid #2b3036;border-radius:5px;overflow-x:auto;white-space:nowrap}
+.cmd code{font-family:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+  font-size:13px;color:#e8e4d8;letter-spacing:.01em}
+.cmdnote{font-size:11.5px;color:var(--muted);margin-top:7px;font-family:-apple-system,sans-serif;line-height:1.5}
+
+/* Wide-table containment. A table scrolls inside its own box so the page body
+   never gains a horizontal scrollbar, and the width-driving cell kinds
+   (monospace paths/PURLs/sonames, and the free-text evidence column) are
+   capped and ellipsized -- the full value stays available via the cell's
+   title tooltip. Generic on purpose: every current and future table inherits
+   it without per-column tuning. */
+.tscroll{overflow-x:auto;overflow-y:hidden;max-width:100%}
+td .mono{display:inline-block;max-width:40ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+.ev{display:inline-block;max-width:36ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;color:var(--muted)}
