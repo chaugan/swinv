@@ -130,6 +130,16 @@ explicit, non-inherited DACL granting only SYSTEM and Administrators, and
 than SYSTEM, Administrators, or the account running the scan. The transmit
 spool and heartbeat state live under that now-protected directory.
 
+*Strengthened in 1.0.1:* the directory is secured once, by `ensureOutputDir`,
+**before the scan starts and before anything writes under `--out`**. Two
+ordering gaps were closed: the heartbeat state writer used to create the
+directory itself with a plain `MkdirAll` - inheriting the parent's permissive
+ACLs and voiding the protected DACL whenever `--out` did not exist yet - and a
+`--stdout --transmit` run bypassed the check entirely, leaving the spool in an
+unvetted path. Both writers now find the directory already guarded, and the
+guard creates missing parents so the default `C:\var\lib\swinv` works on a
+machine where they do not exist.
+
 ### R2 - `authorized_keys` read from an attacker-owned home *(high)*
 
 Under the default config scope the root process read every account's

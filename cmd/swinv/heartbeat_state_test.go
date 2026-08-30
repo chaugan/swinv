@@ -149,13 +149,20 @@ func TestHeartbeatOffChangesNothing(t *testing.T) {
 	}
 }
 
-// The heartbeat is decided before the reports are written, so on the first
-// scan into a fresh --out the directory does not exist yet. Without creating
-// it, the state could never be written and every scan for ever would conclude
-// that nothing was known.
-func TestHeartbeatCreatesAFreshOutputDirectory(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "does-not-exist-yet")
+// The heartbeat state lives in --out, so by the time applyHeartbeat runs the
+// directory already exists: ensureOutputDir created and secured it before the
+// scan, precisely so that no writer -- this one included -- ever has to make
+// it itself (and on Windows, so that it carries the admin-only DACL rather
+// than an inherited one). The writer's side of that contract is that it works
+// into an existing directory and fails, without creating anything, into a
+// missing one; TestWriteHeartbeatStateDoesNotCreateTheDirectory holds the
+// failure half, this the working half.
+func TestHeartbeatWritesIntoTheGuardedOutputDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "created-by-the-guard")
 	cfg := hbConfig(dir)
+	if code := ensureOutputDir(cfg, os.Stderr); code != exitOK {
+		t.Fatalf("ensureOutputDir returned exit code %d, want %d", code, exitOK)
+	}
 
 	first := hbReport(pkgA)
 	applyHeartbeat(cfg, first, quiet)
@@ -163,7 +170,7 @@ func TestHeartbeatCreatesAFreshOutputDirectory(t *testing.T) {
 		t.Errorf("the first scan warned: %v", first.Scan.Warnings)
 	}
 	if _, err := os.Stat(filepath.Join(dir, heartbeatStateFile)); err != nil {
-		t.Fatalf("no state file was written into a fresh output directory: %v", err)
+		t.Fatalf("no state file was written into the guarded output directory: %v", err)
 	}
 
 	second := hbReport(pkgA)

@@ -293,6 +293,21 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
+	// --- output directory -------------------------------------------------
+	// Secured before the scan starts, so that everything which writes under
+	// --out finds the directory already created and vetted: the
+	// --debug-stacks-after goroutine dump lands there mid-scan, the heartbeat
+	// state and the transmit spool are written right after it, and the reports
+	// last. Creation order is the security property -- on Windows, whoever
+	// creates the directory first decides whether a SYSTEM run's output can be
+	// read by an unprivileged user -- so no writer is allowed to make it
+	// itself. See ensureOutputDir.
+	if outputDirUsedBy(cfg) {
+		if code := ensureOutputDir(cfg, stderr); code != exitOK {
+			return code
+		}
+	}
+
 	startedAt := time.Now().UTC()
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.timeout)
 	defer cancel()
@@ -633,13 +648,66 @@ func loadBaseline(path string) (*model.Report, error) {
 	return &r, nil
 }
 
+// outputDirUsedBy reports whether this run writes anything under --out.
+//
+// A --stdout run without --heartbeat, --transmit or --debug-stacks-after
+// touches no directory, and must not create one: pointing --stdout at a
+// default path the process cannot write to would otherwise turn a run that
+// worked into a failure. Every flag that does write under --out -- the
+// reports (any non-stdout run), the heartbeat state, the transmit spool, the
+// goroutine dump -- pulls the output directory in, and with it the guard.
+func outputDirUsedBy(cfg *config) bool {
+	return !cfg.toStdout || cfg.heartbeat || cfg.transmit != "" || cfg.stacksAfter > 0
+}
+
+// ensureOutputDir creates and secures the output directory before anything
+// writes into it. It returns an exit code, already reported to stderr.
+//
+// The ordering here is a security control, not convenience. On Windows, the
+// DACL of --out is only trustworthy if secureOutputDir created it (an explicit
+// SYSTEM/Administrators-only ACL) or vetted it (an owner check) before any
+// writer touched it: the first thing to create the directory decides whether
+// an unprivileged user can read what a SYSTEM run writes inside. The heartbeat
+// state writer and the spool both used to create the directory themselves,
+// with whatever the parent granted, which is why this runs once, up front,
+// before the scan -- also failing fast on an attacker-seeded --out rather than
+// after a multi-minute scan, and covering the mid-scan writers (the
+// --debug-stacks-after dump) that run before writeFiles is reached.
+//
+// The parent is created first, with ordinary inherited ACLs, so a nested
+// default such as C:\var\lib\swinv works on a machine where C:\var does not
+// exist yet; windows.CreateDirectory cannot create intermediate components,
+// and creating the leaf itself is secureOutputDir's job, with the protected
+// ACL. On unix secureOutputDir is a no-op and this reduces to the MkdirAll
+// writeFiles has always done, with the same --perm-derived mode.
+func ensureOutputDir(cfg *config, stderr io.Writer) int {
+	if parent := filepath.Dir(cfg.out); parent != "" && parent != "." {
+		// #nosec G301 -- the mode is operator-chosen and validated, see parsePerm
+		if err := os.MkdirAll(parent, cfg.dirPerm); err != nil {
+			fmt.Fprintf(stderr, "swinv: creating %s: %v\n", parent, err)
+			return exitFatal
+		}
+	}
+	if err := secureOutputDir(cfg.out); err != nil {
+		fmt.Fprintf(stderr, "swinv: %v\n", err)
+		return exitFatal
+	}
+	// #nosec G301 -- the mode is operator-chosen and validated, see parsePerm
+	if err := os.MkdirAll(cfg.out, cfg.dirPerm); err != nil {
+		fmt.Fprintf(stderr, "swinv: creating %s: %v\n", cfg.out, err)
+		return exitFatal
+	}
+	return exitOK
+}
+
 // writeFiles renders the report to every requested format under cfg.out.
 func writeFiles(cfg *config, report *model.Report, logf func(string, ...any), stderr io.Writer) int {
 	// Derived from --perm. The default (0755) keeps a collector running as
 	// another user able to read the reports, which is the documented
 	// deployment model; --perm 0600 tightens it to owner-only.
-	// On Windows, refuse or lock down an output directory an unprivileged user
-	// could have pre-seeded; a no-op on unix, where the mode below governs.
+	// ensureOutputDir has already created and secured the directory before the
+	// scan (see run); this repeat is idempotent on both platforms and keeps
+	// writeFiles safe should it ever be reached through another path.
 	if err := secureOutputDir(cfg.out); err != nil {
 		fmt.Fprintf(stderr, "swinv: %v\n", err)
 		return exitFatal

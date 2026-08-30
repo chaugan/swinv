@@ -58,17 +58,15 @@ func readHeartbeatState(dir string) heartbeatState {
 
 // writeHeartbeatState records this scan's digest for the next one.
 //
-// It creates the output directory itself. The heartbeat is decided before the
-// reports are written, so on the very first scan into a fresh --out the
-// directory does not exist yet -- and without this the state could never be
-// written at all, leaving every scan for ever to conclude that nothing was
-// known and send the whole inventory. Silent, and exactly the failure that
-// makes the feature pointless.
-func writeHeartbeatState(dir string, perm, dirPerm os.FileMode, state heartbeatState) error {
-	// #nosec G301 -- the mode is operator-chosen and validated, see parsePerm
-	if err := os.MkdirAll(dir, dirPerm); err != nil {
-		return err
-	}
+// It does not create the output directory. Creation and vetting belong to
+// ensureOutputDir, which runs before the scan and is the only thing allowed
+// to make --out: on Windows, a directory created here with a plain MkdirAll
+// would carry the parent's inherited ACLs instead of the admin-only DACL the
+// guard applies, and everything written later -- including the transmit spool
+// -- would inherit that. A missing directory therefore surfaces as an error
+// here, which applyHeartbeat already degrades into a scan warning: the cost
+// is one redundant full send next run, never a wrong report.
+func writeHeartbeatState(dir string, perm os.FileMode, state heartbeatState) error {
 	target := filepath.Join(dir, heartbeatStateFile)
 	return output.AtomicWriteFile(target, perm, func(w io.Writer) error {
 		enc := json.NewEncoder(w)
@@ -136,7 +134,7 @@ func applyHeartbeat(cfg *config, report *model.Report, logf func(string, ...any)
 
 	logf("heartbeat: sending the full component list: %s", reason)
 	state.Hosts[host] = heartbeatHost{Digest: digest, FullAt: now}
-	if err := writeHeartbeatState(cfg.out, cfg.filePerm, cfg.dirPerm, state); err != nil {
+	if err := writeHeartbeatState(cfg.out, cfg.filePerm, state); err != nil {
 		// Not fatal. The report is correct either way; the cost is that the
 		// next scan cannot tell it is unchanged and sends everything again.
 		report.Scan.AddWarning("could not record the heartbeat digest, so the next scan will send a full component list: " + err.Error())
