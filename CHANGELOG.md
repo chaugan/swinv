@@ -7,6 +7,52 @@ As of `v1.0.0`, `swinv` is stable: the CLI surface and the output schema follow
 [semantic versioning](#versioning), and a breaking change waits for a new major
 version. See [Versioning](#versioning) below.
 
+## [1.0.1] - 2026-08-30
+
+Close two ordering gaps in the v1.0.0 Windows output-directory hardening (R1):
+the protection was real but could be silently bypassed by who created the
+directory first.
+
+### Security
+
+- **The output directory is now secured before the scan starts, before
+  anything writes under `--out`.** The v1.0.0 guard (`secureOutputDir` on
+  Windows: an explicit SYSTEM/Administrators-only DACL on create, an owner
+  check on an existing directory) ran inside `writeFiles`, late and on one
+  path only. Two gaps followed from that ordering, both fixed by moving the
+  guard to `ensureOutputDir`, called once in `run` before the scan:
+  - **`--heartbeat` could void the protected DACL (high).** The heartbeat
+    state writer created a missing `--out` with a plain `MkdirAll`, which on
+    Windows produces a directory with the parent's inherited ACLs - on the
+    default `C:\var\lib\swinv`, readable by every local user - and whose
+    SYSTEM owner then passed the later owner check. On the first run into a
+    fresh directory, the reports, the transmit spool (full scan payload) and
+    the heartbeat state all landed in that permissive tree; an attacker who
+    had pre-created the directory instead got SYSTEM to write the heartbeat
+    state into it before the run aborted. The writer no longer creates the
+    directory at all: the guard is the only thing that makes `--out`, and a
+    missing directory degrades to the existing scan warning (one redundant
+    full send next run), never to a silently unprotected write.
+  - **`--stdout --transmit` bypassed the check entirely (medium).**
+    `secureOutputDir` was only reachable through `writeFiles`, which a
+    `--stdout` run skips - so the spool directory (`--out/spool`) was created
+    by plain `MkdirAll` under an unvetted path, with the "forced 0600/0700"
+    inert on Windows as everywhere POSIX modes meet ACLs. The guard now runs
+    whenever anything pulls `--out` in: file output, `--heartbeat`,
+    `--transmit`, or the `--debug-stacks-after` goroutine dump, which lands
+    in `--out` mid-scan and was itself a bypass on a `--stdout` run. A pure
+    `--stdout` run that writes nothing still creates no directory, and the
+    send-only modes (`--transmit-check`, `--transmit-only`, `--transmit-from`)
+    are unaffected.
+  - The guard also creates missing **parent** directories before securing the
+    leaf, so the default nested path works on a machine where `C:\var` does
+    not exist; previously that failed outright unless the parents were made
+    by hand - or by an attacker, which was the scenario R1 guarded against.
+  Both fixes carry regression tests (the guard's condition table, creation
+  and failure paths, and the heartbeat writer's refusal to create the
+  directory), and SECURITY.md's R1 entry documents the strengthened
+  guarantee.
+
 ## [1.0.0] - 2026-08-30
 
 First stable release. The CLI and the output schema are now under semver, and
