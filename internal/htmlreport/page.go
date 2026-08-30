@@ -61,7 +61,8 @@ func buildPage(r *model.Report, data reportData, blob string) string {
 		`</div></div>` +
 		`<div class="block">` + bh("Config surface by ATT&amp;CK technique", flCfg, false) + `<div id="ch-attack"></div></div></div>` +
 		`<div class="block" style="margin-bottom:26px">` + bh("Listening ports", flSvc, false) + `<div id="tb-exp"></div></div>` +
-		`<div class="block">` + bh("Persistence &amp; privilege records", flCfg, false) + `<div id="tb-cfg"></div></div>`
+		`<div class="block" style="margin-bottom:26px">` + bh("Persistence &amp; privilege records", flCfg, false) + `<div id="tb-cfg"></div></div>` +
+		interfaceBlock(p, data)
 
 	s3 := `<div class="grid2" style="margin-bottom:26px">` +
 		`<div class="block">` + bh("By component type", "catalogers", true) + `<div id="ch-type"></div></div>` +
@@ -90,6 +91,24 @@ func buildPage(r *model.Report, data reportData, blob string) string {
 		`<title>` + esc(data.Meta.Host) + ` — inventory</title><style>` + css + `</style></head><body><div class="wrap">` +
 		body +
 		`</div><script type="application/json" id="swinv-data">` + blob + `</script><script>` + js + renderCalls + `</script></body></html>`
+}
+
+// interfaceBlock renders the network-interfaces block, stating the flag that
+// governs it either way: a table of every interface when --all-interfaces was
+// on, and an explicit "not collected" where an empty table would read as a
+// machine with no network. Absence is unknown, not clean - the same rule the
+// coverage note at the top of the page states.
+func interfaceBlock(p *model.ScanProfile, data reportData) string {
+	if p == nil || !p.AllInterfaces {
+		return `<div class="block" style="margin-bottom:26px">` +
+			bh("Network interfaces", "--all-interfaces off", false) +
+			`<div class="lead">Not collected: this scan ran without <span class="mono">--all-interfaces</span>. Only the usable identity appears in the report — the non-loopback addresses of interfaces that are up, in the host block — and every other interface and address, loopback and link-local included, is unknown.</div>` +
+			`</div>`
+	}
+	return `<div class="block" style="margin-bottom:26px">` +
+		bh("Network interfaces", "--all-interfaces", false) +
+		`<div class="lead">Every interface with every address — loopback, link-local and down included, addresses in CIDR form. The usable identity in the host block is the subset that leaves the machine. The type is a best-effort classification: <span class="mono">ethernet</span> means “not one of the named kinds”, not “a physical port”.</div>` +
+		`<div id="tb-iface"></div></div>`
 }
 
 func mast(d reportData) string {
@@ -147,6 +166,7 @@ func flagChips(p *model.ScanProfile) string {
 	}
 	out := b("full-scan", "", p.FullScan) +
 		b("hash", "", p.Hash) +
+		b("all-interfaces", "", p.AllInterfaces) +
 		b("elf-scope", orDash(p.ELFScope), true) +
 		b("config-scope", orDash(p.ConfigScope), true) +
 		b("services", "", p.Services) +
@@ -197,6 +217,10 @@ window.__t.exp=mkTable(document.getElementById('tb-exp'),
 window.__t.unl=mkTable(document.getElementById('tb-unl'),
  [{t:'Executable',r:v=>'<span class="mono">'+esc(v)+'</span>'},{t:'Library (soname)'},{t:'Resolved path',r:v=>'<span class="mono">'+esc(v)+'</span>'}],
  R.unowned_links,{per:30});
+var ifaceHost=document.getElementById('tb-iface');
+if(ifaceHost){window.__t.iface=mkTable(ifaceHost,
+ [{t:'Name',r:v=>'<span class="mono">'+esc(v)+'</span>'},{t:'Type',r:v=>v?'<span class="kind">'+esc(v)+'</span>':''},{t:'State',r:v=>v==='up'?'<span class="st ok">up</span>':'<span class="st skip">down</span>'},{t:'MTU'},{t:'MAC',r:v=>v?'<span class="mono">'+esc(v)+'</span>':''},{t:'Addresses',r:v=>'<span class="mono">'+esc(v)+'</span>'}],
+ R.interfaces,{per:30});}
 window.__t.ct=mkTable(document.getElementById('tb-ct'),
  [{t:'ID',r:v=>'<span class="mono">'+esc(v)+'</span>'},{t:'Name'},{t:'Operating system'},{t:'State'},{t:'Image'}],
  R.containers,{per:30});
@@ -235,6 +259,9 @@ func cmdLine(p *model.ScanProfile, r *model.Report) string {
 	}
 	if p.Hash {
 		a = append(a, "--hash")
+	}
+	if p.AllInterfaces {
+		a = append(a, "--all-interfaces")
 	}
 	if p.ELFScope != "" && p.ELFScope != "listening" {
 		a = append(a, "--elf-scope "+p.ELFScope)

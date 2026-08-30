@@ -92,6 +92,13 @@ func platformFacts(h *model.Host, isSystemRoot bool) {
 	h.Virtualization = detectWindowsVirtualization(h.SystemVendor, h.ProductName)
 }
 
+// refineInterfaceType has no Windows refinement yet: the flags-based
+// classification (loopback, point-to-point, ethernet, other) is what ships.
+// Naming adapter types properly means GetAdaptersAddresses' IfType table
+// (IF_TYPE_IEEE80211, IF_TYPE_SOFTWARE_LOOPBACK, and friends), which is worth
+// doing when a Windows report first needs to tell a Wi-Fi NIC from Ethernet.
+func refineInterfaceType(string) string { return "" }
+
 // detectWindowsVirtualization identifies a hypervisor from the SMBIOS strings
 // it advertises, the same signal Linux uses from DMI.
 //

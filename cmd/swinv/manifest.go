@@ -156,6 +156,7 @@ func scanProfile(cfg *config) *model.ScanProfile {
 		NDJSONInclude: parseNDJSONInclude(cfg.ndjsonInclude),
 		Containers:    !cfg.noContainers,
 		Services:      !cfg.noServices,
+		AllInterfaces: cfg.allInterfaces,
 		Root:          root,
 		Args:          cfg.rawArgs,
 	}

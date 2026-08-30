@@ -82,7 +82,8 @@ const (
 type Option func(*options)
 
 type options struct {
-	skipFQDN bool
+	skipFQDN      bool
+	allInterfaces bool
 }
 
 // WithoutFQDN suppresses the reverse-DNS lookup used to fill Host.FQDN.
@@ -94,6 +95,21 @@ type options struct {
 // this and lose only the FQDN field.
 func WithoutFQDN() Option {
 	return func(o *options) { o.skipFQDN = true }
+}
+
+// WithAllInterfaces collects the complete interface inventory into
+// Host.Interfaces: every interface with every address, loopback, link-local
+// and down included, each named, classified and carrying its own addresses.
+//
+// The default IPv4/IPv6/MACs stay what they always were - the usable identity,
+// the subset another machine could reach - which is the right default: the
+// full table adds little to an inventory join and a good deal to what a shared
+// report discloses (every internal subnet, every downed management interface,
+// the loopback range). It is local enumeration, all net.Interfaces and
+// /sys/class/net: no network traffic, and --root does not redirect it, since
+// it describes the machine that is running, not a mounted tree.
+func WithAllInterfaces() Option {
+	return func(o *options) { o.allInterfaces = true }
 }
 
 func Collect(ctx context.Context, fsRoot string, opts ...Option) (h model.Host) {
@@ -146,6 +162,9 @@ func Collect(ctx context.Context, fsRoot string, opts ...Option) (h model.Host) 
 			h.FQDN = lookupFQDN(ctx, h.Hostname)
 		}
 		h.IPv4, h.IPv6, h.MACs = interfaceAddrs()
+		if cfg.allInterfaces {
+			h.Interfaces = allInterfaces()
+		}
 	}
 
 	h.Normalize()
@@ -521,6 +540,75 @@ func interfaceAddrs() (ipv4, ipv6, macs []string) {
 		}
 	}
 	return ipv4, ipv6, macs
+}
+
+// allInterfaces enumerates every interface on the machine, with none of
+// interfaceAddrs' filtering: loopback, down interfaces, link-local and
+// point-to-point addresses all belong in a complete interface inventory.
+//
+// Addresses keep the CIDR form the API hands over ("192.168.1.10/24") rather
+// than being trimmed to bare IPs: the prefix is half the information, and the
+// always-on usable identity already exists for consumers who want bare hosts.
+// Anything that fails per-interface - a vanished interface, an unreadable
+// address list - is skipped rather than fatal, the same policy as the rest of
+// this package.
+func allInterfaces() []model.NetInterface {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	out := make([]model.NetInterface, 0, len(ifaces))
+	for _, iface := range ifaces {
+		ni := model.NetInterface{
+			Name: iface.Name,
+			Type: classifyInterface(iface.Flags, iface.Name),
+			MTU:  iface.MTU,
+			MAC:  iface.HardwareAddr.String(),
+		}
+		if iface.Flags&net.FlagUp != 0 {
+			ni.State = "up"
+		} else {
+			ni.State = "down"
+		}
+		addrs, err := iface.Addrs()
+		if err == nil {
+			for _, a := range addrs {
+				if s := a.String(); s != "" {
+					ni.IPs = append(ni.IPs, s)
+				}
+			}
+		}
+		out = append(out, ni)
+	}
+	return out
+}
+
+// classifyInterface names what kind of interface this is, from the flags the
+// kernel reports on every platform plus whatever the OS can refine.
+//
+// The order matters: a flag can only speak to what it says, so the specific
+// kinds are checked before the generic ones, and ethernet - the fallback for
+// anything broadcast-capable - is last but for "other". A VM's NIC and a
+// container's veth both land on ethernet; that is the kernel's honest answer,
+// and the model documents the field as "not one of the named kinds" rather
+// than "physical".
+func classifyInterface(flags net.Flags, name string) string {
+	switch {
+	case flags&net.FlagLoopback != 0:
+		return "loopback"
+	case flags&net.FlagPointToPoint != 0:
+		// Tunnels, PPP, WireGuard: two ends, no broadcast domain. Checked
+		// before the OS refinement because a refinement of the underlying
+		// device would otherwise mislabel the tunnel on top of it.
+		return "point-to-point"
+	}
+	if refined := refineInterfaceType(name); refined != "" {
+		return refined
+	}
+	if flags&net.FlagBroadcast != 0 {
+		return "ethernet"
+	}
+	return "other"
 }
 
 // dmiPlaceholders are the strings firmware vendors ship when a DMI field was

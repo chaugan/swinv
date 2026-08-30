@@ -19,7 +19,7 @@ import (
 // document.
 // 1.10 added ScanMeta.ScanID and ScanMeta.Sources, which are the self-
 // describing manifest (see the NDJSON heartbeat record). Also additive.
-const SchemaVersion = "1.18"
+const SchemaVersion = "1.19"
 
 // Report is the top-level document written as JSON.
 type Report struct {
@@ -167,6 +167,12 @@ type ScanProfile struct {
 	// passphrases are read from files -- so recording the arguments leaks
 	// nothing a report does not already carry.
 	Args []string `json:"args,omitempty"`
+
+	// AllInterfaces records whether --all-interfaces was on: the scan
+	// gathered every network interface with all of its addresses rather than
+	// only the usable identity. Off by default, so its absence means the
+	// field was not asked for, exactly like every other profile field.
+	AllInterfaces bool `json:"all_interfaces,omitempty"`
 }
 
 // Host is the identity of the machine that was scanned. Every field is
@@ -206,6 +212,31 @@ type Host struct {
 	IPv4           []string `json:"ipv4,omitempty"`
 	IPv6           []string `json:"ipv6,omitempty"`
 	MACs           []string `json:"macs,omitempty"`
+
+	// Interfaces is the complete interface inventory: every interface with
+	// every address, loopback, link-local and down included, each named and
+	// classified. Present only under --all-interfaces -- the IPv4/IPv6/MACs
+	// above remain the always-on "usable identity", which is the subset of
+	// this that leaves the machine. Collected live from the running kernel;
+	// --root does not redirect it, and neither does it touch the network.
+	Interfaces []NetInterface `json:"interfaces,omitempty"`
+}
+
+// NetInterface is one network interface as the running OS reports it.
+//
+// Type is a best-effort classification, not a hardware inventory: loopback,
+// wireless, bridge, bond, point-to-point (tunnels and PPP), ethernet (the
+// fallback for anything broadcast-capable), other. The ethernet fallback is
+// deliberately wide - VM NICs and containers' veth pairs classify as ethernet
+// because from the kernel they are - and a consumer should treat it as "not
+// one of the named kinds" rather than "a physical port".
+type NetInterface struct {
+	Name  string   `json:"name"`
+	Type  string   `json:"type,omitempty"`
+	State string   `json:"state,omitempty"`
+	MTU   int      `json:"mtu,omitempty"`
+	MAC   string   `json:"mac,omitempty"`
+	IPs   []string `json:"ips,omitempty"`
 }
 
 // ScanMeta records how the scan was performed and whether it was complete.
@@ -698,6 +729,12 @@ func (h *Host) Normalize() {
 	h.IPv4 = SortedSet(h.IPv4)
 	h.IPv6 = SortedSet(h.IPv6)
 	h.MACs = SortedSet(h.MACs)
+	sort.Slice(h.Interfaces, func(i, j int) bool {
+		return h.Interfaces[i].Name < h.Interfaces[j].Name
+	})
+	for i := range h.Interfaces {
+		h.Interfaces[i].IPs = SortedSet(h.Interfaces[i].IPs)
+	}
 }
 
 // AddWarning appends a warning, ignoring blanks and exact duplicates.

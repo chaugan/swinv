@@ -213,6 +213,17 @@ filesystem skip list;
 .Nm
 carves snap mount points out of that rule so the two behaviours do not
 contradict each other.
+.It Fl -all-interfaces
+Collect the complete interface inventory into
+.Va host.interfaces :
+every interface, up or down, with its type, state, MTU, MAC, and every
+address in CIDR form — loopback, link-local and all. Off by default: without
+it the report carries only the usable identity, the non-loopback addresses of
+interfaces that are up, which is all another machine can reach. The type is a
+best-effort classification; ethernet means broadcast-capable, not a physical
+port. Local enumeration only: no network traffic, and
+.Fl -root
+does not redirect it.
 .It Fl -include-home
 Also scan the user home trees
 .Pa /home

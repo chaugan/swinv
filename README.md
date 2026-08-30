@@ -1085,6 +1085,7 @@ previous file intact. `--latest-symlink` (on by default) keeps
 | `--format LIST` | `json,csv` | `json`, `csv`, `ndjson`, `cyclonedx-json` |
 | `--stdout` | false | Write to stdout; requires exactly one `--format` |
 | `--include-home` | false | Also scan `/home` and `/root` |
+| `--all-interfaces` | false | Collect every network interface with all of its addresses, name, type, state and MAC into `host.interfaces` (default: only the usable identity — non-loopback addresses of up interfaces) |
 | `--offline` | false | Perform no network activity at all (skips the FQDN lookup) |
 | `--perm OCTAL` | `0644` | Permission bits for the reports; the directory derives from it |
 | `--skip-nested-rootfs` | false | Drop packages that came from a nested root filesystem (see Known limitations) |

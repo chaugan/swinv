@@ -310,6 +310,7 @@ func registerFlags(fs *flag.FlagSet, cfg *config) {
 	fs.BoolVar(&cfg.noSnap, "no-snap", false, "exclude /snap")
 	fs.BoolVar(&cfg.noFlatpak, "no-flatpak", false, "exclude /var/lib/flatpak")
 	fs.BoolVar(&cfg.includeHome, "include-home", false, "also scan user home directories (/home and /root); off by default because they dominate scan time and are privacy-sensitive")
+	fs.BoolVar(&cfg.allInterfaces, "all-interfaces", false, "collect every network interface with all of its addresses, name, type, state and MAC into host.interfaces; off by default, and on top of the always-on usable identity (host.ipv4/ipv6/macs)")
 	fs.StringVar(&cfg.maxMemory, "max-memory", "", "soft memory limit, e.g. 512MiB or 2GiB; makes the GC work harder near the limit (empty = unlimited)")
 	fs.BoolVar(&cfg.offline, "offline", false, "perform no network activity at all; skips the reverse-DNS lookup that fills host.fqdn, which is the only thing swinv uses the network for")
 	fs.BoolVar(&cfg.skipNestedRootfs, "skip-nested-rootfs", false, "drop components that exist only because the scan walked into a second root filesystem (an extracted image, a container rootfs, a chroot); off by default because scanning those is sometimes the point")

@@ -112,6 +112,7 @@ type config struct {
 	noSnap           bool
 	noFlatpak        bool
 	includeHome      bool
+	allInterfaces    bool
 	hash             bool
 	offline          bool
 	skipNestedRootfs bool
@@ -320,6 +321,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	var hostOpts []hostfacts.Option
 	if cfg.offline {
 		hostOpts = append(hostOpts, hostfacts.WithoutFQDN())
+	}
+	if cfg.allInterfaces {
+		hostOpts = append(hostOpts, hostfacts.WithAllInterfaces())
 	}
 	host := hostfacts.Collect(ctx, cfg.root, hostOpts...)
 	if cfg.requireHostID && host.MachineID == "" {

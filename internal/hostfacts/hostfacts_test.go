@@ -868,3 +868,82 @@ func TestWithoutFQDNSkipsTheOnlyNetworkCall(t *testing.T) {
 		t.Error("architecture should still be populated")
 	}
 }
+
+// TestClassifyInterface pins the flag-based half of the classification. Names
+// are chosen to not exist under /sys/class/net on any real machine, so the
+// refinement never fires and the table tests exactly what it claims to.
+func TestClassifyInterface(t *testing.T) {
+	cases := []struct {
+		name  string
+		flags net.Flags
+		want  string
+	}{
+		{"nosuchloopback0999", net.FlagLoopback | net.FlagUp, "loopback"},
+		{"nosuchtun0999", net.FlagPointToPoint | net.FlagUp, "point-to-point"},
+		{"nosuchnic0999", net.FlagBroadcast | net.FlagUp | net.FlagRunning, "ethernet"},
+		{"nosuchthing0999", 0, "other"},
+		// Loopback wins even when the interface is down: a shut loopback is
+		// still a loopback, and down is what State is for.
+		{"nosuchdownloopback0999", net.FlagLoopback, "loopback"},
+	}
+	for _, c := range cases {
+		if got := classifyInterface(c.flags, c.name); got != c.want {
+			t.Errorf("classifyInterface(%q) = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestCollectAllInterfacesOnLiveHost runs the option against the real machine:
+// every host has at least a loopback interface, so an empty result means the
+// wiring is broken rather than the machine being bare.
+func TestCollectAllInterfacesOnLiveHost(t *testing.T) {
+	h := Collect(context.Background(), "/", WithAllInterfaces())
+
+	if len(h.Interfaces) == 0 {
+		t.Fatal("no interfaces collected on the live host")
+	}
+	var sawLoopback bool
+	for _, ni := range h.Interfaces {
+		if ni.Name == "" {
+			t.Error("an interface was collected with no name")
+		}
+		if ni.State != "up" && ni.State != "down" {
+			t.Errorf("interface %q has state %q, want up or down", ni.Name, ni.State)
+		}
+		if ni.Type == "" {
+			t.Errorf("interface %q has no type", ni.Name)
+		}
+		if ni.Type == "loopback" {
+			sawLoopback = true
+			// The whole point of the flag: loopback must carry its
+			// address here, where the always-on usable identity skips it.
+			if len(ni.IPs) == 0 {
+				t.Errorf("loopback %q carries no addresses; the flag collected nothing new", ni.Name)
+			}
+		}
+	}
+	if !sawLoopback {
+		t.Error("no loopback interface in the inventory")
+	}
+
+	// Normalized: sorted by name, so two runs produce identical documents.
+	for i := 1; i < len(h.Interfaces); i++ {
+		if h.Interfaces[i-1].Name > h.Interfaces[i].Name {
+			t.Fatalf("interfaces are not sorted by name: %q after %q",
+				h.Interfaces[i].Name, h.Interfaces[i-1].Name)
+		}
+	}
+}
+
+// The flag must be strictly additive: without it the host block stays exactly
+// as before, interfaces absent -- and the usable identity unchanged.
+func TestCollectInterfacesOffByDefault(t *testing.T) {
+	def := Collect(context.Background(), "/")
+	if def.Interfaces != nil {
+		t.Errorf("Interfaces = %v without the option, want nil", def.Interfaces)
+	}
+	all := Collect(context.Background(), "/", WithAllInterfaces())
+	if len(all.IPv4) != len(def.IPv4) || len(all.MACs) != len(def.MACs) {
+		t.Error("the usable identity changed when --all-interfaces was enabled")
+	}
+}

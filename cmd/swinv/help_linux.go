@@ -33,6 +33,7 @@ func helpSections() []helpSection {
 		{"What gets scanned", []helpFlag{
 			{"--root PATH", "scan this tree instead of / (an image, a chroot)"},
 			{"--include-home", "also scan /home and /root (skipped by default)"},
+			{"--all-interfaces", "collect all interfaces and their addresses"},
 			{"--exclude GLOB", "skip a path; repeatable; ./ */ or **/ prefix"},
 			{"--no-snap, --no-flatpak", "skip snaps or flatpaks (both included by default)"},
 			{"--no-auto-exclude-mounts", "do not skip network and virtual filesystems"},

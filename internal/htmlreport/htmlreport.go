@@ -88,6 +88,7 @@ type rows struct {
 	Exposure     [][]any `json:"exposure"`
 	Containers   [][]any `json:"containers"`
 	UnownedLinks [][]any `json:"unowned_links"`
+	Interfaces   [][]any `json:"interfaces"`
 }
 
 type insights struct {
@@ -228,6 +229,16 @@ func aggregate(r *model.Report) reportData {
 		ctRows = append(ctRows, []any{shortID(c.ID), c.Name, os, c.State, img})
 	}
 
+	// Interfaces ride only when the scan ran with --all-interfaces; an empty
+	// list here is "not collected", and the page says so rather than showing
+	// an empty table that reads as a machine with no network.
+	ifaceRows := make([][]any, 0, len(r.Host.Interfaces))
+	for _, ni := range r.Host.Interfaces {
+		ifaceRows = append(ifaceRows, []any{
+			ni.Name, ni.Type, ni.State, ni.MTU, ni.MAC, strings.Join(ni.IPs, ", "),
+		})
+	}
+
 	m := meta{
 		Host:       r.Host.Hostname,
 		OS:         strings.TrimSpace(r.Host.OSID + " " + r.Host.OSVersionID),
@@ -267,6 +278,7 @@ func aggregate(r *model.Report) reportData {
 			Exposure:     expRows,
 			Containers:   ctRows,
 			UnownedLinks: unownedRows,
+			Interfaces:   ifaceRows,
 		},
 		Insights: insights{
 			UnownedLinkCount:   linkUnowned,

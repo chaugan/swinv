@@ -11,11 +11,19 @@ Part of the [swinv](../README.md) documentation.
 ## Schema version and the compatibility promise
 
 Every JSON document carries a `schema_version` at the top. The current value is
-**`1.18`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
+**`1.19`**, defined as `model.SchemaVersion` in `internal/model/model.go`.
 
 ```json
-"schema_version": "1.18"
+"schema_version": "1.19"
 ```
+
+**1.18 → 1.19** added `host.interfaces` and `scan.profile.all_interfaces`: the
+complete interface inventory collected under `--all-interfaces` — every
+interface with every address, loopback, link-local and down included, each
+named, classified, and carrying its addresses in CIDR form — plus the profile
+field that says the scan asked for it. The always-on `host.ipv4`/`ipv6`/`macs`
+usable identity is unchanged and remains the default. Additive and omitted
+unless the flag was on.
 
 **1.17 → 1.18** added `scan.profile.args`: the invocation the scan was run with,
 the arguments after the program name, verbatim. It lets a consumer - and the
@@ -504,7 +512,18 @@ escaping is disabled, so PURLs and CPEs are written literally rather than with
     "system_vendor": "QEMU",
     "product_name": "Standard PC (q35 + ICH9, 2009)",
     "ipv4": ["10.0.0.7"],
-    "macs": ["52:54:00:ab:cd:ef"]
+    "macs": ["52:54:00:ab:cd:ef"],
+    "interfaces": [
+      {"name": "lo",     "type": "loopback", "state": "up",   "mtu": 65536,
+       "ips": ["127.0.0.1/8", "::1/128"]},
+      {"name": "eth0",   "type": "ethernet", "state": "up",   "mtu": 1500,
+       "mac": "52:54:00:ab:cd:ef",
+       "ips": ["10.0.0.7/24", "fe80::5054:ff:feab:cdef/64"]},
+      {"name": "wg0",    "type": "point-to-point", "state": "up", "mtu": 1420,
+       "ips": ["10.99.0.1/24"]},
+      {"name": "mgmt0",  "type": "other",   "state": "down",
+       "ips": ["192.168.100.5/24"]}
+    ]
   },
 
   "scan": {                                  // how the scan was performed
@@ -583,6 +602,7 @@ yields an omitted field, not an error and not a log line.
 | `product_serial` | `/sys/class/dmi/id/product_serial` | **Root-only.** Silently empty for a non-root run. |
 | `product_uuid` | `/sys/class/dmi/id/product_uuid` | **Root-only.** Silently empty for a non-root run. |
 | `ipv4`, `ipv6`, `macs` | `net.Interfaces()` | Arrays, sorted. Loopback, down interfaces, and link-local addresses are skipped. |
+| `interfaces` | `--all-interfaces` | The complete interface inventory, sorted by name: every interface with its type, state, MTU, MAC, and every address in CIDR form. `type` is a best-effort classification (`loopback`, `wireless`, `bridge`, `bond`, `point-to-point`, `ethernet`, `other`); `ethernet` means "broadcast-capable", not "a physical port". Absent unless the flag was on. |
 
 Firmware placeholder strings (`To Be Filled By O.E.M.`, `Default string`,
 `System Serial Number`, the all-zero UUID) are mapped to empty, because they

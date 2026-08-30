@@ -37,6 +37,7 @@ func helpSections() []helpSection {
 			{"--volumes LIST", "volumes for --full-scan, e.g. D: or D:,E: (replaces C:)"},
 			{"--exclude GLOB", "skip a path; repeatable; ./ */ or **/ prefix"},
 			{"--catalogers EXPR", "e.g. os or +binary,-python"},
+			{"--all-interfaces", "collect all interfaces and their addresses"},
 			{"--offline", "no network activity at all"},
 		}},
 		{"What is listening", []helpFlag{
