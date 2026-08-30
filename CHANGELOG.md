@@ -7,6 +7,38 @@ As of `v1.0.0`, `swinv` is stable: the CLI surface and the output schema follow
 [semantic versioning](#versioning), and a breaking change waits for a new major
 version. See [Versioning](#versioning) below.
 
+## [Unreleased]
+
+### Changed
+
+- **The donut chart's labels moved onto the chart** ("By filesystem root", the
+  top-down view): each slice now carries its label outside the ring, tilted 45
+  degrees, with a short leader line and the slice's count in tow — replacing
+  the side legend, which duplicated the same three rows. The canvas is sized
+  from every label's rotated bounding box, so a long label grows the panel
+  instead of being cut off at the top or bottom edge; overlapping labels are
+  pushed apart, and a slice count beyond eight falls back to the legend rather
+  than colliding. The layout maths live in one pure function, tested under
+  node from `go test` where node is available.
+
+### Added
+
+- **`--all-interfaces` collects the complete interface inventory** into
+  `host.interfaces` (schema `1.19`): every interface - loopback, tunnels,
+  bridges, downed adapters included - with its name, a best-effort type
+  (`loopback`, `wireless`, `bridge`, `bond`, `point-to-point`, `ethernet`,
+  `other`), state, MTU, MAC, and every address in CIDR form, sorted by name so
+  repeated runs diff cleanly. Off by default: the always-on
+  `host.ipv4`/`ipv6`/`macs` remain the *usable identity* - non-loopback
+  addresses of interfaces that are up - which is the subset another machine
+  can reach, and the flag adds the rest on top rather than changing it. Local
+  enumeration only (`net.Interfaces` plus `/sys/class/net` on Linux): no
+  network traffic, unaffected by `--offline`, and not redirected by `--root`,
+  since it describes the machine that is running. The HTML report carries the
+  table with a flag-provenance tag when collected, and states "not collected"
+  where it was not - an empty table would read as a machine with no network.
+  `scan.profile.all_interfaces` records whether a scan asked for it.
+
 ## [1.0.1] - 2026-08-30
 
 Close two ordering gaps in the v1.0.0 Windows output-directory hardening (R1):
